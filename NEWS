@@ -1,0 +1,42 @@
+greybox v0.2.0 (Release data: 2018-03-10)
+==============
+
+Changes:
+* combiner now uses a more clever mechanism in case of bruteForce==FALSE.
+* combiner now also checks if the provided data has ncol>nrow and sets bruteForce if it has.
+* Use Kendall Tau as default in cor() for stepwise.
+* Don't use Kendall Tau as default everywhere - only for fat regressions.
+* New summary and print methods for models from stepwise. No statistical tests printed, only confidence intervals and ICs.
+* AICc for smooth functions in case of iSS models should take only the demand sizes into account, not all the parameters.
+
+Bugfixes:
+*
+
+
+greybox v0.1.1 (Release data: 2018-03-05)
+==============
+
+Changes:
+* We now do not depend on smooth. We suggest it. It's smooth that should depend on greybox!
+* New function imported from smooth - AICc.
+* New functions for the S distribution (the maximisation of likelihood of which corresponds to the minimum of HAM): ds, ps, qs, rs.
+* stepwise now returns the object of two classes: greybox and lm.
+* combiner now returns three classes: greybox, lm and greyboxC.
+* nParam is moved to greybox from smooth.
+
+Bugfixes:
+* If smooth is not installed, plot forecasts using simpler function.
+* The forecasts are now produced for the combined models in cases of fat regressions.
+
+
+greybox v0.1.0 (Release data: 2018-03-03)
+==============
+
+* Initial release. stepwise() and xregExpander() are imported here from smooth package.
+* combiner() function that combines lm() models. This thing is in the development right now.
+* combiner() has a meaningful summary() now. Working to make it more accesible to lm functions.
+* summary() for combiner now returns the list of values.
+* stepwise() should now perform slightly better.
+* combiner() can now be smart and use stepwise for the models pool creation.
+* combined lm model can now be used together with predict() and forecast() functions.
+* plot() and forecast() methods for the combined functions.

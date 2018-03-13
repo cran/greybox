@@ -1,0 +1,31 @@
+Package: greybox
+Type: Package
+Title: Toolbox for Model Selection and Combinations for the Forecasting
+        Purposes
+Version: 0.2.0
+Date: 2018-03-10
+Authors@R: person("Ivan", "Svetunkov", email = "ivan@svetunkov.ru", role = c("aut", "cre"),
+                  comment="Lecturer at Centre for Marketing Analytics and Forecasting, Lancaster University, UK")
+URL: https://github.com/config-i1/greybox
+BugReports: https://github.com/config-i1/greybox/issues
+Description: Implements model selection and combinations via information criteria based on
+             the values of partial correlations. This allows, for example, solving "fat regression"
+             problems, where the number of variables is much larger than the number of observations.
+             This is driven by the research on information criteria, which is well discussed in
+             Burnham & Anderson (2002) <doi:10.1007/b97636>, and currently developed further by
+             Ivan Svetunkov and Yves Sagaert (working paper in progress). Models developed in the
+             package are tailored specifically for forecasting purposes. So as a results there are
+             several methods that allow producing forecasts from these models and visualising them.
+License: GPL (>= 2)
+Depends: R (>= 3.0.2)
+Imports: forecast, stats, graphics, utils, zoo
+Suggests: smooth, numDeriv, testthat, rmarkdown, knitr
+RoxygenNote: 6.0.1
+VignetteBuilder: knitr
+NeedsCompilation: no
+Packaged: 2018-03-10 23:19:47 UTC; config
+Author: Ivan Svetunkov [aut, cre] (Lecturer at Centre for Marketing Analytics
+    and Forecasting, Lancaster University, UK)
+Maintainer: Ivan Svetunkov <ivan@svetunkov.ru>
+Repository: CRAN
+Date/Publication: 2018-03-13 15:13:46 UTC
