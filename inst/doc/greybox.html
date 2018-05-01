@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2018-03-10" />
+<meta name="date" content="2018-05-01" />
 
 <title>Greybox</title>
 
@@ -70,7 +70,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 
 <h1 class="title toc-ignore">Greybox</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2018-03-10</em></h4>
+<h4 class="date"><em>2018-05-01</em></h4>
 
 
 
@@ -84,6 +84,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <li><code>stepwise()</code> - select the linear model with the lowest IC from all the possible in the provided data. Uses partial correlations. Works fast;</li>
 <li><code>combiner()</code> - combine the linear models into one using IC weights;</li>
 <li><code>xregExpander()</code> - expand the provided data by including leads and lags of the variables.</li>
+<li><a href="ro.html">ro()</a> - produce forecasts with a specified function using rolling origin.</li>
 </ol>
 <p>The first two construct a model of a class <code>lm</code>, that could be used for the purposes of analysis or forecasting. The last one expands the exogenous variables to the matrix with lags and leads. Let’s see how all of them work. Let’s start from the end.</p>
 </div>
