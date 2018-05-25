@@ -4,8 +4,8 @@
 \alias{stepwise}
 \title{Stepwise selection of regressors}
 \usage{
-stepwise(data, ic = c("AICc", "AIC", "BIC"), silent = TRUE, df = NULL,
-  method = c("pearson", "kendall", "spearman"))
+stepwise(data, ic = c("AICc", "AIC", "BIC", "BICc"), silent = TRUE,
+  df = NULL, method = c("pearson", "kendall", "spearman"))
 }
 \arguments{
 \item{data}{Data frame containing dependant variable in the first column and
@@ -47,7 +47,7 @@ stepwise(xreg)
 xreg <- matrix(rnorm(20000,10,3),100,200)
 xreg <- cbind(100+0.5*xreg[,1]-0.75*xreg[,2]+rnorm(100,0,3),xreg,rnorm(100,300,10))
 colnames(xreg) <- c("y",paste0("x",c(1:200)),"Noise")
-ourModel <- stepwise(xreg,ic="AICc",method="s")
+ourModel <- stepwise(xreg,ic="AICc")
 plot(ourModel$ICs,type="l",ylim=range(min(ourModel$ICs),max(ourModel$ICs)+5))
 points(ourModel$ICs)
 text(c(1:length(ourModel$ICs))+0.1,ourModel$ICs+5,names(ourModel$ICs))
@@ -57,12 +57,12 @@ text(c(1:length(ourModel$ICs))+0.1,ourModel$ICs+5,names(ourModel$ICs))
 \itemize{
 \item Burnham Kenneth P. and Anderson David R. (2002). Model Selection
 and Multimodel Inference. A Practical Information-Theoretic Approach.
-Springer-Verlag New York. \url{http://dx.doi.org/10.1007/b97636}.
+Springer-Verlag New York. DOI: [10.1007/b97636](http://dx.doi.org/10.1007/b97636).
 }
 }
 \seealso{
 \code{\link[stats]{step}, \link[greybox]{xregExpander},
-\link[greybox]{combiner}}
+\link[greybox]{combine}}
 }
 \author{
 Ivan Svetunkov, \email{ivan@svetunkov.ru}

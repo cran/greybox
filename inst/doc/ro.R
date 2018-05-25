@@ -31,13 +31,23 @@ ourValue <- "pred"
 returnedValues1 <- ro(x, h=3, origins=8, call=ourCall, value=ourValue)
 
 ## ------------------------------------------------------------------------
-apply(abs(returnedValues1$actuals - returnedValues1$pred),1,mean,na.rm=TRUE)
+apply(abs(returnedValues1$holdout - returnedValues1$pred),1,mean,na.rm=TRUE) / mean(returnedValues1$actuals)
 
 ## ------------------------------------------------------------------------
-returnedValues1$actuals
+plot(returnedValues1)
+
+## ------------------------------------------------------------------------
+returnedValues1$holdout
 
 ## ------------------------------------------------------------------------
 returnedValues2 <- ro(x, h=3, origins=8, call=ourCall, value=ourValue, ci=TRUE, co=TRUE)
+
+## ------------------------------------------------------------------------
+plot(returnedValues2)
+
+## ------------------------------------------------------------------------
+ourCallETS <- "forecast(ets(data),h=h,level=95)"
+ourValueETS <- c("mean","lower","upper")
 
 ## ------------------------------------------------------------------------
 x <- matrix(rnorm(120*3,c(100,50,150),c(10,5,15)), 120, 3, byrow=TRUE)
@@ -62,7 +72,7 @@ for(j in 1:3){
                           value=ourValue, co=TRUE)
         ourForecasts[j,i,,] <- ourROReturn$pred
     }
-    ourHoldoutValues[j,,] <- ourROReturn$actuals
+    ourHoldoutValues[j,,] <- ourROReturn$holdout
 }
 
 ## ------------------------------------------------------------------------

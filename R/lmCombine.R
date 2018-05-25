@@ -34,7 +34,7 @@
 #' inSample <- xreg[1:80,]
 #' outSample <- xreg[-c(1:80),]
 #' # Combine all the possible models
-#' ourModel <- combiner(inSample,bruteForce=TRUE)
+#' ourModel <- lmCombine(inSample,bruteForce=TRUE)
 #' forecast(ourModel,outSample)
 #' plot(forecast(ourModel,outSample))
 #'
@@ -45,14 +45,15 @@
 #' inSample <- xreg[1:40,]
 #' outSample <- xreg[-c(1:40),]
 #' # Combine only the models close to the optimal
-#' ourModel <- combiner(inSample,ic="AICc",bruteForce=FALSE)
+#' ourModel <- lmCombine(inSample,ic="BICc",bruteForce=FALSE)
 #' summary(ourModel)
 #' plot(forecast(ourModel,outSample))
 #'
 #' @importFrom stats dnorm
 #'
-#' @export combiner
-combiner <- function(data, ic=c("AICc","AIC","BIC"), bruteForce=FALSE, silent=TRUE){
+#' @aliases combine combiner
+#' @export lmCombine
+lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteForce=FALSE, silent=TRUE){
     # Function combines linear regression models and produces the combined lm object.
     ourData <- data;
     if(!is.data.frame(ourData)){
@@ -73,6 +74,9 @@ combiner <- function(data, ic=c("AICc","AIC","BIC"), bruteForce=FALSE, silent=TR
     }
     else if(ic=="BIC"){
         IC <- BIC;
+    }
+    else if(ic=="BICc"){
+        IC <- BICc;
     }
 
     # Observations in sample, assuming that the missing values are for the holdout
@@ -125,7 +129,7 @@ combiner <- function(data, ic=c("AICc","AIC","BIC"), bruteForce=FALSE, silent=TR
         # If the number of variables is small, do bruteForce
         if(ncol(bestModel$model)<16){
             newData <-  ourData[,c(colnames(ourData)[1],names(bestModel$ICs)[-1])];
-            return(combiner(newData, ic=ic, bruteForce=TRUE, silent=silent));
+            return(lmCombine(newData, ic=ic, bruteForce=TRUE, silent=silent));
         }
         # If we have too many variables, use "stress" analysis
         else{
@@ -242,4 +246,16 @@ combiner <- function(data, ic=c("AICc","AIC","BIC"), bruteForce=FALSE, silent=TR
                        model=ourData, terms=ourTerms, qr=qr(ourData), df=sum(importance)+1);
 
     return(structure(finalModel,class=c("greyboxC","greybox","lm")));
+}
+
+#' @export
+combiner <- function(...){
+    warning("This is the old name of the function. Please use `lmCombine` instead.",call.=FALSE);
+    lmCombine(...);
+}
+
+#' @export
+combine <- function(...){
+    warning("This is the old name of the function. Please use `lmCombine` instead.",call.=FALSE);
+    lmCombine(...);
 }

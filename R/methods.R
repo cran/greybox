@@ -1,22 +1,35 @@
 ##### IC functions #####
 
-#' Corrected Akaike's Information Criterion
+#' Corrected Akaike's Information Criterion and Bayesian Information Criterion
 #'
-#' This function extracts AICc from models. Can be applied to wide variety of
-#' models that use logLik() and nobs() methods (including the popular lm,
-#' forecast, smooth).
+#' This function extracts AICc / BICc from models. It can be applied to wide
+#' variety of models that use logLik() and nobs() methods (including the
+#' popular lm, forecast, smooth classes).
 #'
 #' AICc was proposed by Nariaki Sugiura in 1978 and is used on small samples
-#' for the models with normally distributed residuals.
+#' for the models with normally distributed residuals. BICc was derived in
+#' McQuarrie (1999) and is used in similar circumstances.
+#'
+#' IMPORTANT NOTE: both of the criteria can only be used for univariate models
+#' (regression models, ARIMA, ETS etc) with normally distributed residuals!
 #'
 #' @aliases AICc
+#' @template author
+#' @template AICRef
+#'
 #' @param object Time series model.
 #' @param ...  Some stuff.
 #' @return This function returns numeric value.
-#' @author Ivan Svetunkov, \email{ivan@@svetunkov.ru}
 #' @seealso \link[stats]{AIC}, \link[stats]{BIC}
-#' @references Kenneth P. Burnham, David R. Anderson (1998). Model Selection
-#' and Multimodel Inference. Springer Science & Business Media.
+#' @references \itemize{
+#' \item McQuarrie A.D., A small-sample correction for the Schwarz SIC
+#' model selection criterion, Statistics & Probability Letters 44 (1999)
+#' pp.79-86. \doi{10.1016/S0167-7152(98)00294-6}
+#' \item Sugiura Nariaki (1978) Further analysts of the data by Akaike's
+#' information criterion and the finite corrections, Communications in
+#' Statistics - Theory and Methods, 7:1, 13-26,
+#' \doi{10.1080/03610927808827599}
+#' }
 #' @keywords htest
 #' @examples
 #'
@@ -27,15 +40,22 @@
 #' ourModel <- stepwise(xreg)
 #'
 #' AICc(ourModel,h=10)
+#' BICc(ourModel,h=10)
 #'
+#' @rdname InformationCriteria
 #' @export AICc
 AICc <- function(object, ...) UseMethod("AICc")
+
+#' @rdname InformationCriteria
+#' @aliases BICc
+#' @export BICc
+BICc <- function(object, ...) UseMethod("BICc")
 
 
 #' @export
 AICc.default <- function(object, ...){
     llikelihood <- logLik(object);
-    nParamAll <- attributes(llikelihood)$df;
+    nParamAll <- nParam(object);
     llikelihood <- llikelihood[1:length(llikelihood)];
     obs <- nobs(object);
 
@@ -44,10 +64,39 @@ AICc.default <- function(object, ...){
     return(IC);
 }
 
-
-#' @importFrom forecast getResponse
 #' @export
-forecast::getResponse
+BICc.default <- function(object, ...){
+    llikelihood <- logLik(object);
+    nParamAll <- nParam(object);
+    llikelihood <- llikelihood[1:length(llikelihood)];
+    obs <- nobs(object);
+
+    IC <- - 2*llikelihood + (nParamAll * log(obs) * obs) / (obs - nParamAll - 1);
+
+    return(IC);
+}
+
+#' @importFrom stats confint
+#' @export
+confint.greyboxC <- function(object, parm, level=0.95, ...){
+
+    # Extract parameters
+    parameters <- coef(object);
+    # Extract SE
+    parametersSE <- object$coefficientsSE;
+    # Define quantiles using Student distribution
+    paramQuantiles <- qt((1+level)/2,df=object$df.residual);
+    # Do the stuff
+    confintValues <- cbind(parameters-paramQuantiles*parametersSE,
+                           parameters+paramQuantiles*parametersSE);
+    colnames(confintValues) <- c(paste0((1-level)/2*100,"%"),
+                                 paste0((1+level)/2*100,"%"));
+    # If parm was not provided, return everything.
+    if(!exists("parm",inherits=FALSE)){
+        parm <- names(parameters);
+    }
+    return(confintValues[parm,]);
+}
 
 #' @importFrom forecast forecast
 #' @export forecast
@@ -94,6 +143,10 @@ forecast.greybox <- function(object, newdata, ...){
     return(structure(ourModel,class="forecast.greybox"));
 }
 
+#' @importFrom forecast getResponse
+#' @export
+forecast::getResponse
+
 #' @export
 getResponse.greybox <- function(object, ...){
     responseVariable <- object$model[,1];
@@ -119,7 +172,7 @@ nobs.greybox <- function(object, ...){
 #' @param object Time series model.
 #' @param ... Some other parameters passed to the method.
 #' @return This function returns a numeric value.
-#' @author Ivan Svetunkov, \email{ivan@@svetunkov.ru}
+#' @template author
 #' @seealso \link[stats]{nobs}, \link[stats]{logLik}
 #' @keywords htest
 #' @examples
@@ -143,9 +196,40 @@ nParam.default <- function(object, ...){
 }
 
 #' @export
+nParam.logLik <- function(object, ...){
+    # The length of the vector of parameters + variance
+    return(attributes(object)$df);
+}
+
+#' @export
 nParam.greyboxC <- function(object, ...){
     # The length of the vector of parameters + variance
     return(sum(object$importance)+1);
+}
+
+#' @export
+plot.greybox <- function(x, ...){
+    ellipsis <- list(...);
+    # If type and ylab are not provided, set them...
+    if(!any(names(ellipsis)=="type")){
+        ellipsis$type <- "l";
+    }
+    if(!any(names(ellipsis)=="ylab")){
+        ellipsis$ylab <- colnames(x$model)[1];
+    }
+
+    ellipsis$x <- getResponse(x);
+    yFitted <- fitted(x);
+
+    do.call(plot,ellipsis);
+    lines(yFitted, col="red");
+    if(yFitted[length(yFitted)]>mean(yFitted)){
+        legelndPosition <- "bottomright";
+    }
+    else{
+        legelndPosition <- "topright";
+    }
+    legend(legelndPosition,legend=c("Actuals","Fitted"),col=c("black","red"),lwd=rep(1,2));
 }
 
 #' @export
@@ -189,6 +273,44 @@ plot.forecast.greybox <- function(x, ...){
         }
         else{
             smooth::graphmaker(yActuals, yForecast, yFitted);
+        }
+    }
+}
+
+#' @importFrom grDevices rgb
+#' @export
+plot.rollingOrigin <- function(x, ...){
+    y <- x$actuals;
+    yDeltat <- deltat(y);
+
+    # How many tables we have
+    dimsOfHoldout <- dim(x$holdout);
+    dimsOfThings <- lapply(x,dim);
+    thingsToPlot <- 0;
+    # 1 - actuals, 2 - holdout
+    for(i in 3:length(dimsOfThings)){
+        thingsToPlot <- thingsToPlot + all(dimsOfThings[[i]]==dimsOfHoldout)*1;
+    }
+
+    # Define basic parameters
+    co <- !any(is.na(x$holdout[,ncol(x$holdout)]));
+    h <- nrow(x$holdout);
+    roh <- ncol(x$holdout);
+
+    # Define the start of the RO
+    roStart <- length(y)-h;
+    roStart <- start(y)[1]+yDeltat*(roStart-roh*co);
+
+    # Start plotting
+    plot(y, ylab="Actuals", ylim=range(min(unlist(lapply(x,min,na.rm=T)),na.rm=T),
+                                       max(unlist(lapply(x,max,na.rm=T)),na.rm=T)),
+         ...);
+    abline(v=roStart, col="red", lwd=2);
+    for(j in 1:thingsToPlot){
+        colCurrent <- rgb((j-1)/thingsToPlot,0,(thingsToPlot-j+1)/thingsToPlot,1);
+        for(i in 1:roh){
+            points(roStart+i*yDeltat,x[[2+j]][1,i],col=colCurrent,pch=16);
+            lines(c(roStart + (0:(h-1)+i)*yDeltat),c(x[[2+j]][,i]),col=colCurrent);
         }
     }
 }
@@ -241,34 +363,26 @@ print.forecast.greybox <- function(x, ...){
     print(ourMatrix);
 }
 
-plot.greybox <- function(x, ...){
-    ellipsis <- list(...);
-    # If type and ylab are not provided, set them...
-    if(!any(names(ellipsis)=="type")){
-        ellipsis$type <- "l";
-    }
-    if(!any(names(ellipsis)=="ylab")){
-        ellipsis$ylab <- colnames(x$model)[1];
-    }
+#' @export
+print.rollingOrigin <- function(x, ...){
+    co <- !any(is.na(x$holdout[,ncol(x$holdout)]));
+    h <- nrow(x$holdout);
+    roh <- ncol(x$holdout);
 
-    ellipsis$x <- getResponse(x);
-    yFitted <- fitted(x);
-
-    do.call(plot,ellipsis);
-    lines(yFitted, col="red");
-    if(yFitted[length(yFitted)]>mean(yFitted)){
-        legelndPosition <- "bottomright";
+    if(co){
+        cat(paste0("Rolling Origin with constant holdout was done.\n"));
     }
     else{
-        legelndPosition <- "topright";
+        cat(paste0("Rolling Origin with decreasing holdout was done.\n"));
     }
-    legend(legelndPosition,legend=c("Actuals","Fitted"),col=c("black","red"),lwd=rep(1,2));
+    cat(paste0("Forecast horizon is ",h,"\n"));
+    cat(paste0("Number of origins is ",roh,"\n"));
 }
 
 #' @importFrom stats sigma
 #' @export
 sigma.greybox <- function(object, ...){
-    return(sum(residuals(object)/(nobs(object)-nParam(object))));
+    return(sqrt(sum(residuals(object)^2)/(nobs(object)-nParam(object))));
 }
 
 #' @importFrom stats summary.lm
@@ -276,17 +390,17 @@ sigma.greybox <- function(object, ...){
 summary.greybox <- function(object, level=0.95, ...){
     ourReturn <- summary.lm(object, ...);
 
+    # Collect parameters and their standard errors
     parametersTable <- ourReturn$coefficients[,1:2];
-    paramQuantiles <- qt((1+level)/2,df=object$df.residual);
-    parametersTable <- cbind(parametersTable,parametersTable[,1]-paramQuantiles*parametersTable[,2],
-                             parametersTable[,1]+paramQuantiles*parametersTable[,2])
+    parametersTable <- cbind(parametersTable,confint(object, level=level));
     rownames(parametersTable) <- names(coef(object));
     colnames(parametersTable) <- c("Estimate","Std. Error",
-                                   paste0("Lower ",(1-level)/2*100,"%"), paste0("Upper ",(1+level)/2*100,"%"));
+                                   paste0("Lower ",(1-level)/2*100,"%"),
+                                   paste0("Upper ",(1+level)/2*100,"%"));
     ourReturn$coefficients <- parametersTable;
 
-    ICs <- c(AIC(object),AICc(object),BIC(object));
-    names(ICs) <- c("AIC","AICc","BIC");
+    ICs <- c(AIC(object),AICc(object),BIC(object),BICc(object));
+    names(ICs) <- c("AIC","AICc","BIC","BICc");
     ourReturn$ICs <- ICs;
 
     ourReturn <- structure(ourReturn,class="summary.greybox");
@@ -302,20 +416,19 @@ summary.greyboxC <- function(object, level=0.95, ...){
     parametersTable <- cbind(coef(object),object$coefficientsSE,object$importance);
 
     # Calculate the quantiles for parameters and add them to the table
-    paramQuantiles <- qt((1+level)/2,df=object$df.residual);
-    parametersTable <- cbind(parametersTable,parametersTable[,1]-paramQuantiles*parametersTable[,2],
-                             parametersTable[,1]+paramQuantiles*parametersTable[,2])
+    parametersTable <- cbind(parametersTable,confint(object, level=level));
     rownames(parametersTable) <- names(coef(object));
     colnames(parametersTable) <- c("Estimate","Std. Error","Importance",
-                                   paste0("Lower ",(1-level)/2*100,"%"), paste0("Upper ",(1+level)/2*100,"%"));
+                                   paste0("Lower ",(1-level)/2*100,"%"),
+                                   paste0("Upper ",(1+level)/2*100,"%"));
 
     # Extract degrees of freedom
     df <- c(object$df, object$df.residual, object$rank);
     # Calculate s.e. of residuals
     residSE <- sqrt(sum(errors^2)/df[2]);
 
-    ICs <- c(AIC(object),AICc(object),BIC(object));
-    names(ICs) <- c("AIC","AICc","BIC");
+    ICs <- c(AIC(object),AICc(object),BIC(object),BICc(object));
+    names(ICs) <- c("AIC","AICc","BIC","BICc");
 
     R2 <- 1 - sum(errors^2) / sum((object$model[,1]-mean(object$model[,1]))^2)
     R2Adj <- 1 - (1 - R2) * (obs - 1) / (obs - df[1]);
@@ -324,4 +437,18 @@ summary.greyboxC <- function(object, level=0.95, ...){
                                 ICs=ICs, df=df, r.squared=R2, adj.r.squared=R2Adj),
                            class="summary.greyboxC");
     return(ourReturn);
+}
+
+#' @importFrom stats vcov
+#' @export
+vcov.greyboxC <- function(object, ...){
+    s2 <- sigma(object)^2;
+    xreg <- as.matrix(object$model[,-1]);
+    xreg <- cbind(1,xreg);
+    colnames(xreg)[1] <- "Intercept";
+    importance <- object$importance;
+
+    vcovValue <- s2 * solve(t(xreg) %*% xreg) * importance %*% t(importance);
+    warning("The covariance matrix for combined models is approximate. Don't rely too much on that.",call.=FALSE);
+    return(vcovValue);
 }

@@ -23,10 +23,13 @@ and can be used for the regulation of exogenous variables sizes. See examples
 for the details.}
 
 \item{value}{The variable or set of variables returned by the \code{call}.
-For example, "\code{mean}" for functions of \code{forecast} package. This can
+For example, \code{mean} for functions of \code{forecast} package. This can
 also be a vector of variables. See examples for the details. If the parameter
 is \code{NULL}, then all the values from the call are returned (could be really
-messy!).}
+messy!). Note that if your function returns a list with matrices, then ro will
+return an array. If your function returns a list, then you will have a list of
+lists in the end. So it makes sense to understand what you want to get before
+running the function.}
 
 \item{ci}{The parameter defines if the in-sample window size should be constant.
 If \code{TRUE}, then with each origin one observation is added at the end of
@@ -46,10 +49,12 @@ in parallel.}
 \value{
 Function returns the following variables:
 \itemize{
-\item{\code{actuals} - the matrix of actual values corresponding to the
+\item{\code{actuals} - the data provided to the function.}
+\item{\code{holdout} - the matrix of actual values corresponding to the
 produced forecasts from each origin.}
-\item{\code{value} - the matrices with the produced data from each origin.
-Name of each matrix corresponds to the names in the parameter \code{value}.}
+\item{\code{value} - the matrices / array / lists with the produced data
+from each origin. Name of each object corresponds to the names in the
+parameter \code{value}.}
 }
 }
 \description{
@@ -61,6 +66,9 @@ This function produces rolling origin forecasts using the \code{data} and a
 serial or in parallel, but it needs \code{foreach} and either \code{doMC}
 (Linux only), \code{doParallel} or \code{doSNOW} packages installed in order
 to do the latter.
+
+This is a dangerous function, so be careful with the call that you pass to
+it, and make sure that it is well formulated before the execution.
 }
 \examples{
 
@@ -69,7 +77,10 @@ ourCall <- "predict(arima(x=data,order=c(0,1,1)),n.ahead=h)"
 
 # The default call and values
 ourValue <- "pred"
-ro(x, h=5, origins=5, ourCall, ourValue)
+ourRO <- ro(x, h=5, origins=5, ourCall, ourValue)
+
+# We can now plot the results of this evaluation:
+plot(ourRO)
 
 # You can also use dolar sign
 ourValue <- "$pred"
@@ -85,6 +96,17 @@ ro(x, h=5, origins=20, ourCall, ourValue, ci=TRUE, co=TRUE)
 #### but computed in parallel using all but 1 core of CPU:
 \dontrun{ro(x, h=5, origins=20, ourCall, ourValue, ci=TRUE, co=TRUE, parallel=TRUE)}
 
+#### If you want to use functions from forecast package, please note that you need to
+#### set the values that need to be returned explicitly. There are two options for this.
+# Example 1:
+\dontrun{ourCall <- "forecast(ets(data), h=h, level=95)"
+ourValue <- c("mean", "lower", "upper")
+ro(x,h=5,origins=5,ourCall,ourValue)}
+
+# Example 2:
+\dontrun{ourCall <- "forecast(ets(data), h=h, level=c(80,95))"
+ourValue <- c("mean", "lower[,1]", "upper[,1]", "lower[,2]", "upper[,2]")
+ro(x,h=5,origins=5,ourCall,ourValue)}
 
 #### A more complicated example using the for loop and
 #### several time series

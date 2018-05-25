@@ -28,23 +28,23 @@ ourModel <- stepwise(BJxreg)
 ## ----BJStepwiseResult----------------------------------------------------
 ourModel
 
-## ----BJCombiner1---------------------------------------------------------
-ourModel <- combiner(BJxreg[,-c(3:7,18:22)],bruteForce=TRUE)
+## ----BJcombine1----------------------------------------------------------
+ourModel <- lmCombine(BJxreg[,-c(3:7,18:22)],bruteForce=TRUE)
 summary(ourModel)
 
-## ----BJCombiner2---------------------------------------------------------
-ourModel <- combiner(BJxreg,bruteForce=FALSE)
+## ----BJcombine2----------------------------------------------------------
+ourModel <- lmCombine(BJxreg,bruteForce=FALSE)
 summary(ourModel)
 
-## ----BJCombiner3---------------------------------------------------------
+## ----BJcombine3----------------------------------------------------------
 BJInsample <- BJxreg[1:130,];
 BJHoldout <- BJxreg[-(1:130),];
-ourModel <- combiner(BJInsample,bruteForce=FALSE)
+ourModel <- lmCombine(BJInsample,bruteForce=FALSE)
 
-## ----BJCombinerPlot------------------------------------------------------
+## ----BJcombinePlot-------------------------------------------------------
 plot(ourModel)
 
-## ----BJCombinerForecast--------------------------------------------------
+## ----BJcombineForecast---------------------------------------------------
 ourForecast <- forecast(ourModel,BJHoldout)
 plot(ourForecast)
 
