@@ -146,7 +146,6 @@
 #' ourValue <- "forecast"
 #' ro(x,h=5,origins=5,ourCall,ourValue)}
 #'
-#'
 #' @export ro
 ro <- function(data,h=10,origins=10,call,value=NULL,
                ci=FALSE,co=FALSE,silent=TRUE,parallel=FALSE){
@@ -491,7 +490,7 @@ ro <- function(data,h=10,origins=10,call,value=NULL,
         listReturned[[ivan41+1]] <- stuff;
     }
 
-    listReturned <- c(list(actuals=data),listReturned);
+    listReturned <- c(list(actuals=y),listReturned);
     names(listReturned)[-1] <- c("holdout",value);
     return(structure(listReturned,class="rollingOrigin"));
 }

@@ -42,9 +42,37 @@ BJHoldout <- BJxreg[-(1:130),];
 ourModel <- lmCombine(BJInsample,bruteForce=FALSE)
 
 ## ----BJcombinePlot-------------------------------------------------------
+summary(ourModel)
 plot(ourModel)
 
 ## ----BJcombineForecast---------------------------------------------------
+ourForecast <- forecast(ourModel,BJHoldout)
+plot(ourForecast)
+
+## ----BJDynamicModel------------------------------------------------------
+ourModel <- lmDynamic(BJInsample,bruteForce=FALSE)
+
+## ----BJDynamicPlot-------------------------------------------------------
+ourSummary <- summary(ourModel)
+ourSummary
+plot(ourModel)
+
+## ----BJDynamicCoefficients-----------------------------------------------
+# Coefficients in dynamics
+head(ourModel$dynamic)
+# Standard errors of the coefficients in dynamics
+head(ourModel$se)
+# Importance of parameters in dynamics
+head(ourModel$importance)
+
+## ----BJDynamicCoefficientsPlots, eval=FALSE, include=FALSE---------------
+#  plot(coef(ourModel))
+
+## ----BJDynamicdf---------------------------------------------------------
+ourModel$dfDynamic
+ourModel$df.residualDynamic
+
+## ----BJDynamicForecast---------------------------------------------------
 ourForecast <- forecast(ourModel,BJHoldout)
 plot(ourForecast)
 

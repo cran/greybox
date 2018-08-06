@@ -33,6 +33,11 @@
 #' @export determination
 determination <- function(xreg, ...){
 
+    if(any(colMeans(xreg,na.rm=TRUE)==xreg[1,])){
+        warning("Some of the variables did not have any variability. We dropped them.",
+                call.=FALSE);
+        xreg <- xreg[,colMeans(xreg,na.rm=TRUE)!=xreg[1,]]
+    }
     # Produce correlation matrix
     matrixCorrelations <- cor(xreg, ...);
     # Calculate its determinant
@@ -46,9 +51,18 @@ determination <- function(xreg, ...){
         warning(paste0("The number of variables is larger than the number of observations. ",
                        "All the coefficients of determination are equal to one."), call.=FALSE);
     }
+
     # Calculate the multiple determinations
-    for(i in 1:nVariables){
-        vectorCorrelationsMultiple[i] <- 1 - detCorrelations / det(matrixCorrelations[-i,-i]);
+    if(nVariables>2){
+        for(i in 1:nVariables){
+            vectorCorrelationsMultiple[i] <- 1 - detCorrelations / det(matrixCorrelations[-i,-i]);
+        }
+    }
+    else if(nVariables==2){
+        vectorCorrelationsMultiple <- matrixCorrelations[1,2]^2;
+    }
+    else{
+        vectorCorrelationsMultiple <- 0;
     }
 
     return(vectorCorrelationsMultiple);

@@ -1,8 +1,8 @@
 Package: greybox
 Type: Package
 Title: Toolbox for Model Building and Forecasting
-Version: 0.2.2
-Date: 2018-05-25
+Version: 0.3.0
+Date: 2018-08-05
 Authors@R: person("Ivan", "Svetunkov", email = "ivan@svetunkov.ru", role = c("aut", "cre"),
                   comment="Lecturer at Centre for Marketing Analytics and Forecasting, Lancaster University, UK")
 URL: https://github.com/config-i1/greybox
@@ -12,20 +12,20 @@ Description: Implements functions and instruments for regression model building 
              and models specification for cases of time series data. This includes promotional
              modelling, selection between different dynamic regressions with non-standard
              distributions of errors, selection based on cross validation, solutions to the fat
-             regressions model problem and more. Models developed in the package are tailored
+             regression model problem and more. Models developed in the package are tailored
              specifically for forecasting purposes. So as a results there are several methods
              that allow producing forecasts from these models and visualising them.
 License: GPL (>= 2)
 Depends: R (>= 3.0.2)
-Imports: forecast, stats, graphics, utils, lamW
-Suggests: smooth, doMC, doParallel, foreach, numDeriv, testthat,
+Imports: forecast, stats, graphics, utils, lamW, numDeriv, nloptr
+Suggests: smooth, doMC, doParallel, foreach, truncreg, testthat,
         rmarkdown, knitr
 RoxygenNote: 6.0.1
 VignetteBuilder: knitr
 NeedsCompilation: no
-Packaged: 2018-05-24 22:29:26 UTC; config
+Packaged: 2018-08-05 22:30:56 UTC; config
 Author: Ivan Svetunkov [aut, cre] (Lecturer at Centre for Marketing Analytics
     and Forecasting, Lancaster University, UK)
 Maintainer: Ivan Svetunkov <ivan@svetunkov.ru>
 Repository: CRAN
-Date/Publication: 2018-05-25 07:32:53 UTC
+Date/Publication: 2018-08-06 07:20:02 UTC
