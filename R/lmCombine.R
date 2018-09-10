@@ -3,7 +3,7 @@
 #' Function combines parameters of linear regressions of the first variable
 #' on all the other provided data.
 #'
-#' The algorithm uses lm() to fit different models and then combines the models
+#' The algorithm uses alm() to fit different models and then combines the models
 #' based on the selected IC.
 #'
 #' @template AICRef
@@ -18,9 +18,27 @@
 #' one are produced and then combined.
 #' @param silent If \code{FALSE}, then nothing is silent, everything is printed
 #' out. \code{TRUE} means that nothing is produced.
+#' @param distribution Distribution to pass to \code{alm()}.
 #'
 #' @return Function returns \code{model} - the final model of the class
-#' "lm.combined".
+#' "greyboxC". The list of variables:
+#' \itemize{
+#' \item coefficients - combined parameters of the model,
+#' \item se - combined standard errors of the parameters of the model,
+#' \item actuals - actual values of the response variable,
+#' \item fitted.values - the fitted values,
+#' \item residuals - residual of the model,
+#' \item distribution - distribution used in the estimation,
+#' \item logLik - combined log-likelihood of the model,
+#' \item IC - the values of the combined information criterion,
+#' \item df.residual - number of degrees of freedom of the residuals of
+#' the combined model,
+#' \item df - number of degrees of freedom of the combined model,
+#' \item importance - importance of the parameters,
+#' \item call - call used in the function,
+#' \item rank - rank of the combined model,
+#' \item model - the data used in the model.
+#' }
 #'
 #' @seealso \code{\link[stats]{step}, \link[greybox]{xregExpander},
 #' \link[greybox]{stepwise}}
@@ -35,8 +53,8 @@
 #' outSample <- xreg[-c(1:80),]
 #' # Combine all the possible models
 #' ourModel <- lmCombine(inSample,bruteForce=TRUE)
-#' forecast(ourModel,outSample)
-#' plot(forecast(ourModel,outSample))
+#' predict(ourModel,outSample)
+#' plot(predict(ourModel,outSample))
 #'
 #' ### Fat regression example
 #' xreg <- matrix(rnorm(5000,10,3),50,100)
@@ -47,14 +65,19 @@
 #' # Combine only the models close to the optimal
 #' ourModel <- lmCombine(inSample,ic="BICc",bruteForce=FALSE)
 #' summary(ourModel)
-#' plot(forecast(ourModel,outSample))
+#' plot(predict(ourModel,outSample))
 #'
 #' @importFrom stats dnorm
 #'
 #' @aliases combine combiner
 #' @export lmCombine
-lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteForce=FALSE, silent=TRUE){
+lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteForce=FALSE, silent=TRUE,
+                      distribution=c("dnorm","dfnorm","dlnorm","dlaplace","ds","dchisq","dlogis",
+                                    "plogis","pnorm")){
     # Function combines linear regression models and produces the combined lm object.
+    cl <- match.call();
+    cl$formula <- as.formula(paste0(colnames(data)[1]," ~ 1"));
+
     ourData <- data;
     if(!is.data.frame(ourData)){
         ourData <- as.data.frame(ourData);
@@ -77,6 +100,20 @@ lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteForce=FALSE, s
     }
     else if(ic=="BICc"){
         IC <- BICc;
+    }
+
+    distribution <- distribution[1];
+    if(distribution=="dnorm"){
+        lmCall <- function(formula, data){
+            model <- list(xreg=as.matrix(cbind(1,data[,as.character(all.vars(formula[[3]]))])))
+            model <- c(model,.lm.fit(model$xreg, as.matrix(data[,as.character(formula[[2]])])));
+            return(structure(model,class=c("lmGreybox","lm")));
+        }
+        listToCall <- vector("list");
+    }
+    else{
+        lmCall <- alm;
+        listToCall <- list(distribution=distribution);
     }
 
     # Observations in sample, assuming that the missing values are for the holdout
@@ -110,31 +147,31 @@ lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteForce=FALSE, s
         parametersSE <- matrix(0,nCombinations,nVariables+1);
 
         # Starting estimating the models with just a constant
-        ourModel <- lm(as.formula(paste0(responseName,"~1")),data=ourData);
+        # ourModel <- alm(as.formula(paste0(responseName,"~1")),data=ourData,distribution=distribution);
+        listToCall$formula <- as.formula(paste0(responseName,"~1"));
+        listToCall$data <- ourData;
+        ourModel <- do.call(lmCall,listToCall);
         ICs[1] <- IC(ourModel);
         parameters[1,1] <- coef(ourModel)[1];
         parametersSE[1,1] <- diag(vcov(ourModel));
     }
     else{
-        if(nVariables>=obsInsample){
-            if(!silent){
-                cat("Selecting the best model...\n");
-            }
-            bestModel <- stepwise(ourData, ic=ic, method="kendall");
+        if(!silent){
+            cat("Selecting the best model...\n");
         }
-        else{
-            bestModel <- stepwise(ourData, ic=ic);
-        }
+        bestModel <- stepwise(ourData, ic=ic, distribution=distribution);
 
         # If the number of variables is small, do bruteForce
-        if(ncol(bestModel$model)<16){
+        if(nParam(bestModel)<16){
             newData <-  ourData[,c(colnames(ourData)[1],names(bestModel$ICs)[-1])];
-            return(lmCombine(newData, ic=ic, bruteForce=TRUE, silent=silent));
+            bestModel <- lmCombine(newData, ic=ic, bruteForce=TRUE, silent=silent, distribution=distribution);
+            bestModel$call <- cl;
+            return(bestModel);
         }
         # If we have too many variables, use "stress" analysis
         else{
             # Extract names of the used variables
-            bestExoNames <- colnames(bestModel$model)[-1];
+            bestExoNames <- names(coef(bestModel))[-1];
             nVariablesInModel <- length(bestExoNames);
             # Define number of combinations:
             # 1. Best model
@@ -193,7 +230,10 @@ lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteForce=FALSE, s
             cat(paste0(round(i/nCombinations,2)*100,"%"));
         }
         lmFormula <- paste0(responseName,"~",paste0(variablesNames[variablesCombinations[i,]==1],collapse="+"));
-        ourModel <- lm(as.formula(lmFormula),data=ourData);
+        # ourModel <- alm(as.formula(lmFormula),data=ourData,distribution=distribution);
+        listToCall$formula <- as.formula(lmFormula);
+        listToCall$data <- ourData;
+        ourModel <- do.call(lmCall,listToCall);
         ICs[i] <- IC(ourModel);
         parameters[i,c(1,variablesCombinations[i,])==1] <- coef(ourModel);
         parametersSE[i,c(1,variablesCombinations[i,])==1] <- diag(vcov(ourModel));
@@ -230,32 +270,13 @@ lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteForce=FALSE, s
     parametersSECombined <- c(ICWeights %*% sqrt(parametersSE +(parameters - matrix(apply(parametersWeighted,2,sum),nrow(parameters),ncol(parameters),byrow=T))^2))
     names(parametersSECombined) <- exoNames;
 
-    # Create an object of the same name as the original data
-    # If it was a call on its own, make it one string
-    assign(paste0(deparse(substitute(data)),collapse=""),as.data.frame(data));
-    testModel <- do.call("lm", list(formula=as.formula(paste0(responseName,"~.")), data=substitute(data)));
-
     #Calcualte logLik
     logLikCombined <- sum(dnorm(errors,0,sd=sqrt(sum(errors^2)/df),log=TRUE));
 
-    ourTerms <- testModel$terms;
+    finalModel <- list(coefficients=parametersCombined, se=parametersSECombined, fitted.values=as.vector(yFitted),
+                       residuals=as.vector(errors), distribution=distribution, logLik=logLikCombined, IC=ICValue,
+                       df.residual=df, df=sum(importance)+1, importance=importance,
+                       call=cl, rank=nVariables+1, data=ourData);
 
-    finalModel <- list(coefficients=parametersCombined, residuals=as.vector(errors), fitted.values=as.vector(yFitted),
-                       df.residual=df, se=parametersSECombined, importance=importance,
-                       IC=ICValue, call=testModel$call, logLik=logLikCombined, rank=nVariables+1,
-                       model=ourData, terms=ourTerms, qr=qr(ourData), df=sum(importance)+1);
-
-    return(structure(finalModel,class=c("greyboxC","greybox","lm")));
-}
-
-#' @export
-combiner <- function(...){
-    warning("This is the old name of the function. Please use `lmCombine` instead.",call.=FALSE);
-    lmCombine(...);
-}
-
-#' @export
-combine <- function(...){
-    warning("This is the old name of the function. Please use `lmCombine` instead.",call.=FALSE);
-    lmCombine(...);
+    return(structure(finalModel,class=c("greyboxC","greybox","alm")));
 }

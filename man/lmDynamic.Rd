@@ -4,8 +4,10 @@
 \alias{lmDynamic}
 \title{Combine regressions based on point information criteria}
 \usage{
-lmDynamic(data, ic = c("AICc", "AIC", "BIC", "BICc"), bruteForce = FALSE,
-  silent = TRUE)
+lmDynamic(data, ic = c("AICc", "AIC", "BIC", "BICc"),
+  bruteForce = FALSE, silent = TRUE, distribution = c("dnorm",
+  "dfnorm", "dlnorm", "dlaplace", "ds", "dchisq", "dlogis", "plogis",
+  "pnorm"))
 }
 \arguments{
 \item{data}{Data frame containing dependent variable in the first column and
@@ -19,18 +21,41 @@ one are produced and then combined.}
 
 \item{silent}{If \code{FALSE}, then nothing is silent, everything is printed
 out. \code{TRUE} means that nothing is produced.}
+
+\item{distribution}{Distribution to pass to \code{alm()}.}
 }
 \value{
 Function returns \code{model} - the final model of the class
-"lm.combined", which includes time varying parameters and dynamic importance
-of each variable.
+"gryboxD", which includes time varying parameters and dynamic importance
+of each variable. The list of variables:
+\itemize{
+\item coefficients - mean (over time) parameters of the model,
+\item se - mean standard errors of the parameters of the model,
+\item actuals - actual values of the response variable,
+\item fitted.values - the fitted values,
+\item residuals - residual of the model,
+\item distribution - distribution used in the estimation,
+\item logLik - mean (over time) log-likelihood of the model,
+\item IC - dynamic values of the information criterion (pIC),
+\item df.residual - mean number of degrees of freedom of the residuals of
+the model,
+\item df - mean number of degrees of freedom of the model,
+\item importance - dynamic importance of the parameters,
+\item coefficientsDynamic - table with parameters of the model, varying over
+the time,
+\item df.residualDynamic - dynamic df.residual,
+\item dfDynamic - dynamic df,
+\item call - call used in the function,
+\item rank - rank of the combined model,
+\item model - the data used in the model.
+}
 }
 \description{
 Function combines parameters of linear regressions of the first variable
 on all the other provided data using pAIC weights
 }
 \details{
-The algorithm uses lm() to fit different models and then combines the models
+The algorithm uses alm() to fit different models and then combines the models
 based on the selected point IC. This is a dynamic counterpart of
 \link[greybox]{lmCombine} function.
 }
@@ -44,8 +69,8 @@ inSample <- xreg[1:80,]
 outSample <- xreg[-c(1:80),]
 # Combine all the possible models
 ourModel <- lmDynamic(inSample,bruteForce=TRUE)
-forecast(ourModel,outSample)
-plot(forecast(ourModel,outSample))
+predict(ourModel,outSample)
+plot(predict(ourModel,outSample))
 
 }
 \references{

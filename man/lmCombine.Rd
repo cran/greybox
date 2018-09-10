@@ -6,8 +6,10 @@
 \alias{combiner}
 \title{Combine regressions based on information criteria}
 \usage{
-lmCombine(data, ic = c("AICc", "AIC", "BIC", "BICc"), bruteForce = FALSE,
-  silent = TRUE)
+lmCombine(data, ic = c("AICc", "AIC", "BIC", "BICc"),
+  bruteForce = FALSE, silent = TRUE, distribution = c("dnorm",
+  "dfnorm", "dlnorm", "dlaplace", "ds", "dchisq", "dlogis", "plogis",
+  "pnorm"))
 }
 \arguments{
 \item{data}{Data frame containing dependent variable in the first column and
@@ -21,17 +23,36 @@ one are produced and then combined.}
 
 \item{silent}{If \code{FALSE}, then nothing is silent, everything is printed
 out. \code{TRUE} means that nothing is produced.}
+
+\item{distribution}{Distribution to pass to \code{alm()}.}
 }
 \value{
 Function returns \code{model} - the final model of the class
-"lm.combined".
+"greyboxC". The list of variables:
+\itemize{
+\item coefficients - combined parameters of the model,
+\item se - combined standard errors of the parameters of the model,
+\item actuals - actual values of the response variable,
+\item fitted.values - the fitted values,
+\item residuals - residual of the model,
+\item distribution - distribution used in the estimation,
+\item logLik - combined log-likelihood of the model,
+\item IC - the values of the combined information criterion,
+\item df.residual - number of degrees of freedom of the residuals of
+the combined model,
+\item df - number of degrees of freedom of the combined model,
+\item importance - importance of the parameters,
+\item call - call used in the function,
+\item rank - rank of the combined model,
+\item model - the data used in the model.
+}
 }
 \description{
 Function combines parameters of linear regressions of the first variable
 on all the other provided data.
 }
 \details{
-The algorithm uses lm() to fit different models and then combines the models
+The algorithm uses alm() to fit different models and then combines the models
 based on the selected IC.
 }
 \examples{
@@ -44,8 +65,8 @@ inSample <- xreg[1:80,]
 outSample <- xreg[-c(1:80),]
 # Combine all the possible models
 ourModel <- lmCombine(inSample,bruteForce=TRUE)
-forecast(ourModel,outSample)
-plot(forecast(ourModel,outSample))
+predict(ourModel,outSample)
+plot(predict(ourModel,outSample))
 
 ### Fat regression example
 xreg <- matrix(rnorm(5000,10,3),50,100)
@@ -56,7 +77,7 @@ outSample <- xreg[-c(1:40),]
 # Combine only the models close to the optimal
 ourModel <- lmCombine(inSample,ic="BICc",bruteForce=FALSE)
 summary(ourModel)
-plot(forecast(ourModel,outSample))
+plot(predict(ourModel,outSample))
 
 }
 \references{

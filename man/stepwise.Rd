@@ -5,7 +5,10 @@
 \title{Stepwise selection of regressors}
 \usage{
 stepwise(data, ic = c("AICc", "AIC", "BIC", "BICc"), silent = TRUE,
-  df = NULL, method = c("pearson", "kendall", "spearman"))
+  df = NULL, method = c("pearson", "kendall", "spearman"),
+  distribution = c("dnorm", "dfnorm", "dlnorm", "dlaplace", "ds",
+  "dchisq", "dlogis", "plogis", "pnorm"), occurrence = c("none",
+  "plogis", "pnorm"))
 }
 \arguments{
 \item{data}{Data frame containing dependant variable in the first column and
@@ -21,9 +24,15 @@ used on residuals).}
 
 \item{method}{Method of correlations calculation. The default is Kendall's
 Tau, which should be applicable to a wide range of data in different scales.}
+
+\item{distribution}{Distribution to pass to \code{alm()}.}
+
+\item{occurrence}{what distribution to use for occurrence part. See
+\link[greybox]{alm} for details.}
 }
 \value{
-Function returns \code{model} - the final model of the class "lm".
+Function returns \code{model} - the final model of the class "alm".
+See \link[greybox]{alm} for details of the output.
 }
 \description{
 Function selects variables that give linear regression with the lowest
@@ -32,7 +41,7 @@ partial correlations. This should be a simpler and faster implementation
 than step() function from `stats' package.
 }
 \details{
-The algorithm uses lm() to fit different models and cor() to select the next
+The algorithm uses alm() to fit different models and cor() to select the next
 regressor in the sequence.
 }
 \examples{
@@ -42,6 +51,13 @@ xreg <- cbind(rnorm(100,10,3),rnorm(100,50,5))
 xreg <- cbind(100+0.5*xreg[,1]-0.75*xreg[,2]+rnorm(100,0,3),xreg,rnorm(100,300,10))
 colnames(xreg) <- c("y","x1","x2","Noise")
 stepwise(xreg)
+
+### Mixture distribution of Log Normal and Cumulative Logit
+xreg[,1] <- xreg[,1] * round(exp(xreg[,1]-70) / (1 + exp(xreg[,1]-70)),0)
+colnames(xreg) <- c("y","x1","x2","Noise")
+ourModel <- stepwise(xreg, distribution="dlnorm",
+                     occurrence=stepwise(xreg, distribution="plogis"))
+summary(ourModel)
 
 ### Fat regression example
 xreg <- matrix(rnorm(20000,10,3),100,200)
@@ -62,7 +78,7 @@ Springer-Verlag New York. DOI: [10.1007/b97636](http://dx.doi.org/10.1007/b97636
 }
 \seealso{
 \code{\link[stats]{step}, \link[greybox]{xregExpander},
-\link[greybox]{combine}}
+\link[greybox]{lmCombine}}
 }
 \author{
 Ivan Svetunkov, \email{ivan@svetunkov.ru}

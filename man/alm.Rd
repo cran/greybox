@@ -4,8 +4,10 @@
 \alias{alm}
 \title{Advanced Linear Model}
 \usage{
-alm(formula, data, subset = NULL, na.action, distribution = c("laplace",
-  "s", "fnorm", "chisq"))
+alm(formula, data, subset, na.action, distribution = c("dnorm", "dfnorm",
+  "dlnorm", "dlaplace", "dlogis", "ds", "dchisq", "dpois", "dnbinom",
+  "plogis", "pnorm"), occurrence = c("none", "plogis", "pnorm"),
+  B = NULL, vcovProduce = FALSE)
 }
 \arguments{
 \item{formula}{an object of class "formula" (or one that can be coerced to
@@ -22,11 +24,52 @@ data contain NAs. The default is set by the na.action setting of
 factory-fresh default is \link[stats]{na.omit}. Another possible value
 is NULL, no action. Value \link[stats]{na.exclude} can be useful.}
 
-\item{distribution}{What density function to use in the process.}
+\item{distribution}{what density function to use in the process. The full
+name of the distribution should be provided here. Values with "d" in the
+beginning of the name refer to the density function, while "p" stands for
+"probability" (cumulative distribution function). The names align with the
+names of distribution functions in R. For example, see \link[stats]{dnorm}.}
+
+\item{occurrence}{what distribution to use for occurrence variable. Can be
+\code{"none"}, then nothing happens; \code{"plogis"} - then the logistic
+regression using \code{alm()} is estimated for the occurrence part;
+\code{"pnorm"} - then probit is constructed via \code{alm()} for the
+occurrence part. In both of the latter cases, the formula used is the same
+as the formula for the sizes. Finally, an "alm" model can be provided and
+its estimates will be used in the model construction.
+
+If this is not \code{"none"}, then the model is estimated
+in two steps: 1. Occurrence part of the model; 2. Sizes part of the model
+(excluding zeroes from the data).}
+
+\item{B}{vector of parameters of the linear model. When \code{NULL}, it
+is estimated.}
+
+\item{vcovProduce}{whether to produce variance-covariance matrix of
+coefficients or not. This is done via hessian calculation, so might be
+computationally costly.}
 }
 \value{
 Function returns \code{model} - the final model of the class
-"alm".
+"alm", which contains:
+\itemize{
+\item coefficients - estimated parameters of the model,
+\item vcov - covariance matrix of parameters of the model (based on Fisher
+Information). Returned only when \code{vcovProduce=TRUE}.
+\item actuals - actual values of the response variable,
+\item fitted.values - fitted values,
+\item residuals - residuals of the model,
+\item mu - the estimated location parameter of the distribution,
+\item scale - the estimated scale parameter of the distribution,
+\item distribution - distribution used in the estimation,
+\item logLik - log-likelihood of the model,
+\item df.residual - number of degrees of freedom of the residuals of the model,
+\item df - number of degrees of freedom of the model,
+\item call - how the model was called,
+\item rank - rank of the model,
+\item data - data used for the model construction,
+\item occurrence - the occurrence model used in the estimation.
+}
 }
 \description{
 Function estimates model based on the selected distribution
@@ -35,11 +78,18 @@ Function estimates model based on the selected distribution
 This is a function, similar to \link[stats]{lm}, but for the cases of several
 non-normal distributions. These include:
 \enumerate{
+\item Normal distribution, \link[stats]{dnorm},
+\item Folded normal distribution, \link[greybox]{dfnorm},
+\item Log normal distribution, \link[stats]{dlnorm},
 \item Laplace distribution, \link[greybox]{dlaplace},
 \item S-distribution, \link[greybox]{ds},
-\item Folded-normal distribution, \link[greybox]{dfnorm},
-\item Chi-Squared Distribution, \link[stats]{dchisq}.
+\item Chi-Squared Distribution, \link[stats]{dchisq},
+\item Logistic Distribution, \link[stats]{dlogis}.
 }
+
+This function is slower than \code{lm}, because it relies on likelihood estimation
+of parameters, hessian calculation and matrix multiplication. So think twice when
+using \code{distribution="dnorm"} here.
 
 Probably some other distributions will be added to this function at some point...
 
@@ -52,10 +102,26 @@ xreg <- cbind(100+0.5*xreg[,1]-0.75*xreg[,2]+rlaplace(100,0,3),xreg,rnorm(100,30
 colnames(xreg) <- c("y","x1","x2","Noise")
 inSample <- xreg[1:80,]
 outSample <- xreg[-c(1:80),]
-# Combine all the possible models
-ourModel <- alm(y~x1+x2, inSample, distribution="laplace")
+
+ourModel <- alm(y~x1+x2, inSample, distribution="dlaplace")
 summary(ourModel)
-plot(forecast(ourModel,outSample))
+plot(predict(ourModel,outSample))
+
+# An example with binary response variable
+xreg[,1] <- round(exp(xreg[,1]-70) / (1 + exp(xreg[,1]-70)),0)
+colnames(xreg) <- c("y","x1","x2","Noise")
+inSample <- xreg[1:80,]
+outSample <- xreg[-c(1:80),]
+
+# Logistic distribution (logit regression)
+ourModel <- alm(y~x1+x2, inSample, distribution="plogis")
+summary(ourModel)
+plot(predict(ourModel,outSample,interval="c"))
+
+# Normal distribution (probit regression)
+ourModel <- alm(y~x1+x2, inSample, distribution="pnorm")
+summary(ourModel)
+plot(predict(ourModel,outSample,interval="p"))
 
 }
 \seealso{

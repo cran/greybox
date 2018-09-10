@@ -46,7 +46,7 @@ summary(ourModel)
 plot(ourModel)
 
 ## ----BJcombineForecast---------------------------------------------------
-ourForecast <- forecast(ourModel,BJHoldout)
+ourForecast <- predict(ourModel,BJHoldout)
 plot(ourForecast)
 
 ## ----BJDynamicModel------------------------------------------------------
@@ -73,6 +73,6 @@ ourModel$dfDynamic
 ourModel$df.residualDynamic
 
 ## ----BJDynamicForecast---------------------------------------------------
-ourForecast <- forecast(ourModel,BJHoldout)
+ourForecast <- predict(ourModel,BJHoldout)
 plot(ourForecast)
 

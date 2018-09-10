@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+
+<meta charset="utf-8" />
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="pandoc" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<meta name="author" content="Ivan Svetunkov" />
+
+<meta name="date" content="2018-09-10" />
+
+<title>Advanced Linear Model</title>
+
+
+
+<style type="text/css">code{white-space: pre;}</style>
+<style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+</style>
+
+
+
+<link href="data:text/css;charset=utf-8,body%20%7B%0Abackground%2Dcolor%3A%20%23fff%3B%0Amargin%3A%201em%20auto%3B%0Amax%2Dwidth%3A%20700px%3B%0Aoverflow%3A%20visible%3B%0Apadding%2Dleft%3A%202em%3B%0Apadding%2Dright%3A%202em%3B%0Afont%2Dfamily%3A%20%22Open%20Sans%22%2C%20%22Helvetica%20Neue%22%2C%20Helvetica%2C%20Arial%2C%20sans%2Dserif%3B%0Afont%2Dsize%3A%2014px%3B%0Aline%2Dheight%3A%201%2E35%3B%0A%7D%0A%23header%20%7B%0Atext%2Dalign%3A%20center%3B%0A%7D%0A%23TOC%20%7B%0Aclear%3A%20both%3B%0Amargin%3A%200%200%2010px%2010px%3B%0Apadding%3A%204px%3B%0Awidth%3A%20400px%3B%0Aborder%3A%201px%20solid%20%23CCCCCC%3B%0Aborder%2Dradius%3A%205px%3B%0Abackground%2Dcolor%3A%20%23f6f6f6%3B%0Afont%2Dsize%3A%2013px%3B%0Aline%2Dheight%3A%201%2E3%3B%0A%7D%0A%23TOC%20%2Etoctitle%20%7B%0Afont%2Dweight%3A%20bold%3B%0Afont%2Dsize%3A%2015px%3B%0Amargin%2Dleft%3A%205px%3B%0A%7D%0A%23TOC%20ul%20%7B%0Apadding%2Dleft%3A%2040px%3B%0Amargin%2Dleft%3A%20%2D1%2E5em%3B%0Amargin%2Dtop%3A%205px%3B%0Amargin%2Dbottom%3A%205px%3B%0A%7D%0A%23TOC%20ul%20ul%20%7B%0Amargin%2Dleft%3A%20%2D2em%3B%0A%7D%0A%23TOC%20li%20%7B%0Aline%2Dheight%3A%2016px%3B%0A%7D%0Atable%20%7B%0Amargin%3A%201em%20auto%3B%0Aborder%2Dwidth%3A%201px%3B%0Aborder%2Dcolor%3A%20%23DDDDDD%3B%0Aborder%2Dstyle%3A%20outset%3B%0Aborder%2Dcollapse%3A%20collapse%3B%0A%7D%0Atable%20th%20%7B%0Aborder%2Dwidth%3A%202px%3B%0Apadding%3A%205px%3B%0Aborder%2Dstyle%3A%20inset%3B%0A%7D%0Atable%20td%20%7B%0Aborder%2Dwidth%3A%201px%3B%0Aborder%2Dstyle%3A%20inset%3B%0Aline%2Dheight%3A%2018px%3B%0Apadding%3A%205px%205px%3B%0A%7D%0Atable%2C%20table%20th%2C%20table%20td%20%7B%0Aborder%2Dleft%2Dstyle%3A%20none%3B%0Aborder%2Dright%2Dstyle%3A%20none%3B%0A%7D%0Atable%20thead%2C%20table%20tr%2Eeven%20%7B%0Abackground%2Dcolor%3A%20%23f7f7f7%3B%0A%7D%0Ap%20%7B%0Amargin%3A%200%2E5em%200%3B%0A%7D%0Ablockquote%20%7B%0Abackground%2Dcolor%3A%20%23f6f6f6%3B%0Apadding%3A%200%2E25em%200%2E75em%3B%0A%7D%0Ahr%20%7B%0Aborder%2Dstyle%3A%20solid%3B%0Aborder%3A%20none%3B%0Aborder%2Dtop%3A%201px%20solid%20%23777%3B%0Amargin%3A%2028px%200%3B%0A%7D%0Adl%20%7B%0Amargin%2Dleft%3A%200%3B%0A%7D%0Adl%20dd%20%7B%0Amargin%2Dbottom%3A%2013px%3B%0Amargin%2Dleft%3A%2013px%3B%0A%7D%0Adl%20dt%20%7B%0Afont%2Dweight%3A%20bold%3B%0A%7D%0Aul%20%7B%0Amargin%2Dtop%3A%200%3B%0A%7D%0Aul%20li%20%7B%0Alist%2Dstyle%3A%20circle%20outside%3B%0A%7D%0Aul%20ul%20%7B%0Amargin%2Dbottom%3A%200%3B%0A%7D%0Apre%2C%20code%20%7B%0Abackground%2Dcolor%3A%20%23f7f7f7%3B%0Aborder%2Dradius%3A%203px%3B%0Acolor%3A%20%23333%3B%0Awhite%2Dspace%3A%20pre%2Dwrap%3B%20%0A%7D%0Apre%20%7B%0Aborder%2Dradius%3A%203px%3B%0Amargin%3A%205px%200px%2010px%200px%3B%0Apadding%3A%2010px%3B%0A%7D%0Apre%3Anot%28%5Bclass%5D%29%20%7B%0Abackground%2Dcolor%3A%20%23f7f7f7%3B%0A%7D%0Acode%20%7B%0Afont%2Dfamily%3A%20Consolas%2C%20Monaco%2C%20%27Courier%20New%27%2C%20monospace%3B%0Afont%2Dsize%3A%2085%25%3B%0A%7D%0Ap%20%3E%20code%2C%20li%20%3E%20code%20%7B%0Apadding%3A%202px%200px%3B%0A%7D%0Adiv%2Efigure%20%7B%0Atext%2Dalign%3A%20center%3B%0A%7D%0Aimg%20%7B%0Abackground%2Dcolor%3A%20%23FFFFFF%3B%0Apadding%3A%202px%3B%0Aborder%3A%201px%20solid%20%23DDDDDD%3B%0Aborder%2Dradius%3A%203px%3B%0Aborder%3A%201px%20solid%20%23CCCCCC%3B%0Amargin%3A%200%205px%3B%0A%7D%0Ah1%20%7B%0Amargin%2Dtop%3A%200%3B%0Afont%2Dsize%3A%2035px%3B%0Aline%2Dheight%3A%2040px%3B%0A%7D%0Ah2%20%7B%0Aborder%2Dbottom%3A%204px%20solid%20%23f7f7f7%3B%0Apadding%2Dtop%3A%2010px%3B%0Apadding%2Dbottom%3A%202px%3B%0Afont%2Dsize%3A%20145%25%3B%0A%7D%0Ah3%20%7B%0Aborder%2Dbottom%3A%202px%20solid%20%23f7f7f7%3B%0Apadding%2Dtop%3A%2010px%3B%0Afont%2Dsize%3A%20120%25%3B%0A%7D%0Ah4%20%7B%0Aborder%2Dbottom%3A%201px%20solid%20%23f7f7f7%3B%0Amargin%2Dleft%3A%208px%3B%0Afont%2Dsize%3A%20105%25%3B%0A%7D%0Ah5%2C%20h6%20%7B%0Aborder%2Dbottom%3A%201px%20solid%20%23ccc%3B%0Afont%2Dsize%3A%20105%25%3B%0A%7D%0Aa%20%7B%0Acolor%3A%20%230033dd%3B%0Atext%2Ddecoration%3A%20none%3B%0A%7D%0Aa%3Ahover%20%7B%0Acolor%3A%20%236666ff%3B%20%7D%0Aa%3Avisited%20%7B%0Acolor%3A%20%23800080%3B%20%7D%0Aa%3Avisited%3Ahover%20%7B%0Acolor%3A%20%23BB00BB%3B%20%7D%0Aa%5Bhref%5E%3D%22http%3A%22%5D%20%7B%0Atext%2Ddecoration%3A%20underline%3B%20%7D%0Aa%5Bhref%5E%3D%22https%3A%22%5D%20%7B%0Atext%2Ddecoration%3A%20underline%3B%20%7D%0A%0Acode%20%3E%20span%2Ekw%20%7B%20color%3A%20%23555%3B%20font%2Dweight%3A%20bold%3B%20%7D%20%0Acode%20%3E%20span%2Edt%20%7B%20color%3A%20%23902000%3B%20%7D%20%0Acode%20%3E%20span%2Edv%20%7B%20color%3A%20%2340a070%3B%20%7D%20%0Acode%20%3E%20span%2Ebn%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Efl%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Ech%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Est%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Eco%20%7B%20color%3A%20%23888888%3B%20font%2Dstyle%3A%20italic%3B%20%7D%20%0Acode%20%3E%20span%2Eot%20%7B%20color%3A%20%23007020%3B%20%7D%20%0Acode%20%3E%20span%2Eal%20%7B%20color%3A%20%23ff0000%3B%20font%2Dweight%3A%20bold%3B%20%7D%20%0Acode%20%3E%20span%2Efu%20%7B%20color%3A%20%23900%3B%20font%2Dweight%3A%20bold%3B%20%7D%20%20code%20%3E%20span%2Eer%20%7B%20color%3A%20%23a61717%3B%20background%2Dcolor%3A%20%23e3d2d2%3B%20%7D%20%0A" rel="stylesheet" type="text/css" />
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Advanced Linear Model</h1>
+<h4 class="author"><em>Ivan Svetunkov</em></h4>
+<h4 class="date"><em>2018-09-10</em></h4>
+
+
+
+<p>ALM stands for “Advanced Linear Model”. It’s not so much advanced as it sounds, but it has some advantages over the basic LM, retaining some basic features. In some sense <code>alm()</code> resembles the <code>glm()</code> function from stats package, but with a higher focus on forecasting rather than on hypothesis testing. You will not get p-values anywhere from the <code>alm()</code> function and won’t see <span class="math inline">\(R^2\)</span> in the outputs. The maximum what you can count on is having confidence intervals for the parameters or for the regression line. The other important difference from <code>glm()</code> is the availability of distributions that are not supported by <code>glm()</code> (for example, Folded Normal or Chi Squared distributions).</p>
+<p>The core of the function is the likelihood approach. The estimation of parameters in the model is done via the maximisation of likelihood function of a selected distribution. The calculation of the standard errors is done based on the calculation of hessian of the distribution. And in the centre of all of that are information criteria that can be used for the models comparison.</p>
+<p>All the supported distributions have specific functions which form the following four groups for the <code>distribution</code> parameter in <code>alm()</code>:</p>
+<ol style="list-style-type: decimal">
+<li>General continuous density functions,</li>
+<li>Continuous density functions for positive data,</li>
+<li>Discrete density functions,</li>
+<li>Cumulative functions for binary variables.</li>
+</ol>
+<p>All of them rely on respective d- and p- functions in R. For example, Log Normal distribution uses <code>dlnorm()</code> function from <code>stats</code> package.</p>
+<p>The <code>alm()</code> function also supports <code>occurrence</code> parameter, which allows modelling non-zero values and the occurrence of non-zeroes as two different models. The combination of any distribution from (1) - (3) for the non-zero values and a distribution from (4) for the occurrence will result in a mixture distribution model, e.g. a mixture of Log-Normal and Cumulative Logistic or a Hurdle Poisson (with Cumulative Normal for the occurrence part).</p>
+Every model produced using <code>alm()</code> can be represented as:
+<span class="math display">\[\begin{equation} \label{eq:basicALM}
+    y_t = f(\mu_t, \epsilon_t) = f(x_t' B, \epsilon_t) ,
+\end{equation}\]</span>
+where <span class="math inline">\(y_t\)</span> is a value of the response variable, <span class="math inline">\(x_t\)</span> is a vector of exogenous variables, <span class="math inline">\(B\)</span> is a vector of the parameters, <span class="math inline">\(\mu_t\)</span> is the conditional mean (produced based on the exogenous variables and the parameters of the model), <span class="math inline">\(\epsilon_t\)</span> is the error term on the observation <span class="math inline">\(t\)</span> and <span class="math inline">\(f(\cdot)\)</span> is a distribution function that does a transformation of the inputs into the output. In case of a mixture distribution the model becomes slightly more complicated:
+<span class="math display">\[\begin{equation} \label{eq:basicALMMixture}
+    \begin{matrix}
+        y_t = o_t f(x_t' B, \epsilon_t) \\
+        o_t \sim \text{Bernoulli}(p_t) \\
+        p_t = g(z_t' A, \eta_t)
+    \end{matrix},
+\end{equation}\]</span>
+<p>where <span class="math inline">\(o_t\)</span> is a binary variable, <span class="math inline">\(p_t\)</span> is the probability of occurrence, <span class="math inline">\(z_t\)</span> is a vector of exogenous variables, <span class="math inline">\(A\)</span> is a vector of parameters and <span class="math inline">\(\eta\)</span> is a the error term for the <span class="math inline">\(p_t\)</span>.</p>
+<p>The <code>alm()</code> function returns, along with the set of common for <code>lm()</code> variables (such as <code>coefficient</code> and <code>fitted.values</code>), the variable <code>mu</code>, which corresponds to the conditional mean used inside the distribution, and <code>scale</code> – the second parameter, which usually corresponds to standard error or dispersion parameter. The values of these two variables vary from distribution to distribution. Note, however, that the <code>model</code> variable returned by <code>lm()</code> function was renamed into <code>data</code> in <code>alm()</code>, and that <code>alm()</code> does not return <code>terms</code> and QR decomposition.</p>
+<p>Given that the parameters of any model in <code>alm()</code> are estimated via likelihood, it can be assumed that they have assymptotically normal distribution, thus the confidence intervals for any model rely on the normality and are constructed based on the unbiased estimate of variance, extracted using <code>sigma()</code> function.</p>
+<p>The covariance matrix of parameters almost in all the cases is calculated as an inverse of the hessian of respective distribution funtion. The exclusions are Normal, Log-Normal, Cumulative Logistic and Cumulative Normal distributions, that use analytical solutions.</p>
+<p>Although the basic principles of estimation of models and predictions from them are the same for all the distributions, each of the distribution has its own features. So it makes sense to discuss them individually. We discuss the distributions in the four groups mentioned above.</p>
+<div id="general-continuous-density-distributions" class="section level2">
+<h2>General continuous density distributions</h2>
+<p>This group of functions includes:</p>
+<ol style="list-style-type: decimal">
+<li>Normal distribution,</li>
+<li>Laplace distribution,</li>
+<li>Logistic distribution,</li>
+<li>S distribution,</li>
+</ol>
+<div id="normal-distribution" class="section level3">
+<h3>Normal distribution</h3>
+The density of normal distribution is:
+<span class="math display">\[\begin{equation} \label{eq:Normal}
+    f(y_t) = \frac{1}{\sqrt{2 \pi \sigma^2}} \exp \left( -\frac{\left(y_t - \mu_t \right)^2}{2 \sigma^2} \right) ,
+\end{equation}\]</span>
+<p>where <span class="math inline">\(\sigma^2\)</span> is the variance of the error term.</p>
+<p><code>alm()</code> with Normal distribution (<code>distribution=&quot;dnorm&quot;</code>) is equivalent to <code>lm()</code> function from <code>stats</code> package and returns roughly the same estimates of parameters, so if you are concerned with the time of calculation, I would recommend reverting to <code>lm()</code>.</p>
+Maximising the likelihood of the model  is equivalent to the estimation of the basic linear regression using Least Squares method:
+<span class="math display">\[\begin{equation} \label{eq:linearModel}
+    y_t = \mu_t + \epsilon_t = x_t' B + \epsilon_t,
+\end{equation}\]</span>
+<p>where <span class="math inline">\(\epsilon_t \sim \mathcal{N}(0, \sigma^2)\)</span>.</p>
+The variance <span class="math inline">\(\sigma^2\)</span> is estimated in <code>alm()</code> based on likelihood:
+<span class="math display">\[\begin{equation} \label{eq:sigmaNormal}
+    \hat{\sigma}^2 = \frac{1}{T} \sum_{t=1}^T \left(y_t - \mu_t \right)^2 ,
+\end{equation}\]</span>
+<p>where <span class="math inline">\(T\)</span> is the sample size. Its square root (standard deviation) is used in the calculations of <code>dnorm()</code> function, and the value is then return via <code>scale</code> variable. This value does not have bias correction. However the <code>sigma()</code> method applied to the resulting model, returns the bias corrected version of standard deviation. And <code>vcov()</code>, <code>confint()</code>, <code>summary()</code> and <code>predict()</code> rely on the value extracted by <code>sigma()</code>.</p>
+<p><span class="math inline">\(\mu_t\)</span> is returned as is in <code>mu</code> variable, and the fitted values are set equivalent to <code>mu</code>.</p>
+</div>
+<div id="laplace-distribution" class="section level3">
+<h3>Laplace distribution</h3>
+Laplace distribution has some similarities with the Normal one:
+<span class="math display">\[\begin{equation} \label{eq:Laplace}
+    f(y_t) = \frac{1}{\sqrt{2 b}} \exp \left( -\frac{\left| y_t - \mu_t \right|}{b} \right) ,
+\end{equation}\]</span>
+where <span class="math inline">\(b\)</span> is the scale parameter, which, when estimated using liklihood, is equal to the mean absolute error:
+<span class="math display">\[\begin{equation} \label{eq:bLaplace}
+    b = \frac{1}{T} \sum_{t=1}^T \left| y_t - \mu_t \right| .
+\end{equation}\]</span>
+<p>So maximising the likelihood  is equivalent to estimating the linear regression  via the minimisation of <span class="math inline">\(b\)</span> . So when estimating a model via minimising <span class="math inline">\(b\)</span>, the assumption imposed on the error term is <span class="math inline">\(\epsilon_t \sim \text{Laplace}(0, b)\)</span>. The main difference of Laplace from Normal distribution is its fatter tails.</p>
+<code>alm()</code> function with <code>distribution=&quot;dlaplace&quot;</code> returns <code>mu</code> equal to <span class="math inline">\(\mu_t\)</span> and the fitted values equal to <code>mu</code>. <span class="math inline">\(b\)</span> is returned in the <code>scale</code> variable. The prediction intervals are derived from the quantiles of Laplace distribution after transforming the conditional variance into the conditional scale parameter <span class="math inline">\(b\)</span> using the connection between the two in Laplace distribution:
+<span class="math display">\[\begin{equation} \label{eq:bLaplaceAndSigma}
+    b = \sqrt{\frac{\sigma^2}{2}}.
+\end{equation}\]</span>
+</div>
+<div id="logistic-distribution" class="section level3">
+<h3>Logistic distribution</h3>
+The density function of Logistic distribution is:
+<span class="math display">\[\begin{equation} \label{eq:Logistic}
+    f(y_t) = \frac{\exp \left(- \frac{y_t - \mu_t}{s} \right)} {s \left( 1 + \exp \left(- \frac{y_t - \mu_t}{s} \right) \right)^{2}},
+\end{equation}\]</span>
+where <span class="math inline">\(s\)</span> is a scale parameter, which is estimated in <code>alm()</code> based on the connection between the parameter and the variance in the logistic distribution:
+<span class="math display">\[\begin{equation} \label{eq:sLogisticAndSigma}
+    s = \sigma \sqrt{\frac{3}{\pi^2}}.
+\end{equation}\]</span>
+<p>Once again the maximisation of  implies the estimation of the linear model , where <span class="math inline">\(\epsilon_t \sim \text{Logistic}(0, s)\)</span>.</p>
+<p>Logistic is considered a fat tailed distribution, but its tails are not as fat as in Laplace. Kurtosis of standard Logistic is 4.2, while in case of Laplace it is 6.</p>
+<p><code>alm()</code> function with <code>distribution=&quot;dlogis&quot;</code> returns <span class="math inline">\(\mu_t\)</span> in <code>mu</code> and in <code>fitted.values</code> variables, and <span class="math inline">\(s\)</span> in the <code>scale</code> variable. Similar to Laplace distribution, the prediction interevals use the connection between the variance and scale, and rely on the <code>qlogis</code> function.</p>
+</div>
+<div id="s-distribution" class="section level3">
+<h3>S distribution</h3>
+The S distribution has the following density function:
+<span class="math display">\[\begin{equation} \label{eq:S}
+    f(y_t) = \frac{1}{4b^2} \exp \left( -\frac{\sqrt{|y_t - \mu_t|}}{b} \right) ,
+\end{equation}\]</span>
+where <span class="math inline">\(b\)</span> is a scale parameter. If estimated via maximum likelihood, the scale parameter is equal to:
+<span class="math display">\[\begin{equation} \label{eq:bS}
+    b = \frac{1}{T} \sum_{t=1}^T \sqrt{\left| y_t - \mu_t \right|} ,
+\end{equation}\]</span>
+<p>which corresponds to the minimisation of “Half Absolute Error” or “Half Absolute Moment”, which is equal to <span class="math inline">\(2b\)</span>.</p>
+<p>S distribution has a kurtosis of 25.2, which makes it an “extreme excess” distribution. It might be useful in cases of randomly occurring incidents and extreme values.</p>
+<code>alm()</code> function with <code>distribution=&quot;ds&quot;</code> returns <span class="math inline">\(\mu_t\)</span> in the same variables <code>mu</code> and <code>fitted.values</code>, and <span class="math inline">\(b\)</span> in the <code>scale</code> variable. Similarly to the previous functions, the prediction intervals are based on the <code>qs()</code> function from <code>greybox</code> package and use the connection between the scale and the variance:
+<span class="math display">\[\begin{equation} \label{eq:bSAndSigma}
+    b = \left( \frac{\sigma^2}{120} \right) ^{\frac{1}{4}}.
+\end{equation}\]</span>
+<p>For all the functions in this category <code>resid()</code> method returns <span class="math inline">\(e_t = y_t - \mu_t\)</span>.</p>
+</div>
+</div>
+<div id="continuous-density-functions-for-positive-data" class="section level2">
+<h2>Continuous density functions for positive data</h2>
+<p>This group includes:</p>
+<ol style="list-style-type: decimal">
+<li>Log Normal distribution,</li>
+<li>Folded Normal distribution,</li>
+<li>Noncentral Chi Squared distribution.</li>
+</ol>
+<p>Although (2) and (3) in theory allow having zeroes in data, given that the density function is equal to zero in any specific point, it will be zero in these cases as well. So the <code>alm()</code> will return some solutions for these distributions, but don’t expect anything good. As for (1), it supports strictily positive data.</p>
+<div id="log-normal-distribution" class="section level3">
+<h3>Log Normal distribution</h3>
+Log Normal distribution appears when a normally distributed variable is expontiated. This means that if <span class="math inline">\(x \sim \mathcal{N}(\mu, \sigma^2)\)</span>, then <span class="math inline">\(\exp x \sim \text{log}\mathcal{N}(\mu, \sigma^2)\)</span>. The density function of Log Normal distribution is:
+<span class="math display">\[\begin{equation} \label{eq:LogNormal}
+    f(y_t) = \frac{1}{y_t \sqrt{2 \pi \sigma^2}} \exp \left( -\frac{\left(\log y_t - \mu_t \right)^2}{2 \sigma^2} \right) ,
+\end{equation}\]</span>
+where the variance estimated using likelihood is:
+<span class="math display">\[\begin{equation} \label{eq:sigmaLogNormal}
+    \hat{\sigma}^2 = \frac{1}{T} \sum_{t=1}^T \left(\log y_t - \mu_t \right)^2 .
+\end{equation}\]</span>
+Estimating the model with Log Normal distribution is equivalent to estimating the parameters of log-linear model:
+<span class="math display">\[\begin{equation} \label{eq:logLinearModel}
+    \log y_t = \mu_t + \epsilon_t,
+\end{equation}\]</span>
+where <span class="math inline">\(\epsilon_t \sim \mathcal{N}(0, \sigma^2)\)</span> or:
+<span class="math display">\[\begin{equation} \label{eq:logLinearModelExp}
+    y_t = \exp(\mu_t + \epsilon_t).
+\end{equation}\]</span>
+<p><code>alm()</code> with <code>distribution=&quot;dlnorm&quot;</code> does not transform the provided data and estimates the density directly using <code>dlnorm()</code> function with the estimated mean <span class="math inline">\(\mu_t\)</span> and the variance . If you need a log-log model, then you would need to take logarithms of the external variables. The <span class="math inline">\(\mu_t\)</span> is returned in the variable <code>mu</code>, the <span class="math inline">\(\sigma^2\)</span> is in the variable <code>scale</code>, while the <code>fitted.values</code> contains the exponent of <span class="math inline">\(\mu_t\)</span>, which, given the connection between the Normal and Log Normal distributions, corresponds to median of distribution rather than mean. Finally, <code>resid()</code> method returns <span class="math inline">\(e_t = \log y_t - \mu_t\)</span>.</p>
+</div>
+<div id="folded-normal-distribution" class="section level3">
+<h3>Folded Normal distribution</h3>
+Folded Normal distribution is obtained when the absolute value of normally distributed variable is taken: if <span class="math inline">\(x \sim \mathcal{N}(\mu, \sigma^2)\)</span>, then <span class="math inline">\(|x| \sim \text{folded }\mathcal{N}(\mu, \sigma^2)\)</span>. The density function is:
+<span class="math display">\[\begin{equation} \label{eq:foldNormal}
+    f(y_t) = \frac{1}{\sqrt{2 \pi \sigma^2}} \left( \exp \left( -\frac{\left(y_t - \mu_t \right)^2}{2 \sigma^2} \right) + \exp \left( -\frac{\left(y_t + \mu_t \right)^2}{2 \sigma^2} \right) \right),
+\end{equation}\]</span>
+Conditional mean and variance of Folded Normal are estimated in <code>alm()</code> (with <code>distribution=&quot;dfnorm&quot;</code>) similarly to how this is done for Normal distribution. They are returned in the variables <code>mu</code> and <code>scale</code> respectively. In order to produce the fitted value (which is returned in <code>fitted.values</code>), the following correction is done:
+<span class="math display">\[\begin{equation} \label{eq:foldNormalFitted}
+    \hat{y_t} = \sqrt{\frac{2}{\pi}} \sigma \exp \left( -\frac{\mu_t^2}{2 \sigma^2} \right) + \mu_t \left(1 - 2 \Phi \left(-\frac{\mu_t}{\sigma} \right) \right),
+\end{equation}\]</span>
+<p>where <span class="math inline">\(\Phi(\cdot)\)</span> is the CDF of Normal distribution.</p>
+<p>The conditional variance of the forecasts is calculated based on the elements of <code>vcov()</code> (as in all the other functions), the predicted values are corrected in the same way as the fitted values , and the prediction intervals are generated from the <code>qfnorm()</code> function of <code>greybox</code> package. As for the residuals, <code>resid()</code> method returns <span class="math inline">\(e_t = y_t - \mu_t\)</span>.</p>
+</div>
+<div id="noncentral-chi-squared-distribution" class="section level3">
+<h3>Noncentral Chi Squared distribution</h3>
+<p>Noncentral Chi Squared distribution arises, when a normally distributed variable with a unity variance is squared and summed up: if <span class="math inline">\(x_i \sim \mathcal{N}(\mu_i, 1)\)</span>, then <span class="math inline">\(\sum_{i=1}^k x_i^2 \sim \chi^2(k, \lambda)\)</span>, where <span class="math inline">\(k\)</span> is the number of degrees of freedom and <span class="math inline">\(\lambda = \sum_{i=1}^k \mu_i^2\)</span>. In the case of non-unity variance, with <span class="math inline">\(z_i \sim \mathcal{N}(\mu_i, \sigma^2)\)</span>, the variable can also be represented as <span class="math inline">\(z_i = \sigma x_i\)</span>, and then it can be assumed that <span class="math inline">\(\sum_{i=1}^k z_i^2 \sim \chi^2(k \sigma, \lambda)\)</span>. In the perfect world, <span class="math inline">\(\lambda_t\)</span> would coorespond to the location of the original distribution of <span class="math inline">\(z_i\)</span>, while <span class="math inline">\(k\)</span> would need to be time varying and would need to include both number of elements <span class="math inline">\(k\)</span> and the individual variances <span class="math inline">\(\sigma^2_i\)</span> for each of the element, depending on the external variables values. However, given that the squares of the normal data are used, it is not possible to disaggregate the values into the original two parts. Thus we assume that the variance is constant for all the cases, and estimate it using likelihood. As a result the non-centrality parameter covers two parts that would be split in the ideal world.</p>
+The density function of Noncentral Chi Squared distribution is quite difficult. <code>alm()</code> uses <code>dchisq()</code> function from <code>stats</code> package, assuming constant number of degrees of freedom <span class="math inline">\(k\)</span> and time varying noncentrality parameter <span class="math inline">\(\lambda_t\)</span>:
+<span class="math display">\[\begin{equation} \label{eq:NCChiSquared}
+    f(y_t) = \frac{1}{2} \exp \left( -\frac{y_t + \lambda_t}{2} \right) \left(\frac{y_t}{\lambda_t} \right)^{\frac{k}{4}-0.5} I_{\frac{k}{2}-1}(\sqrt{\lambda_t y_t}),
+\end{equation}\]</span>
+where <span class="math inline">\(I_k(x)\)</span> is a Bessel function of the first kind. The <span class="math inline">\(\lambda_t\)</span> parameter is estimated from a regression with exogenous variables:
+<span class="math display">\[\begin{equation} \label{eq:lambdaValue}
+    \lambda_t = \exp ( x_t' B ) ,
+\end{equation}\]</span>
+<p>where <span class="math inline">\(\exp\)</span> is taken in order to make <span class="math inline">\(\lambda_t\)</span> strictly positive, while <span class="math inline">\(k\)</span> is estimated directly by maximising the likelihood. In order to avoid the negative values of <span class="math inline">\(k\)</span>, it’s absolute value is used. <span class="math inline">\(\lambda_t\)</span> is then returned in the variable <code>mu</code>, while <span class="math inline">\(k\)</span> is returned in <code>scale</code>. Finally, <code>fitted.values</code> returns <span class="math inline">\(\lambda_t + k\)</span>. Similar correction is done in <code>predict()</code> function. As for the prediction intervals, they are generated using <code>qchisq()</code> function from <code>stats</code> package. Last but not least, <code>resid()</code> method returns <span class="math inline">\(e_t = \log y_t - \log \mu_t\)</span>.</p>
+</div>
+</div>
+<div id="discrete-density-functions" class="section level2">
+<h2>Discrete density functions</h2>
+<p>This group includes:</p>
+<ol style="list-style-type: decimal">
+<li>Poisson distribution,</li>
+<li>Negative Binomial distribution,</li>
+</ol>
+<p>These distributions should be used in cases of count data.</p>
+<div id="poisson-distribution" class="section level3">
+<h3>Poisson distribution</h3>
+Poisson distribution used in ALM has the following standard probability mass function:
+<span class="math display">\[\begin{equation} \label{eq:Poisson}
+    P(X=y_t) = \frac{\lambda_t^{y_t} \exp(-\lambda_t)}{y_t!},
+\end{equation}\]</span>
+<p>where <span class="math inline">\(\lambda_t = \mu_t = \sigma^2_t = \exp(x_t' B)\)</span>. As it can be noticed, here we assume that the variance of the model varies in time and depends on the values of the exogenous variables, which is a specific case of heteroscedasticity. The exponent of <span class="math inline">\(x_t' B\)</span> is needed in order to avoid the negative values in <span class="math inline">\(\lambda_t\)</span>.</p>
+<p><code>alm()</code> with <code>distribution=&quot;dpois&quot;</code> returns <code>mu</code>, <code>fitted.values</code> and <code>scale</code> equal to <span class="math inline">\(\lambda_t\)</span>. The qunatiles of distribution in <code>predict()</code> method are generated using <code>qpois()</code> function from <code>stats</code> package. Finally, the returned residuals correspond to <span class="math inline">\(\log y_t - \log \mu_t\)</span>, which is not really helpful or meaningful…</p>
+</div>
+<div id="negative-binomial-distribution" class="section level3">
+<h3>Negative Binomial distribution</h3>
+Negative Binomial distribution implemented in <code>alm()</code> is parameterised in terms of mean and variance:
+<span class="math display">\[\begin{equation} \label{eq:NegBin}
+    P(X=y_t) = \binom{y_t+\frac{\mu_t^2}{\sigma^2-\mu_t}}{y_t} \left( \frac{\sigma^2 - \mu_t}{\sigma^2} \right)^{y_t} \left( \frac{\mu_t}{\sigma^2} \right)^\frac{\mu_t^2}{\sigma^2 - \mu_t},
+\end{equation}\]</span>
+<p>where <span class="math inline">\(\mu_t = \exp(x_t' B)\)</span> and <span class="math inline">\(\sigma^2\)</span> is estimated separately in the optimisation process. These values are then used in the <code>dnbinom()</code> function in order to calculate the log-likelihood based on the distribution function.</p>
+<p><code>alm()</code> with <code>distribution=&quot;dnbinom&quot;</code> returns <span class="math inline">\(\mu_t\)</span> in <code>mu</code> and <code>fitted.values</code> and <span class="math inline">\(\sigma^2\)</span> in <code>scale</code>. The prediction intervals are produces using <code>qnbinom()</code> function. Similarly to Poisson distribution, <code>resid()</code> method returns <span class="math inline">\(\log y_t - \log \mu_t\)</span>.</p>
+</div>
+</div>
+<div id="cumulative-functions-for-binary-variables" class="section level2">
+<h2>Cumulative functions for binary variables</h2>
+<p>The final class of models includes two cases:</p>
+<ol style="list-style-type: decimal">
+<li>Logistic distribution (logit model),</li>
+<li>Normal distribution (probit model).</li>
+</ol>
+In both of them it is assumed that the response variable is binary and can be either zero or one. The main idea for this class of models is to use a transformation of the original data and link a continuous latent variable with a binary one. As a reminder, all the models eventually assume that:
+<span class="math display">\[\begin{equation} \label{eq:basicALMCumulative}
+    \begin{matrix}
+        o_t \sim \text{Bernoulli}(p_t) \\
+        p_t = g(x_t' A, \eta_t)
+    \end{matrix},
+\end{equation}\]</span>
+<p>where <span class="math inline">\(o_t\)</span> is the binary response variable and <span class="math inline">\(g(\cdot)\)</span> is the cumulative distribution function. Given that we work with the probability of occurrence, the <code>predict()</code> method produces forecasts for the probability of occurrence rather than the binary variable itself. Finally, although many other cumulative distribution functions can be used for this transformation (e.g. <code>plaplace()</code> or <code>plnorm()</code>), the most popular ones are logistic and normal CDFs.</p>
+Given that the binary variable has Bernoulli distribution, its log-likelihood is:
+<span class="math display">\[\begin{equation} \label{eq:BernoulliLikelihood}
+    \ell(p_t | o_t) = \sum_{o_t=1} \log p_t + \sum_{o_t=0} \log(1 - p_t),
+\end{equation}\]</span>
+<p>So the estimation of parameters for all the CDFs can be done maximising this likelihood.</p>
+In all the functions it is assumed that there is an actual level <span class="math inline">\(q_t\)</span> that underlies the probability <span class="math inline">\(p_t\)</span>. This level can be modelled as:
+<span class="math display">\[\begin{equation} \label{eq:CDFLevelALM}
+    q_t = \nu_t + \eta_t ,
+\end{equation}\]</span>
+<p>and it can be transformed to the probability with <span class="math inline">\(p_t = g(q_t)\)</span>. So the aim of all the functions is to estimate the expectation <span class="math inline">\(\nu_t\)</span> and transform it to the estimate of the probability <span class="math inline">\(\hat{p}_t\)</span>.</p>
+In order to estimate the error <span class="math inline">\(\eta_t\)</span>, we assume that <span class="math inline">\(o_t=1\)</span> happens mainly when the respective estimated probability <span class="math inline">\(\hat{p}_t\)</span> is very close to one as well. Based on that the error can be calculated as:
+<span class="math display">\[\begin{equation} \label{eq:BinaryError}
+    u_t' = o_t - \hat{p}_t .
+\end{equation}\]</span>
+However this error is not useful and should be somehow transformed into the scale of the underlying unobserved variable <span class="math inline">\(q_t\)</span>. Given that both <span class="math inline">\(o_t \in (0, 1)\)</span> and <span class="math inline">\(\hat{p}_t \in (0, 1)\)</span>, the error will lie in <span class="math inline">\((-1, 1)\)</span>. We therefore standardise it so that it lies in the region of <span class="math inline">\((0, 1)\)</span>:
+<span class="math display">\[\begin{equation} \label{eq:BinaryErrorBounded}
+    u_t = \frac{u_t' + 1}{2} = \frac{o_t - \hat{p}_t + 1}{2}.
+\end{equation}\]</span>
+<p>This transformation means that, when <span class="math inline">\(o_t=\hat{p}_t\)</span>, then the error <span class="math inline">\(u_t=0.5\)</span>, when <span class="math inline">\(o_t=1\)</span> and <span class="math inline">\(\hat{p}_t=0\)</span> then <span class="math inline">\(u_t=1\)</span> and finally, in the opposite case of <span class="math inline">\(o_t=0\)</span> and <span class="math inline">\(\hat{p}_t=1\)</span>, it is <span class="math inline">\(u_t=0\)</span>. After that this error is transformed using either Logistic or Normal quantile generation function into the scale of <span class="math inline">\(q_t\)</span>, making sure that the case of <span class="math inline">\(u_t=0.5\)</span> corresponds to zero, the <span class="math inline">\(u_t&gt;0.5\)</span> corresponds to the positive and <span class="math inline">\(u_t&lt;0.5\)</span> corresponds to the negative errors.</p>
+<div id="cumulative-logistic-distribution" class="section level3">
+<h3>Cumulative Logistic distribution</h3>
+We have previously discussed the density function of logistic distribution. The standardised cumulative distribution function used in <code>alm()</code> is:
+<span class="math display">\[\begin{equation} \label{eq:LogisticCDFALM}
+    \hat{p}_t = \frac{1}{1+\exp(-\nu_t)},
+\end{equation}\]</span>
+where <span class="math inline">\(\nu_t = x_t' A\)</span> is the conditional mean of the level, underlying the probability. This value is then used in the likelihood  in order to estimate the parameters of the model. The error term of the model is calculated using the formula:
+<span class="math display">\[\begin{equation} \label{eq:LogisticError}
+    e_t = \log \left( \frac{u_t}{1 - u_t} \right) = \log \left( \frac{1 + o_t (1 + \exp(\nu_t))}{1 + \exp(\nu_t) (2 - o_t) - o_t} \right).
+\end{equation}\]</span>
+<p>This way the error varies from <span class="math inline">\(-\infty\)</span> to <span class="math inline">\(\infty\)</span> and is equal to zero, when <span class="math inline">\(u_t=0.5\)</span>. The error is assumed to be normally distributed (because… why not?).</p>
+<p>The <code>alm()</code> function with <code>distribution=&quot;plogis&quot;</code> returns <span class="math inline">\(\nu_t\)</span> in <code>mu</code>, standard deviation, calculated using the respective errors  in <code>scale</code> and the probability <span class="math inline">\(\hat{p}_t\)</span> based on  in <code>fitted.values</code>. <code>resid()</code> method returns the errors discussed above. <code>predict()</code> method produces point forecasts and the intervals for the probability of occurrence. The intervals use the assumption of normality of the error term, generating respective quantiles (based on the estimated <span class="math inline">\(\nu_t\)</span> and variance of the error) and then transforming them into the scale of probabitliy using Logistic CDF.</p>
+</div>
+<div id="cumulative-normal-distribution" class="section level3">
+<h3>Cumulative Normal distribution</h3>
+The case of cumulative Normal distribution is quite similar to the cumulative Logistic one. The transformation is done using the standard normal CDF:
+<span class="math display">\[\begin{equation} \label{eq:NormalCDFALM}
+    \hat{p}_t = \Phi(\nu_t) = \frac{1}{\sqrt{2 \pi}} \int_{-\infty}^{\nu_t} \exp \left(-\frac{1}{2}x^2 \right) dx ,
+\end{equation}\]</span>
+where <span class="math inline">\(\nu_t = x_t' A\)</span>. Similarly to the Logistic CDF, the estimated probability is used in the likelihood  in order to estimate the parameters of the model. The error term is calculated using the standardised quantile function of Normal distribution:
+<span class="math display">\[\begin{equation} \label{eq:NormalError}
+    e_t = \Phi \left(\frac{o_t - \hat{p}_t + 1}{2}\right)^{-1} .
+\end{equation}\]</span>
+<p>It acts similar to the error from Logistic distribution, but is based on the different functions. Once again we assume that the error has Normal distribution.</p>
+<p>Similar to the Logistic CDF, the <code>alm()</code> function with <code>distribution=&quot;pnorm&quot;</code> returns <span class="math inline">\(\nu_t\)</span> in <code>mu</code>, standard deviation, calculated based on the errors  in <code>scale</code> and the probability <span class="math inline">\(\hat{p}_t\)</span> based on  in <code>fitted.values</code>. <code>resid()</code> method returns the errors discussed above. <code>predict()</code> method produces point forecasts and the intervals for the probability of occurrence. The intervals use the assumption of normality of the error term and are based on the same idea as in Logistic CDF: quantiles of normal distribution (using the estimated mean and standard deviation) and then the transformation using the standard Normal CDF.</p>
+</div>
+</div>
+<div id="mixture-distribution-models" class="section level2">
+<h2>Mixture distribution models</h2>
+<p>Finally, mixture distribution models can be used in <code>alm()</code> by defining <code>distribution</code> and <code>occurrence</code> parameters. Currently only <code>plogis()</code> and <code>pnorm()</code> are supported for the occurrence variable, but all the other distributions discussed above can be used for the modelling of the non-zero values. If <code>occurrence=&quot;plogis&quot;</code> or <code>occurrence=&quot;pnorm&quot;</code>, then <code>alm()</code> is fit two times: first on the non-zero data only (defining the subset) and second - using the same data, substituting the response variable by the binary occurrence variable and specifying <code>distribution=occurrence</code>. As an alternative option, occurrence <code>alm()</code> model can be estimated separately and then provided as a variable in <code>occurrence</code>.</p>
+<p>As an example of mixture model, let’s generate some data:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">xreg &lt;-<span class="st"> </span><span class="kw">cbind</span>(<span class="kw">rlaplace</span>(<span class="dv">100</span>,<span class="dv">10</span>,<span class="dv">3</span>),<span class="kw">rnorm</span>(<span class="dv">100</span>,<span class="dv">50</span>,<span class="dv">5</span>))
+xreg &lt;-<span class="st"> </span><span class="kw">cbind</span>(<span class="dv">100</span><span class="fl">+0.5</span><span class="op">*</span>xreg[,<span class="dv">1</span>]<span class="op">-</span><span class="fl">0.75</span><span class="op">*</span>xreg[,<span class="dv">2</span>]<span class="op">+</span><span class="kw">rlaplace</span>(<span class="dv">100</span>,<span class="dv">0</span>,<span class="dv">3</span>),xreg,<span class="kw">rnorm</span>(<span class="dv">100</span>,<span class="dv">300</span>,<span class="dv">10</span>))
+<span class="kw">colnames</span>(xreg) &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;y&quot;</span>,<span class="st">&quot;x1&quot;</span>,<span class="st">&quot;x2&quot;</span>,<span class="st">&quot;Noise&quot;</span>)
+
+xreg[,<span class="dv">1</span>] &lt;-<span class="st"> </span><span class="kw">round</span>(<span class="kw">exp</span>(xreg[,<span class="dv">1</span>]<span class="op">-</span><span class="dv">70</span>) <span class="op">/</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span><span class="kw">exp</span>(xreg[,<span class="dv">1</span>]<span class="op">-</span><span class="dv">70</span>)),<span class="dv">0</span>) <span class="op">*</span><span class="st"> </span><span class="kw">round</span>(xreg[,<span class="dv">1</span>]<span class="op">-</span><span class="dv">70</span>)
+inSample &lt;-<span class="st"> </span>xreg[<span class="dv">1</span><span class="op">:</span><span class="dv">80</span>,]
+outSample &lt;-<span class="st"> </span>xreg[<span class="op">-</span><span class="kw">c</span>(<span class="dv">1</span><span class="op">:</span><span class="dv">80</span>),]</code></pre></div>
+<p>First, we estimate the occurrence model (it will complain that the response variable is not binary, but it will work):</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">modelOccurrence &lt;-<span class="st"> </span><span class="kw">alm</span>(y<span class="op">~</span>x1<span class="op">+</span>x2<span class="op">+</span>Noise, inSample, <span class="dt">distribution=</span><span class="st">&quot;plogis&quot;</span>)
+<span class="co">#&gt; Warning: You have defined CDF 'plogis' as a distribution.</span>
+<span class="co">#&gt; This means that the response variable needs to be binary with values of 0 and 1.</span>
+<span class="co">#&gt; Don't worry, we will encode it for you. But, please, be careful next time!</span></code></pre></div>
+<p>And then use it for the mixture model:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">modelMixture &lt;-<span class="st"> </span><span class="kw">alm</span>(y<span class="op">~</span>x1<span class="op">+</span>x2<span class="op">+</span>Noise, inSample, <span class="dt">distribution=</span><span class="st">&quot;dlnorm&quot;</span>, <span class="dt">occurrence=</span>modelOccurrence)</code></pre></div>
+<p>The occurrence model will be return in the respective variable:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">summary</span>(modelMixture)
+<span class="co">#&gt; Distribution used in the estimation: Mixture of Log Normal and Cumulative logistic</span>
+<span class="co">#&gt; Coefficients:</span>
+<span class="co">#&gt;             Estimate Std. Error Lower 2.5% Upper 97.5%</span>
+<span class="co">#&gt; (Intercept)  9.10335    4.24971    0.13725    18.06945</span>
+<span class="co">#&gt; x1           0.02334    0.03666   -0.05400     0.10069</span>
+<span class="co">#&gt; x2          -0.04879    0.03134   -0.11491     0.01734</span>
+<span class="co">#&gt; Noise       -0.01889    0.01354   -0.04745     0.00967</span>
+<span class="co">#&gt; ICs:</span>
+<span class="co">#&gt;      AIC     AICc      BIC     BICc </span>
+<span class="co">#&gt; 194.2757 185.0865 218.0959 197.9623</span>
+<span class="kw">summary</span>(modelMixture<span class="op">$</span>occurrence)
+<span class="co">#&gt; Distribution used in the estimation: Cumulative logistic</span>
+<span class="co">#&gt; Coefficients:</span>
+<span class="co">#&gt;             Estimate Std. Error Lower 2.5% Upper 97.5%</span>
+<span class="co">#&gt; (Intercept) 10.81879    3.55457    3.73773    17.89986</span>
+<span class="co">#&gt; x1           0.20918    0.02673    0.15592     0.26243</span>
+<span class="co">#&gt; x2          -0.26730    0.02108   -0.30930    -0.22530</span>
+<span class="co">#&gt; Noise       -0.00268    0.01123   -0.02506     0.01970</span>
+<span class="co">#&gt; ICs:</span>
+<span class="co">#&gt;      AIC     AICc      BIC     BICc </span>
+<span class="co">#&gt; 76.33316 77.14397 88.24329 90.01979</span></code></pre></div>
+<p>After that we can produce forecasts using the data from the holdout sample:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">predict</span>(modelMixture,outSample,<span class="dt">interval=</span><span class="st">&quot;p&quot;</span>)
+<span class="co">#&gt;             Mean Lower 6.2% Upper 2.7%</span>
+<span class="co">#&gt;  [1,] 1.60934145  1.3762149  11.417080</span>
+<span class="co">#&gt;  [2,] 6.99625692  1.8245301  31.357194</span>
+<span class="co">#&gt;  [3,] 0.79469044  1.3085726   7.913651</span>
+<span class="co">#&gt;  [4,] 2.41790620  1.3622464  13.757168</span>
+<span class="co">#&gt;  [5,] 1.34296141  1.4301730  10.671984</span>
+<span class="co">#&gt;  [6,] 0.24397578  1.6037315   4.067957</span>
+<span class="co">#&gt;  [7,] 0.80530373  1.4088255   8.085185</span>
+<span class="co">#&gt;  [8,] 1.67616715  1.0238369  10.875520</span>
+<span class="co">#&gt;  [9,] 0.88641058  1.8796485  10.230027</span>
+<span class="co">#&gt; [10,] 1.01106647  1.4831829   9.944270</span>
+<span class="co">#&gt; [11,] 0.54538151  1.5305443   6.738692</span>
+<span class="co">#&gt; [12,] 1.33202263  1.4035909  10.409994</span>
+<span class="co">#&gt; [13,] 3.55667405  1.5219621  18.217167</span>
+<span class="co">#&gt; [14,] 0.89969756  0.9502512   7.622868</span>
+<span class="co">#&gt; [15,] 0.04624123  0.0000000   0.000000</span>
+<span class="co">#&gt; [16,] 0.10118268  0.0000000   0.000000</span>
+<span class="co">#&gt; [17,] 1.17190079  1.3500388   9.655933</span>
+<span class="co">#&gt; [18,] 0.20781397  1.7900268   3.704615</span>
+<span class="co">#&gt; [19,] 3.47090721  1.2673846  16.424860</span>
+<span class="co">#&gt; [20,] 1.96304825  1.7003650  14.751814</span></code></pre></div>
+</div>
+
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
