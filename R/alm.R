@@ -56,6 +56,8 @@
 #' @param vcovProduce whether to produce variance-covariance matrix of
 #' coefficients or not. This is done via hessian calculation, so might be
 #' computationally costly.
+#' @param ... additional parameters to pass to distribution functions
+#' (e.g. \code{alpha} value for Asymmetric Laplace distribution).
 #'
 #' @return Function returns \code{model} - the final model of the class
 #' "alm", which contains:
@@ -75,7 +77,10 @@
 #' \item call - how the model was called,
 #' \item rank - rank of the model,
 #' \item data - data used for the model construction,
-#' \item occurrence - the occurrence model used in the estimation.
+#' \item occurrence - the occurrence model used in the estimation,
+#' \item other - the list of all the other parameters either passed to the
+#' function or estimated in the process, but not included in the standard output
+#' (e.g. \code{alpha} for Asymmetric Laplace).
 #' }
 #'
 #' @seealso \code{\link[greybox]{stepwise}, \link[greybox]{lmCombine}}
@@ -115,17 +120,18 @@
 #' @importFrom stats plogis
 #' @export alm
 alm <- function(formula, data, subset, na.action,
-                distribution=c("dnorm","dfnorm","dlnorm","dlaplace","dlogis","ds","dchisq",
+                distribution=c("dnorm","dlogis","dlaplace","dalaplace","ds",
+                               "dfnorm","dlnorm","dchisq",
                                "dpois","dnbinom",
                                "plogis","pnorm"),
                 occurrence=c("none","plogis","pnorm"),
-                B=NULL, vcovProduce=FALSE){
+                B=NULL, vcovProduce=FALSE, ...){
 # Useful stuff for dnbinom: https://scialert.net/fulltext/?doi=ajms.2010.1.15
 
     cl <- match.call();
 
     distribution <- distribution[1];
-    if(all(distribution!=c("dnorm","dfnorm","dlnorm","dlaplace","dlogis","ds","dchisq",
+    if(all(distribution!=c("dnorm","dlogis","dlaplace","dalaplace","ds","dfnorm","dlnorm","dchisq",
                            "dpois","dnbinom","plogis","pnorm"))){
         if(any(distribution==c("norm","fnorm","lnorm","laplace","s","chisq","logis"))){
             warning(paste0("You are using the old value of the distribution parameter.\n",
@@ -135,6 +141,20 @@ alm <- function(formula, data, subset, na.action,
         }
         else{
             stop(paste0("Sorry, but the distribution '",distribution,"' is not yet supported"), call.=FALSE);
+        }
+    }
+
+    ellipsis <- list(...);
+
+    # If this is ALD, then see if alpha was provided. Otherwise estimate it.
+    if(distribution=="dalaplace"){
+        if(is.null(ellipsis$alpha)){
+            ellipsis$alpha <- alpha <- 0.5
+            alphaEstimate <- TRUE;
+        }
+        else{
+            alpha <- ellipsis$alpha;
+            alphaEstimate <- FALSE;
         }
     }
 
@@ -327,14 +347,22 @@ alm <- function(formula, data, subset, na.action,
     }
 
     fitter <- function(B, distribution, y, matrixXreg){
+        if(distribution=="dalaplace"){
+            if(alphaEstimate){
+                alpha <- B[1];
+                B <- B[-1];
+            }
+        }
+
         mu[] <- switch(distribution,
                        "dpois" = exp(matrixXreg %*% B),
-                       "dchisq" =,
+                       "dchisq" = ifelseFast(any(matrixXreg %*% B[-1] <0),1E+100,(matrixXreg %*% B[-1])^2),
                        "dnbinom" = exp(matrixXreg %*% B[-1]),
                        "dnorm" =,
                        "dfnorm" =,
                        "dlnorm" =,
                        "dlaplace" =,
+                       "dalaplace" =,
                        "dlogis" =,
                        "ds" =,
                        "pnorm" =,
@@ -346,6 +374,7 @@ alm <- function(formula, data, subset, na.action,
                         "dfnorm" = sqrt(meanFast((y-mu)^2)),
                         "dlnorm" = sqrt(meanFast((log(y)-mu)^2)),
                         "dlaplace" = meanFast(abs(y-mu)),
+                        "dalaplace" = meanFast((y-mu) * (alpha - (y<=mu)*1)),
                         "dlogis" = sqrt(meanFast((y-mu)^2) * 3 / pi^2),
                         "ds" = meanFast(sqrt(abs(y-mu))) / 2,
                         "dchisq" =,
@@ -366,6 +395,7 @@ alm <- function(formula, data, subset, na.action,
                            "dfnorm" = dfnorm(y, mu=fitterReturn$mu, sigma=fitterReturn$scale, log=TRUE),
                            "dlnorm" = dlnorm(y, meanlog=fitterReturn$mu, sdlog=fitterReturn$scale, log=TRUE),
                            "dlaplace" = dlaplace(y, mu=fitterReturn$mu, b=fitterReturn$scale, log=TRUE),
+                           "dalaplace" = dalaplace(y, mu=fitterReturn$mu, b=fitterReturn$scale, alpha=alpha, log=TRUE),
                            "dlogis" = dlogis(y, location=fitterReturn$mu, scale=fitterReturn$scale, log=TRUE),
                            "ds" = ds(y, mu=fitterReturn$mu, b=fitterReturn$scale, log=TRUE),
                            "dchisq" = dchisq(y, df=fitterReturn$scale, ncp=fitterReturn$mu, log=TRUE),
@@ -388,32 +418,62 @@ alm <- function(formula, data, subset, na.action,
 
     #### Estimate parameters of the model ####
     if(is.null(B)){
-        if(any(distribution==c("dlnorm","dchisq"))){
+        if(any(distribution==c("dlnorm","dpois","dnbinom"))){
             if(any(y[ot]==0)){
+                # Use Box-Cox if there are zeroes
                 B <- .lm.fit(matrixXreg,(y^0.01-1)/0.01)$coefficients;
             }
             else{
                 B <- .lm.fit(matrixXreg,log(y))$coefficients;
             }
         }
-        else if(any(distribution==c("dpois","dnbinom")) & all(y[ot]!=0)){
-            # Use log in case of no zeroes...
-            B <- .lm.fit(matrixXreg,log(y))$coefficients;
+        else if(any(distribution==c("plogis","pnorm"))){
+            # Box-Cox transform in order to get meaningful initials
+            B <- .lm.fit(matrixXreg,(y^0.01-1)/0.01)$coefficients;
         }
         else{
             B <- .lm.fit(matrixXreg,y)$coefficients;
+            BLower <- -Inf;
+            BUpper <- Inf;
         }
 
         if(distribution=="dnbinom"){
             B <- c(var(y), B);
+            BLower <- c(0,rep(-Inf,length(B)-1));
+            BUpper <- rep(Inf,length(B));
         }
         else if(distribution=="dchisq"){
             B <- c(1, B);
+            BLower <- c(0,rep(-Inf,length(B)-1));
+            BUpper <- rep(Inf,length(B));
+        }
+        else if(distribution=="dalaplace"){
+            if(alphaEstimate){
+                B <- c(alpha, B);
+                BLower <- c(0,rep(-Inf,length(B)-1));
+                BUpper <- c(1,rep(Inf,length(B)-1));
+            }
+            else{
+                BLower <- rep(-Inf,length(B));
+                BUpper <- rep(Inf,length(B));
+            }
+        }
+        else{
+            BLower <- rep(-Inf,length(B));
+            BUpper <- rep(Inf,length(B));
+        }
+
+        if(any(distribution==c("dpois","dnbinom","plogos","pnorm"))){
+            maxeval <- 500;
+        }
+        else{
+            maxeval <- 100;
         }
 
         # Although this is not needed in case of distribution="dnorm", we do that in a way, for the code consistency purposes
         res <- nloptr(B, CF,
-                      opts=list("algorithm"="NLOPT_LN_SBPLX", xtol_rel=1e-6, maxeval=100, print_level=0),
+                      opts=list("algorithm"="NLOPT_LN_SBPLX", xtol_rel=1e-6, maxeval=maxeval, print_level=0),
+                      lb=BLower, ub=BUpper,
                       distribution=distribution, y=y, matrixXreg=matrixXreg);
         B[] <- res$solution;
 
@@ -435,6 +495,16 @@ alm <- function(formula, data, subset, na.action,
         scale <- abs(B[1]);
         names(B) <- c("df",variablesNames);
     }
+    else if(distribution=="dalaplace"){
+        if(alphaEstimate){
+            ellipsis$alpha <- alpha <- B[1];
+            variablesNames <- c("alpha",variablesNames);
+            names(B) <- variablesNames;
+        }
+        else{
+            names(B) <- variablesNames;
+        }
+    }
     else{
         names(B) <- variablesNames;
     }
@@ -442,11 +512,19 @@ alm <- function(formula, data, subset, na.action,
     # Parameters of the model + scale
     df <- nVariables + 1;
 
+    if(distribution=="dalaplace"){
+        if(alphaEstimate){
+            df <- df + 1;
+            nVariables <- nVariables + 1;
+        }
+    }
+
     ### Fitted values in the scale of the original variable
     yFitted[] <- switch(distribution,
                        "dfnorm" = sqrt(2/pi)*scale*exp(-mu^2/(2*scale^2))+mu*(1-2*pnorm(-mu/scale)),
                        "dnorm" =,
                        "dlaplace" =,
+                       "dalaplace" =,
                        "dlogis" =,
                        "ds" =,
                        "dpois" =,
@@ -461,12 +539,13 @@ alm <- function(formula, data, subset, na.action,
     errors[] <- switch(distribution,
                        "dfnorm" =,
                        "dlaplace" =,
+                       "dalaplace" =,
                        "dlogis" =,
                        "ds" =,
-                       "dnorm" = y - mu,
+                       "dnorm" =,
                        "dpois" =,
-                       "dnbinom" =,
-                       "dchisq" = log(y) - log(yFitted),
+                       "dnbinom" = y - mu,
+                       "dchisq" = sqrt(y) - sqrt(mu),
                        "dlnorm"= log(y) - mu,
                        "pnorm" = qnorm((y - pnorm(mu, 0, 1) + 1) / 2, 0, 1),
                        "plogis" = log((1 + y * (1 + exp(mu))) / (1 + exp(mu) * (2 - y) - y)) # Here we use the proxy from Svetunkov et al. (2018)
@@ -478,7 +557,12 @@ alm <- function(formula, data, subset, na.action,
             method.args <- list(d=1e-6, r=6);
         }
         else{
-            method.args <- list(d=1e-4, r=4);
+            if(any(distribution==c("dnbinom","dlaplace","dalaplace"))){
+                method.args <- list(d=1e-6, r=6);
+            }
+            else{
+                method.args <- list(d=1e-4, r=4);
+            }
         }
 
         if(distribution=="dpois"){
@@ -501,27 +585,25 @@ alm <- function(formula, data, subset, na.action,
             warning(paste0("Something went wrong and we failed to produce the covariance matrix of the parameters.\n",
                            "Obviously, it's not our fault. Probably Russians have hacked your computer...\n",
                            "Try a different distribution maybe?"), call.=FALSE);
-            vcovMatrix <- 1e-10*diag(nVariables);
+            vcovMatrix <- diag(1e+100,nVariables);
         }
         else{
-            if(any(vcovMatrix==0)){
-                warning(paste0("Something went wrong and we failed to produce the covariance matrix of the parameters.\n",
-                               "Obviously, it's not our fault. Probably Russians have hacked your computer...\n",
-                               "Try a different distribution maybe?"), call.=FALSE);
-                vcovMatrix <- 1e-10*diag(nVariables);
-            }
-            else{
-                # See if Choleski works... It sometimes fails, when we don't get to the max of likelihood.
-                vcovMatrixTry <- try(chol2inv(chol(vcovMatrix)), silent=TRUE);
-                if(class(vcovMatrixTry)=="try-error"){
-                    warning(paste0("Choleski decomposition of hessian failed, so we had to revert to the simple inversion.\n",
+            # See if Choleski works... It sometimes fails, when we don't get to the max of likelihood.
+            vcovMatrixTry <- try(chol2inv(chol(vcovMatrix)), silent=TRUE);
+            if(class(vcovMatrixTry)=="try-error"){
+                warning(paste0("Choleski decomposition of hessian failed, so we had to revert to the simple inversion.\n",
+                               "The estimate of the covariance matrix of parameters might be inacurate."),
+                        call.=FALSE);
+                vcovMatrix <- try(solve(vcovMatrix, diag(nVariables), tol=1e-20), silent=TRUE);
+                if(class(vcovMatrix)=="try-error"){
+                    warning(paste0("Sorry, but the hessian is singular, so we could not invert it.\n",
                                    "The estimate of the covariance matrix of parameters might be inacurate."),
                             call.=FALSE);
-                    vcovMatrix <- solve(vcovMatrix, diag(nVariables));
+                    vcovMatrix <- diag(1e+100,nVariables);
                 }
-                else{
-                    vcovMatrix <- vcovMatrixTry;
-                }
+            }
+            else{
+                vcovMatrix <- vcovMatrixTry;
             }
 
             # Sometimes the diagonal elements in the covariance matrix are negative because likelihood is not fully maximised...
@@ -575,10 +657,18 @@ alm <- function(formula, data, subset, na.action,
     if(any(distribution==c("dchisq","dnbinom"))){
         B <- B[-1];
     }
+    else if(distribution=="dalaplace"){
+        if(alphaEstimate){
+            variablesNames <- variablesNames[-1];
+            nVariables <- nVariables - 1;
+        }
+    }
 
     finalModel <- list(coefficients=B, vcov=vcovMatrix, fitted.values=yFitted, residuals=as.vector(errors),
                        mu=mu, scale=scale, distribution=distribution, logLik=-CFValue,
-                       df.residual=obsInsample-df, df=df, call=cl, rank=df, data=dataWork,
-                       occurrence=occurrence, subset=subset);
+                       df.residual=obsInsample-df, df=df, call=cl, rank=df,
+                       data=matrix(as.matrix(dataWork[,c(responseName,variablesNames[-1])]), ncol=nVariables,
+                                   dimnames=list(NULL, c(responseName,variablesNames[-1]))),
+                       occurrence=occurrence, subset=subset, other=ellipsis);
     return(structure(finalModel,class=c("alm","greybox")));
 }

@@ -12,6 +12,9 @@
 #'
 #' The S distribution has fat tails and large excess.
 #'
+#' Both \code{ps} and \code{qs} are returned for the lower tail of
+#' the distribution.
+#'
 #' @template author
 #' @keywords distribution
 #'
@@ -19,7 +22,7 @@
 #' @param p vector of probabilities.
 #' @param n number of observations. Should be a single number.
 #' @param mu vector of location parameters (means).
-#' @param b vector of scaling parameter (which equals to ham/2).
+#' @param b vector of scaling parameter (which are equal to ham/2).
 #' @param log if \code{TRUE}, then probabilities are returned in
 #' logarithms.
 #'
@@ -78,51 +81,57 @@ ps <- function(q, mu=0, b=1){
 #' @importFrom lamW lambertWm1
 #' @aliases qs
 qs <- function(p, mu=0, b=1){
-    svetReturn <- array(0,c(length(p),length(mu),length(b)),
-                        dimnames=list(paste0("p=",p),paste0("mu=",mu),paste0("b=",b)));
-    svetReturn[p==0.5,,] <- 1;
-    svetReturn[p==0,,] <- -Inf;
-    svetReturn[p==1,,] <- Inf;
-    probsToEstimate <- which(svetReturn[,1,1]==0);
-    svetReturn[svetReturn==1] <- 0;
-    if(length(probsToEstimate)!=0){
-        for(i in 1:length(probsToEstimate)){
-            j <- probsToEstimate[i];
-            for(k in 1:length(b)){
-                if(p[j]<0.5){
-                    svetReturn[j,,k] <- (-b[k]^2*lambertWm1(-2*p[j]/exp(1))^2 -
-                                             2*b[k]^2*lambertWm1(-2*p[j]/exp(1))-b[k]^2);
-                }
-                else{
-                    svetReturn[j,,k] <- (b[k]^2*lambertWm1(2*(p[j]-1)/exp(1))^2 +
-                                             2*b[k]^2*lambertWm1(2*(p[j]-1)/exp(1))+b[k]^2);
+    p <- unique(p);
+    mu <- unique(mu);
+    b <- unique(b);
+    lengthMax <- max(length(p),length(mu),length(b));
+    # If length of p, mu and b differs, then go difficult. Otherwise do simple stuff
+    if(any(!c(length(p),length(mu),length(b)) %in% c(lengthMax, 1))){
+        svetReturn <- array(0,c(length(p),length(mu),length(b)),
+                            dimnames=list(paste0("p=",p),paste0("mu=",mu),paste0("b=",b)));
+        svetReturn[p==0.5,,] <- 1;
+        svetReturn[p==0,,] <- -Inf;
+        svetReturn[p==1,,] <- Inf;
+        probsToEstimate <- which(svetReturn[,1,1]==0);
+        svetReturn[svetReturn==1] <- 0;
+        if(length(probsToEstimate)!=0){
+            for(i in 1:length(probsToEstimate)){
+                j <- probsToEstimate[i];
+                for(k in 1:length(b)){
+                    if(p[j]<0.5){
+                        svetReturn[j,,k] <- (-b[k]^2*lambertWm1(-2*p[j]/exp(1))^2 -
+                                                 2*b[k]^2*lambertWm1(-2*p[j]/exp(1))-b[k]^2);
+                    }
+                    else{
+                        svetReturn[j,,k] <- (b[k]^2*lambertWm1(2*(p[j]-1)/exp(1))^2 +
+                                                 2*b[k]^2*lambertWm1(2*(p[j]-1)/exp(1))+b[k]^2);
+                    }
                 }
             }
+            svetReturn <- svetReturn + rep(mu,each=length(p));
         }
-        svetReturn <- svetReturn + rep(mu,each=length(p));
+        # Drop the redundant dimensions
+        svetReturn <- svetReturn[,,];
     }
-    if(any(dim(svetReturn)==1)){
-        if(dim(svetReturn)[1]==1){
-            svetReturn <- svetReturn[1,,];
+    else{
+        Ie <- (p < 0.5)*1;
+        svetReturn <- max(length(p),length(mu),length(b));
+        svetReturn <- mu + ((-1)^Ie * b^2*lambertWm1((-1)^Ie * 2*(p - 1 + Ie)/exp(1))^2 +
+                                (-1)^Ie*2*b^2*lambertWm1((-1)^Ie * 2*(p - 1 + Ie)/exp(1))+(-1)^Ie*b^2);
+        if(any(p==0)){
+            svetReturn[p==0] <- -Inf;
         }
-        else if(dim(svetReturn)[2]==1){
-            svetReturn <- svetReturn[,1,];
-        }
-        else if(dim(svetReturn)[3]==1){
-            svetReturn <- svetReturn[,,1];
-        }
-
-        if(any(dim(svetReturn)==1)){
-            svetReturn <- c(svetReturn);
+        if(any(p==1)){
+            svetReturn[p==1] <- Inf;
         }
     }
     return(svetReturn);
 }
 
-#' @rdname s-distribution
-#' @export rs
-#' @aliases rs
-rs <- function(n=1, mu=0, b=1){
-    svetReturn <- qs(runif(n,0,1),mu,b);
-    return(svetReturn);
-}
+    #' @rdname s-distribution
+    #' @export rs
+    #' @aliases rs
+    rs <- function(n=1, mu=0, b=1){
+        svetReturn <- qs(runif(n,0,1),mu,b);
+        return(svetReturn);
+    }
