@@ -4,7 +4,9 @@
 #' on all the other provided data.
 #'
 #' The algorithm uses alm() to fit different models and then combines the models
-#' based on the selected IC.
+#' based on the selected IC. The parameters are combined so that if they are not
+#' present in some of models, it is assumed that they are equal to zero. Thus,
+#' there is a shrinkage effect in the combination.
 #'
 #' @template AICRef
 #' @template author
@@ -39,6 +41,8 @@
 #' \item rank - rank of the combined model,
 #' \item data - the data used in the model,
 #' \item mu - the location value of the distribution.
+#' \item combination - the table, indicating which variables were used in every
+#' model construction and what were the weights for each model.
 #' }
 #'
 #' @seealso \code{\link[stats]{step}, \link[greybox]{xregExpander},
@@ -134,6 +138,7 @@ lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteForce=FALSE, s
         # Matrix of all the combinations
         variablesBinary <- rep(1,nVariables);
         variablesCombinations <- matrix(NA,nCombinations,nVariables);
+        colnames(variablesCombinations) <- variablesNames;
 
         #Produce matrix with binaries for inclusion of variables in the loop
         variablesCombinations[,1] <- rep(c(0:1),times=prod(variablesBinary[-1]+1));
@@ -243,13 +248,27 @@ lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteForce=FALSE, s
     }
 
     # Calculate IC weights
-    ICWeights <- ICs - min(ICs);
-    ICWeights <- exp(-0.5*ICWeights) / sum(exp(-0.5*ICWeights));
+    # is.finite is needed in the case of overfitting the data
+    modelsGood <- is.finite(ICs);
+    ICWeights <- ICs - min(ICs[modelsGood]);
+    ICWeights[modelsGood] <- exp(-0.5*ICWeights[modelsGood]) / sum(exp(-0.5*ICWeights[modelsGood]));
+    # If we awfully overfitted the data with some of models, discard them.
+    if(any(!modelsGood)){
+        ICWeights[!modelsGood] <- 0;
+    }
 
     # Calculate weighted parameters
     parametersWeighted <- parameters * matrix(ICWeights,nrow(parameters),ncol(parameters));
+    parametersCombined <- colSums(parametersWeighted);
 
-    parametersCombined <- apply(parametersWeighted,2,sum);
+    # If shrinkage is not needed, then calculate weights for each parameter and modify the combined parameters
+    # if(!shrink){
+    #     modifiedWeights <- colSums(cbind(1,variablesCombinations) * matrix(ICWeights,nrow(parameters),nVariables+1));
+    #     weightsZero <- (modifiedWeights==0);
+    #     parametersCombined <- parametersCombined / modifiedWeights;
+    #     # If some of summary weights were zero, then make parameters zero as well
+    #     parametersCombined[weightsZero] <- 0;
+    # }
     names(parametersCombined) <- exoNames;
 
     # From the matrix of exogenous variables without the response variable
@@ -296,9 +315,16 @@ lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteForce=FALSE, s
     ICValue <- c(ICWeights %*% ICs);
     names(ICValue) <- ic;
 
+    variablesCombinations <- cbind(variablesCombinations,ICWeights,ICs);
+    colnames(variablesCombinations)[nVariables+1] <- "IC weights";
+
     # Models SE
     parametersSECombined <- c(ICWeights %*% sqrt(parametersSE +(parameters - matrix(apply(parametersWeighted,2,sum),nrow(parameters),ncol(parameters),byrow=T))^2))
     names(parametersSECombined) <- exoNames;
+
+    if(any(is.nan(parametersSECombined)) | any(is.infinite(parametersSECombined))){
+        warning("The standard errors of the parameters cannot be produced properly. It seems that we have overfitted the data.", call.=FALSE);
+    }
 
     #Calcualte logLik
     logLikCombined <- sum(dnorm(errors,0,sd=sqrt(sum(errors^2)/df),log=TRUE));
@@ -306,7 +332,7 @@ lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteForce=FALSE, s
     finalModel <- list(coefficients=parametersCombined, se=parametersSECombined, fitted.values=as.vector(yFitted),
                        residuals=as.vector(errors), distribution=distribution, logLik=logLikCombined, IC=ICValue,
                        df.residual=df, df=sum(importance)+1, importance=importance,
-                       call=cl, rank=nVariables+1, data=ourData, mu=mu);
+                       call=cl, rank=nVariables+1, data=ourData, mu=mu, combination=variablesCombinations);
 
     return(structure(finalModel,class=c("greyboxC","alm","greybox")));
 }

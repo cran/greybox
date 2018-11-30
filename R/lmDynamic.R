@@ -232,17 +232,22 @@ lmDynamic <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteForce=FALSE, s
 
     # Calculate weighted parameters
     parametersWeighted <- pICWeights %*% parameters;
+    # if(!shrink){
+    #     modifiedWeights <- pICWeights %*% cbind(1,variablesCombinations);
+    #     parametersWeighted <- parametersWeighted / modifiedWeights;
+    # }
     colnames(parametersWeighted) <- exoNames;
 
-    parametersMean <- apply(parametersWeighted,2,mean);
+    parametersMean <- colMeans(parametersWeighted);
     names(parametersMean) <- exoNames;
 
     # From the matrix of exogenous variables without the response variable
     ourDataExo <- cbind(rep(1,nrow(ourData)),ourData[,-1]);
     colnames(ourDataExo) <- exoNames;
 
-    mu <- parametersWeighted * as.matrix(ourDataExo);
-    mu <- apply(mu,1,sum)
+    # Calculate the mean based on the mean values of parameters
+    mu <- as.matrix(ourDataExo) %*% parametersMean;
+    # mu <- rowSums(parametersWeighted * as.matrix(ourDataExo));
 
     yFitted <- switch(distribution,
                       "dfnorm" =,

@@ -46,6 +46,8 @@ the combined model,
 \item rank - rank of the combined model,
 \item data - the data used in the model,
 \item mu - the location value of the distribution.
+\item combination - the table, indicating which variables were used in every
+model construction and what were the weights for each model.
 }
 }
 \description{
@@ -54,7 +56,9 @@ on all the other provided data.
 }
 \details{
 The algorithm uses alm() to fit different models and then combines the models
-based on the selected IC.
+based on the selected IC. The parameters are combined so that if they are not
+present in some of models, it is assumed that they are equal to zero. Thus,
+there is a shrinkage effect in the combination.
 }
 \examples{
 

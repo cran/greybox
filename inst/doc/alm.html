@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2018-10-27" />
+<meta name="date" content="2018-11-29" />
 
 <title>Advanced Linear Model</title>
 
@@ -70,7 +70,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 
 <h1 class="title toc-ignore">Advanced Linear Model</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2018-10-27</em></h4>
+<h4 class="date"><em>2018-11-29</em></h4>
 
 
 
@@ -78,9 +78,10 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <p>The core of the function is the likelihood approach. The estimation of parameters in the model is done via the maximisation of likelihood function of a selected distribution. The calculation of the standard errors is done based on the calculation of hessian of the distribution. And in the centre of all of that are information criteria that can be used for the models comparison.</p>
 <p>All the supported distributions have specific functions which form the following four groups for the <code>distribution</code> parameter in <code>alm()</code>:</p>
 <ol style="list-style-type: decimal">
-<li>General continuous density functions,</li>
-<li>Continuous density functions for positive data,</li>
-<li>Discrete density functions,</li>
+<li>Density functions of continuous distributions,</li>
+<li>Density functions for continuous positive data,</li>
+<li>Continuous distributions on a specific interval,</li>
+<li>Density functions of discrete distributions,</li>
 <li>Cumulative functions for binary variables.</li>
 </ol>
 <p>All of them rely on respective d- and p- functions in R. For example, Log Normal distribution uses <code>dlnorm()</code> function from <code>stats</code> package.</p>
@@ -89,7 +90,7 @@ Every model produced using <code>alm()</code> can be represented as:
 <span class="math display">\[\begin{equation} \label{eq:basicALM}
     y_t = f(\mu_t, \epsilon_t) = f(x_t' B, \epsilon_t) ,
 \end{equation}\]</span>
-where <span class="math inline">\(y_t\)</span> is a value of the response variable, <span class="math inline">\(x_t\)</span> is a vector of exogenous variables, <span class="math inline">\(B\)</span> is a vector of the parameters, <span class="math inline">\(\mu_t\)</span> is the conditional mean (produced based on the exogenous variables and the parameters of the model), <span class="math inline">\(\epsilon_t\)</span> is the error term on the observation <span class="math inline">\(t\)</span> and <span class="math inline">\(f(\cdot)\)</span> is a distribution function that does a transformation of the inputs into the output. In case of a mixture distribution the model becomes slightly more complicated:
+where <span class="math inline">\(y_t\)</span> is the value of the response variable, <span class="math inline">\(x_t\)</span> is the vector of exogenous variables, <span class="math inline">\(B\)</span> is the vector of the parameters, <span class="math inline">\(\mu_t\)</span> is the conditional mean (produced based on the exogenous variables and the parameters of the model), <span class="math inline">\(\epsilon_t\)</span> is the error term on the observation <span class="math inline">\(t\)</span> and <span class="math inline">\(f(\cdot)\)</span> is the distribution function that does a transformation of the inputs into the output. In case of a mixture distribution the model becomes slightly more complicated:
 <span class="math display">\[\begin{equation} \label{eq:basicALMMixture}
     \begin{matrix}
         y_t = o_t f(x_t' B, \epsilon_t) \\
@@ -97,13 +98,13 @@ where <span class="math inline">\(y_t\)</span> is a value of the response variab
         p_t = g(z_t' A, \eta_t)
     \end{matrix},
 \end{equation}\]</span>
-<p>where <span class="math inline">\(o_t\)</span> is a binary variable, <span class="math inline">\(p_t\)</span> is the probability of occurrence, <span class="math inline">\(z_t\)</span> is a vector of exogenous variables, <span class="math inline">\(A\)</span> is a vector of parameters and <span class="math inline">\(\eta\)</span> is a the error term for the <span class="math inline">\(p_t\)</span>.</p>
+<p>where <span class="math inline">\(o_t\)</span> is the binary variable, <span class="math inline">\(p_t\)</span> is the probability of occurrence, <span class="math inline">\(z_t\)</span> is the vector of exogenous variables, <span class="math inline">\(A\)</span> is the vector of parameters and <span class="math inline">\(\eta\)</span> is the error term for the <span class="math inline">\(p_t\)</span>.</p>
 <p>The <code>alm()</code> function returns, along with the set of common for <code>lm()</code> variables (such as <code>coefficient</code> and <code>fitted.values</code>), the variable <code>mu</code>, which corresponds to the conditional mean used inside the distribution, and <code>scale</code> – the second parameter, which usually corresponds to standard error or dispersion parameter. The values of these two variables vary from distribution to distribution. Note, however, that the <code>model</code> variable returned by <code>lm()</code> function was renamed into <code>data</code> in <code>alm()</code>, and that <code>alm()</code> does not return <code>terms</code> and QR decomposition.</p>
 <p>Given that the parameters of any model in <code>alm()</code> are estimated via likelihood, it can be assumed that they have asymptotically normal distribution, thus the confidence intervals for any model rely on the normality and are constructed based on the unbiased estimate of variance, extracted using <code>sigma()</code> function.</p>
 <p>The covariance matrix of parameters almost in all the cases is calculated as an inverse of the hessian of respective distribution function. The exclusions are Normal, Log-Normal, Cumulative Logistic and Cumulative Normal distributions, that use analytical solutions.</p>
 <p>Although the basic principles of estimation of models and predictions from them are the same for all the distributions, each of the distribution has its own features. So it makes sense to discuss them individually. We discuss the distributions in the four groups mentioned above.</p>
-<div id="general-continuous-density-distributions" class="section level2">
-<h2>General continuous density distributions</h2>
+<div id="density-functions-of-continuous-distributions" class="section level2">
+<h2>Density functions of continuous distributions</h2>
 <p>This group of functions includes:</p>
 <ol style="list-style-type: decimal">
 <li>Normal distribution,</li>
@@ -111,7 +112,9 @@ where <span class="math inline">\(y_t\)</span> is a value of the response variab
 <li>Asymmetric Laplace distribution,</li>
 <li>Logistic distribution,</li>
 <li>S distribution,</li>
+<li>Student t distribution,</li>
 </ol>
+<p>For all the functions in this category <code>resid()</code> method returns <span class="math inline">\(e_t = y_t - \mu_t\)</span>.</p>
 <div id="normal-distribution" class="section level3">
 <h3>Normal distribution</h3>
 The density of normal distribution is:
@@ -154,34 +157,35 @@ where <span class="math inline">\(s^2\)</span> is the bias-corrected variance of
 <h3>Laplace distribution</h3>
 Laplace distribution has some similarities with the Normal one:
 <span class="math display">\[\begin{equation} \label{eq:Laplace}
-    f(y_t) = \frac{1}{2 b} \exp \left( -\frac{\left| y_t - \mu_t \right|}{b} \right) ,
+    f(y_t) = \frac{1}{2 s} \exp \left( -\frac{\left| y_t - \mu_t \right|}{s} \right) ,
 \end{equation}\]</span>
-where <span class="math inline">\(b\)</span> is the scale parameter, which, when estimated using likelihood, is equal to the mean absolute error:
+where <span class="math inline">\(s\)</span> is the scale parameter, which, when estimated using likelihood, is equal to the mean absolute error:
 <span class="math display">\[\begin{equation} \label{eq:bLaplace}
-    b = \frac{1}{T} \sum_{t=1}^T \left| y_t - \mu_t \right| .
+    s = \frac{1}{T} \sum_{t=1}^T \left| y_t - \mu_t \right| .
 \end{equation}\]</span>
-<p>So maximising the likelihood  is equivalent to estimating the linear regression  via the minimisation of <span class="math inline">\(b\)</span> . So when estimating a model via minimising <span class="math inline">\(b\)</span>, the assumption imposed on the error term is <span class="math inline">\(\epsilon_t \sim \text{Laplace}(0, b)\)</span>. The main difference of Laplace from Normal distribution is its fatter tails.</p>
-<code>alm()</code> function with <code>distribution=&quot;dlaplace&quot;</code> returns <code>mu</code> equal to <span class="math inline">\(\mu_t\)</span> and the fitted values equal to <code>mu</code>. <span class="math inline">\(b\)</span> is returned in the <code>scale</code> variable. The prediction intervals are derived from the quantiles of Laplace distribution after transforming the conditional variance into the conditional scale parameter <span class="math inline">\(b\)</span> using the connection between the two in Laplace distribution:
+<p>So maximising the likelihood  is equivalent to estimating the linear regression  via the minimisation of <span class="math inline">\(s\)</span> . So when estimating a model via minimising <span class="math inline">\(s\)</span>, the assumption imposed on the error term is <span class="math inline">\(\epsilon_t \sim \text{Laplace}(0, s)\)</span>. The main difference of Laplace from Normal distribution is its fatter tails.</p>
+<code>alm()</code> function with <code>distribution=&quot;dlaplace&quot;</code> returns <code>mu</code> equal to <span class="math inline">\(\mu_t\)</span> and the fitted values equal to <code>mu</code>. <span class="math inline">\(s\)</span> is returned in the <code>scale</code> variable. The prediction intervals are derived from the quantiles of Laplace distribution after transforming the conditional variance into the conditional scale parameter <span class="math inline">\(s\)</span> using the connection between the two in Laplace distribution:
 <span class="math display">\[\begin{equation} \label{eq:bLaplaceAndSigma}
-    b = \sqrt{\frac{\sigma^2}{2}},
+    s = \sqrt{\frac{\sigma^2}{2}},
 \end{equation}\]</span>
 <p>where <span class="math inline">\(\sigma^2\)</span> is substituted either by the conditional variance of <span class="math inline">\(\mu_t\)</span> or <span class="math inline">\(y_t\)</span>.</p>
+<p>The kurtosis of Laplace distribution is 6, making it suitable for modelling rarely occurring events.</p>
 </div>
 <div id="asymmetric-laplace-distribution" class="section level3">
 <h3>Asymmetric Laplace distribution</h3>
-Asymmetric Laplace distribution can be considered as a two Laplace distributions with different parameters <span class="math inline">\(b\)</span> for left and right side. There are several ways to summarise the probability density function, the one used in <code>alm()</code> relies on the asymmetry parameter <span class="math inline">\(\alpha\)</span> <span class="citation">(Yu and Zhang 2005)</span>:
+Asymmetric Laplace distribution can be considered as a two Laplace distributions with different parameters <span class="math inline">\(s\)</span> for left and right side. There are several ways to summarise the probability density function, the one used in <code>alm()</code> relies on the asymmetry parameter <span class="math inline">\(\alpha\)</span> <span class="citation">(Yu and Zhang 2005)</span>:
 <span class="math display">\[\begin{equation} \label{eq:ALaplace}
-    f(y_t) = \frac{\alpha (1- \alpha)}{b} \exp \left( -\frac{y_t - \mu_t}{b} (\alpha - I(y_t \leq \mu_t)) \right) ,
+    f(y_t) = \frac{\alpha (1- \alpha)}{s} \exp \left( -\frac{y_t - \mu_t}{s} (\alpha - I(y_t \leq \mu_t)) \right) ,
 \end{equation}\]</span>
-where <span class="math inline">\(b\)</span> is the scale parameter, <span class="math inline">\(\alpha\)</span> is skewness parameter and <span class="math inline">\(I(y_t \leq \mu_t)\)</span> is the indicator function, which is equal to one, when the condition is satisfied and to zero otherwise. The scale parameter <span class="math inline">\(b\)</span> estimated using likelihood is equal to the quantile loss:
+where <span class="math inline">\(s\)</span> is the scale parameter, <span class="math inline">\(\alpha\)</span> is skewness parameter and <span class="math inline">\(I(y_t \leq \mu_t)\)</span> is the indicator function, which is equal to one, when the condition is satisfied and to zero otherwise. The scale parameter <span class="math inline">\(s\)</span> estimated using likelihood is equal to the quantile loss:
 <span class="math display">\[\begin{equation} \label{eq:bALaplace}
-    b = \frac{1}{T} \sum_{t=1}^T \left(y_t - \mu_t \right)(\alpha - I(y_t \leq \mu_t)) .
+    s = \frac{1}{T} \sum_{t=1}^T \left(y_t - \mu_t \right)(\alpha - I(y_t \leq \mu_t)) .
 \end{equation}\]</span>
-<p>Thus maximising the likelihood  is equivalent to estimating the linear regression  via the minimisation of <span class="math inline">\(\alpha\)</span> quantile, making this equivalent to quantile regression. So quantile regression models assume indirectly that the error term is <span class="math inline">\(\epsilon_t \sim \text{ALaplace}(0, b, \alpha)\)</span> <span class="citation">(Geraci and Bottai 2007)</span>. The advantage of using <code>alm()</code> in this case is in having the full distribution, which allows to do all the fancy things you can do when you have likelihood.</p>
-<p>In case of <span class="math inline">\(\alpha=0.5\)</span> the function reverts to the symmetric Laplace where <span class="math inline">\(b=\frac{1}{2}\text{MAE}\)</span>.</p>
-<code>alm()</code> function with <code>distribution=&quot;dalaplace&quot;</code> accepts an additional parameter <code>alpha</code> in ellipsis, which defines the quantile <span class="math inline">\(\alpha\)</span>. If it is not provided, then the function will estimated it maximising the likelihood and return it as the first coefficient. <code>alm()</code> returns <code>mu</code> equal to <span class="math inline">\(\mu_t\)</span> and the fitted values equal to <code>mu</code>. <span class="math inline">\(b\)</span> is returned in the <code>scale</code> variable. The parameter <span class="math inline">\(\alpha\)</span> is returned in the variable <code>other</code> of the final model. The prediction intervals are produced using <code>qalaplace()</code> function. In order to find the values of <span class="math inline">\(b\)</span> for the holdout the following connection between the variance of the variable and the scale in Asymmetric Laplace distribution is used:
+<p>Thus maximising the likelihood  is equivalent to estimating the linear regression  via the minimisation of <span class="math inline">\(\alpha\)</span> quantile, making this equivalent to quantile regression. So quantile regression models assume indirectly that the error term is <span class="math inline">\(\epsilon_t \sim \text{ALaplace}(0, s, \alpha)\)</span> <span class="citation">(Geraci and Bottai 2007)</span>. The advantage of using <code>alm()</code> in this case is in having the full distribution, which allows to do all the fancy things you can do when you have likelihood.</p>
+<p>In case of <span class="math inline">\(\alpha=0.5\)</span> the function reverts to the symmetric Laplace where <span class="math inline">\(s=\frac{1}{2}\text{MAE}\)</span>.</p>
+<code>alm()</code> function with <code>distribution=&quot;dalaplace&quot;</code> accepts an additional parameter <code>alpha</code> in ellipsis, which defines the quantile <span class="math inline">\(\alpha\)</span>. If it is not provided, then the function will estimated it maximising the likelihood and return it as the first coefficient. <code>alm()</code> returns <code>mu</code> equal to <span class="math inline">\(\mu_t\)</span> and the fitted values equal to <code>mu</code>. <span class="math inline">\(s\)</span> is returned in the <code>scale</code> variable. The parameter <span class="math inline">\(\alpha\)</span> is returned in the variable <code>other</code> of the final model. The prediction intervals are produced using <code>qalaplace()</code> function. In order to find the values of <span class="math inline">\(s\)</span> for the holdout the following connection between the variance of the variable and the scale in Asymmetric Laplace distribution is used:
 <span class="math display">\[\begin{equation} \label{eq:bALaplaceAndSigma}
-    b = \sqrt{\sigma^2 \frac{\alpha^2 (1-\alpha)^2}{(1-\alpha)^2 + \alpha^2}},
+    s = \sqrt{\sigma^2 \frac{\alpha^2 (1-\alpha)^2}{(1-\alpha)^2 + \alpha^2}},
 \end{equation}\]</span>
 <p>where <span class="math inline">\(\sigma^2\)</span> is substituted either by the conditional variance of <span class="math inline">\(\mu_t\)</span> or <span class="math inline">\(y_t\)</span>.</p>
 </div>
@@ -191,36 +195,49 @@ The density function of Logistic distribution is:
 <span class="math display">\[\begin{equation} \label{eq:Logistic}
     f(y_t) = \frac{\exp \left(- \frac{y_t - \mu_t}{s} \right)} {s \left( 1 + \exp \left(- \frac{y_t - \mu_t}{s} \right) \right)^{2}},
 \end{equation}\]</span>
-where <span class="math inline">\(s\)</span> is a scale parameter, which is estimated in <code>alm()</code> based on the connection between the parameter and the variance in the logistic distribution:
+where <span class="math inline">\(s\)</span> is the scale parameter, which is estimated in <code>alm()</code> based on the connection between the parameter and the variance in the logistic distribution:
 <span class="math display">\[\begin{equation} \label{eq:sLogisticAndSigma}
     s = \sigma \sqrt{\frac{3}{\pi^2}}.
 \end{equation}\]</span>
 <p>Once again the maximisation of  implies the estimation of the linear model , where <span class="math inline">\(\epsilon_t \sim \text{Logistic}(0, s)\)</span>.</p>
-<p>Logistic is considered a fat tailed distribution, but its tails are not as fat as in Laplace. Kurtosis of standard Logistic is 4.2, while in case of Laplace it is 6.</p>
+<p>Logistic is considered a fat tailed distribution, but its tails are not as fat as in Laplace. Kurtosis of standard Logistic is 4.2.</p>
 <p><code>alm()</code> function with <code>distribution=&quot;dlogis&quot;</code> returns <span class="math inline">\(\mu_t\)</span> in <code>mu</code> and in <code>fitted.values</code> variables, and <span class="math inline">\(s\)</span> in the <code>scale</code> variable. Similar to Laplace distribution, the prediction intervals use the connection between the variance and scale, and rely on the <code>qlogis</code> function.</p>
 </div>
 <div id="s-distribution" class="section level3">
 <h3>S distribution</h3>
 The S distribution has the following density function:
 <span class="math display">\[\begin{equation} \label{eq:S}
-    f(y_t) = \frac{1}{4b^2} \exp \left( -\frac{\sqrt{|y_t - \mu_t|}}{b} \right) ,
+    f(y_t) = \frac{1}{4b^2} \exp \left( -\frac{\sqrt{|y_t - \mu_t|}}{s} \right) ,
 \end{equation}\]</span>
-where <span class="math inline">\(b\)</span> is a scale parameter. If estimated via maximum likelihood, the scale parameter is equal to:
+where <span class="math inline">\(s\)</span> is the scale parameter. If estimated via maximum likelihood, the scale parameter is equal to:
 <span class="math display">\[\begin{equation} \label{eq:bS}
-    b = \frac{1}{T} \sum_{t=1}^T \sqrt{\left| y_t - \mu_t \right|} ,
+    s = \frac{1}{T} \sum_{t=1}^T \sqrt{\left| y_t - \mu_t \right|} ,
 \end{equation}\]</span>
 <p>which corresponds to the minimisation of “Half Absolute Error” or “Half Absolute Moment”, which is equal to <span class="math inline">\(2b\)</span>.</p>
-<p>S distribution has a kurtosis of 25.2, which makes it an “extreme excess” distribution. It might be useful in cases of randomly occurring incidents and extreme values.</p>
-<code>alm()</code> function with <code>distribution=&quot;ds&quot;</code> returns <span class="math inline">\(\mu_t\)</span> in the same variables <code>mu</code> and <code>fitted.values</code>, and <span class="math inline">\(b\)</span> in the <code>scale</code> variable. Similarly to the previous functions, the prediction intervals are based on the <code>qs()</code> function from <code>greybox</code> package and use the connection between the scale and the variance:
+<p>S distribution has a kurtosis of 25.2, which makes it an “extreme excess” distribution. It might be useful in cases of randomly occurring incidents and extreme values (Black Swans?).</p>
+<code>alm()</code> function with <code>distribution=&quot;ds&quot;</code> returns <span class="math inline">\(\mu_t\)</span> in the same variables <code>mu</code> and <code>fitted.values</code>, and <span class="math inline">\(s\)</span> in the <code>scale</code> variable. Similarly to the previous functions, the prediction intervals are based on the <code>qs()</code> function from <code>greybox</code> package and use the connection between the scale and the variance:
 <span class="math display">\[\begin{equation} \label{eq:bSAndSigma}
-    b = \left( \frac{\sigma^2}{120} \right) ^{\frac{1}{4}},
+    s = \left( \frac{\sigma^2}{120} \right) ^{\frac{1}{4}},
 \end{equation}\]</span>
 <p>where once again <span class="math inline">\(\sigma^2\)</span> is substituted either by the conditional variance of <span class="math inline">\(\mu_t\)</span> or <span class="math inline">\(y_t\)</span>.</p>
-<p>For all the functions in this category <code>resid()</code> method returns <span class="math inline">\(e_t = y_t - \mu_t\)</span>.</p>
+</div>
+<div id="student-t-distribution" class="section level3">
+<h3>Student t distribution</h3>
+The Student t distribution has a difficult density function:
+<span class="math display">\[\begin{equation} \label{eq:T}
+    f(y_t) = \frac{\Gamma\left(\frac{d+1}{2}\right)}{\sqrt{d \pi} \Gamma\left(\frac{d}{2}\right)} \left( 1 + \frac{x^2}{d} \right)^{-\frac{d+1}{2}} ,
+\end{equation}\]</span>
+where <span class="math inline">\(d\)</span> is the number of degrees of freedom, which can also be considered as the scale parameter of the distribution. It has the following connection with the in-sample variance of the error (but only for the case, when <span class="math inline">\(d&gt;2\)</span>):
+<span class="math display">\[\begin{equation} \label{eq:scaleOfT}
+    d = \frac{2}{1-\sigma^{-2}}.
+\end{equation}\]</span>
+<p>Given that the formula  holds only for cases of <span class="math inline">\(d&gt;2\)</span> (and respectively for <span class="math inline">\(\sigma^2&gt;1\)</span>), the degrees of freedom in this case are restricted by 2 from below.</p>
+<p>Kurtosis of Student t distribution depends on the value of <span class="math inline">\(d\)</span>, and for the cases of <span class="math inline">\(d&gt;4\)</span> is equal to <span class="math inline">\(\frac{6}{d-4}\)</span>.</p>
+<p><code>alm()</code> function with <code>distribution=&quot;dt&quot;</code> returns <span class="math inline">\(\mu_t\)</span> in the same variables <code>mu</code> and <code>fitted.values</code>, and <span class="math inline">\(d\)</span> in the <code>scale</code> variable. Both prediction and confidence intervals use <code>qt()</code> function from <code>stats</code> package and rely on the estimated in-sample value of <span class="math inline">\(d\)</span>. The intervals are constructed similarly to how it is done in Normal distribution  (based on <code>qt()</code> function).</p>
 </div>
 </div>
-<div id="continuous-density-functions-for-positive-data" class="section level2">
-<h2>Continuous density functions for positive data</h2>
+<div id="density-functions-for-continuous-positive-data" class="section level2">
+<h2>Density functions for continuous positive data</h2>
 <p>This group includes:</p>
 <ol style="list-style-type: decimal">
 <li>Log Normal distribution,</li>
@@ -272,7 +289,7 @@ The density function of Noncentral Chi Squared distribution is quite difficult. 
 <span class="math display">\[\begin{equation} \label{eq:NCChiSquared}
     f(y_t) = \frac{1}{2} \exp \left( -\frac{y_t + \lambda_t}{2} \right) \left(\frac{y_t}{\lambda_t} \right)^{\frac{k}{4}-0.5} I_{\frac{k}{2}-1}(\sqrt{\lambda_t y_t}),
 \end{equation}\]</span>
-where <span class="math inline">\(I_k(x)\)</span> is a Bessel function of the first kind. The <span class="math inline">\(\lambda_t\)</span> parameter is estimated from a regression with exogenous variables:
+where <span class="math inline">\(I_k(x)\)</span> is the Bessel function of the first kind. The <span class="math inline">\(\lambda_t\)</span> parameter is estimated from a regression with exogenous variables:
 <span class="math display">\[\begin{equation} \label{eq:lambdaValue}
     \lambda_t = ( x_t' B )^2 ,
 \end{equation}\]</span>
@@ -285,8 +302,42 @@ The model that is assumed in the case of Noncentral Chi Squared distribution is:
 <p><span class="math inline">\(\lambda_t\)</span> is returned in the variable <code>mu</code>, while <span class="math inline">\(k\)</span> is returned in <code>scale</code>. Finally, <code>fitted.values</code> returns <span class="math inline">\(\lambda_t + k\)</span>. Similar correction is done in <code>predict()</code> function. As for the prediction intervals, they are generated using <code>qchisq()</code> function from <code>stats</code> package. Last but not least, <code>resid()</code> method returns <span class="math inline">\(e_t = \sqrt{y_t} - \sqrt{\mu_t}\)</span>.</p>
 </div>
 </div>
-<div id="discrete-density-functions" class="section level2">
-<h2>Discrete density functions</h2>
+<div id="continuous-distributions-on-a-specific-interval" class="section level2">
+<h2>Continuous distributions on a specific interval</h2>
+<p>There is currently onle one distribution in this group:</p>
+<ol style="list-style-type: decimal">
+<li>Beta distribution.</li>
+</ol>
+Beta distribution is a distribution for a continuous variable that is defined on the interval of <span class="math inline">\((0, 1)\)</span>. Note that the bounds are not included here, because the probability density function is not well defined on them. If the provided data contains either zeroes or ones, the function will modify the values using:
+<span class="math display">\[\begin{equation} \label{eq:BetaWarning}
+    y^\prime_t = y_t (1 - 2 \cdot 10^{-10}),
+\end{equation}\]</span>
+<p>and it will warn the user about this modification. This correction makes sure that there are no boundary values in the data, and it is quite artificial and needed for estimation purposes only.</p>
+The density function of Beta distribution has the form:
+<span class="math display">\[\begin{equation} \label{eq:Beta}
+    f(y_t) = \frac{y_t^{\alpha_t-1}(1-y_t)^{\beta_t-1}}{B(\alpha_t, \beta_t)} ,
+\end{equation}\]</span>
+where <span class="math inline">\(\alpha_t\)</span> is the first shape parameter and <span class="math inline">\(\beta_t\)</span> is the second one. Note indices for the both shape parameters. This is what makes the <code>alm()</code> implementation of Beta distribution different from any other. We assume that both of them have underlying deterministic models, so that:
+<span class="math display">\[\begin{equation} \label{eq:BetaAt}
+    \alpha_t = \exp(x_t' A) ,
+\end{equation}\]</span>
+and
+<span class="math display">\[\begin{equation} \label{eq:BetaBt}
+    \beta_t = \exp(x_t' B),
+\end{equation}\]</span>
+where <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span> are the vectors of parameters for the respective shape variables. This allows the function to model any shapes depending on the values of exogenous variables. The conditional expectation of the model is calculated using:
+<span class="math display">\[\begin{equation} \label{eq:BetaExpectation}
+    \hat{y}_t = \frac{\alpha_t}{\alpha_t + \beta_t} ,
+\end{equation}\]</span>
+while the conditional variance is:
+<span class="math display">\[\begin{equation} \label{eq:BetaVariance}
+    \text{V}({y}_t) = \frac{\alpha_t \beta_t}{((\alpha_t + \beta_t)^2 (\alpha_t + \beta_t + 1))} .
+\end{equation}\]</span>
+<p><code>alm()</code> function with <code>distribution=&quot;dbeta&quot;</code> returns <span class="math inline">\(\hat{y}_t\)</span> in the variables <code>mu</code> and <code>fitted.values</code>, and <span class="math inline">\(\text{V}({y}_t)\)</span> in the <code>scale</code> variable. The shape parameters are returned in the respective variables <code>other$shape1</code> and <code>other$shape2</code>. You will notice that the output of the model contains twice more parameters than the number of variables in the model. This is because of the estimation of two models: <span class="math inline">\(\alpha_t\)</span>  and <span class="math inline">\(\beta_t\)</span>  - instead of one.</p>
+<p>Respectively, when <code>predict()</code> function is used for the <code>alm</code> model with Beta distribution, the two models are used in order to produce predicted values for <span class="math inline">\(\alpha_t\)</span> and <span class="math inline">\(\beta_t\)</span>. After that the conditional mean <code>mu</code> and conditional variance <code>variances</code> are produced using the formulae above. The prediction intervals are generated using <code>qbeta</code> function with the provided shape parameters for the holdout. As for the confidence intervals, they are produced assuming normality for the parameters of the model and using the estimate of the variance of the mean based on the <code>variances</code> (which is weird and probably wrong).</p>
+</div>
+<div id="density-functions-of-discrete-distributions" class="section level2">
+<h2>Density functions of discrete distributions</h2>
 <p>This group includes:</p>
 <ol style="list-style-type: decimal">
 <li>Poisson distribution,</li>
@@ -378,7 +429,7 @@ where <span class="math inline">\(\nu_t = x_t' A\)</span>. Similarly to the Logi
 <p>Finally, mixture distribution models can be used in <code>alm()</code> by defining <code>distribution</code> and <code>occurrence</code> parameters. Currently only <code>plogis()</code> and <code>pnorm()</code> are supported for the occurrence variable, but all the other distributions discussed above can be used for the modelling of the non-zero values. If <code>occurrence=&quot;plogis&quot;</code> or <code>occurrence=&quot;pnorm&quot;</code>, then <code>alm()</code> is fit two times: first on the non-zero data only (defining the subset) and second - using the same data, substituting the response variable by the binary occurrence variable and specifying <code>distribution=occurrence</code>. As an alternative option, occurrence <code>alm()</code> model can be estimated separately and then provided as a variable in <code>occurrence</code>.</p>
 <p>As an example of mixture model, let’s generate some data:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">xreg &lt;-<span class="st"> </span><span class="kw">cbind</span>(<span class="kw">rlaplace</span>(<span class="dv">100</span>,<span class="dv">10</span>,<span class="dv">3</span>),<span class="kw">rnorm</span>(<span class="dv">100</span>,<span class="dv">50</span>,<span class="dv">5</span>))
-xreg &lt;-<span class="st"> </span><span class="kw">cbind</span>(<span class="dv">100</span><span class="fl">+0.5</span><span class="op">*</span>xreg[,<span class="dv">1</span>]<span class="op">-</span><span class="fl">0.75</span><span class="op">*</span>xreg[,<span class="dv">2</span>]<span class="op">+</span><span class="kw">rlaplace</span>(<span class="dv">100</span>,<span class="dv">0</span>,<span class="dv">3</span>),xreg,<span class="kw">rnorm</span>(<span class="dv">100</span>,<span class="dv">300</span>,<span class="dv">10</span>))
+xreg &lt;-<span class="st"> </span><span class="kw">cbind</span>(<span class="dv">100</span><span class="op">+</span><span class="fl">0.5</span><span class="op">*</span>xreg[,<span class="dv">1</span>]<span class="op">-</span><span class="fl">0.75</span><span class="op">*</span>xreg[,<span class="dv">2</span>]<span class="op">+</span><span class="kw">rlaplace</span>(<span class="dv">100</span>,<span class="dv">0</span>,<span class="dv">3</span>),xreg,<span class="kw">rnorm</span>(<span class="dv">100</span>,<span class="dv">300</span>,<span class="dv">10</span>))
 <span class="kw">colnames</span>(xreg) &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;y&quot;</span>,<span class="st">&quot;x1&quot;</span>,<span class="st">&quot;x2&quot;</span>,<span class="st">&quot;Noise&quot;</span>)
 
 xreg[,<span class="dv">1</span>] &lt;-<span class="st"> </span><span class="kw">round</span>(<span class="kw">exp</span>(xreg[,<span class="dv">1</span>]<span class="op">-</span><span class="dv">70</span>) <span class="op">/</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span><span class="kw">exp</span>(xreg[,<span class="dv">1</span>]<span class="op">-</span><span class="dv">70</span>)),<span class="dv">0</span>) <span class="op">*</span><span class="st"> </span><span class="kw">round</span>(xreg[,<span class="dv">1</span>]<span class="op">-</span><span class="dv">70</span>)
@@ -396,47 +447,47 @@ outSample &lt;-<span class="st"> </span>xreg[<span class="op">-</span><span clas
 <span class="co">#&gt; Distribution used in the estimation: Mixture of Log Normal and Cumulative logistic</span>
 <span class="co">#&gt; Coefficients:</span>
 <span class="co">#&gt;             Estimate Std. Error Lower 2.5% Upper 97.5%</span>
-<span class="co">#&gt; (Intercept) -0.45472    5.62031  -12.05447    11.14503</span>
-<span class="co">#&gt; x1           0.05378    0.04746   -0.04417     0.15173</span>
-<span class="co">#&gt; x2          -0.07149    0.04485   -0.16404     0.02107</span>
-<span class="co">#&gt; Noise        0.01398    0.01651   -0.02009     0.04806</span>
+<span class="co">#&gt; (Intercept) -9.19230    6.33870  -22.88622     4.50163</span>
+<span class="co">#&gt; x1           0.06249    0.03521   -0.01357     0.13855</span>
+<span class="co">#&gt; x2          -0.00674    0.03538   -0.08318     0.06970</span>
+<span class="co">#&gt; Noise        0.03211    0.01927   -0.00952     0.07374</span>
 <span class="co">#&gt; ICs:</span>
 <span class="co">#&gt;      AIC     AICc      BIC     BICc </span>
-<span class="co">#&gt; 330.2341 321.0449 354.0544 333.9208</span>
+<span class="co">#&gt; 167.5472 158.3580 191.3675 171.2339</span>
 <span class="kw">summary</span>(modelMixture<span class="op">$</span>occurrence)
 <span class="co">#&gt; Distribution used in the estimation: Cumulative logistic</span>
 <span class="co">#&gt; Coefficients:</span>
-<span class="co">#&gt;              Estimate Std. Error Lower 2.5% Upper 97.5%</span>
-<span class="co">#&gt; (Intercept) 339.09332   14.76843  309.67309   368.51355</span>
-<span class="co">#&gt; x1            1.62748    0.13504    1.35846     1.89650</span>
-<span class="co">#&gt; x2           -4.24161    0.08530   -4.41153    -4.07169</span>
-<span class="co">#&gt; Noise        -0.51634    0.04537   -0.60673    -0.42596</span>
+<span class="co">#&gt;             Estimate Std. Error Lower 2.5% Upper 97.5%</span>
+<span class="co">#&gt; (Intercept) 23.81308    7.33202    9.20694    38.41921</span>
+<span class="co">#&gt; x1           0.40056    0.05237    0.29623     0.50489</span>
+<span class="co">#&gt; x2          -0.97031    0.03991   -1.04980    -0.89081</span>
+<span class="co">#&gt; Noise        0.05610    0.02264    0.01099     0.10120</span>
 <span class="co">#&gt; ICs:</span>
-<span class="co">#&gt;      AIC     AICc      BIC     BICc </span>
-<span class="co">#&gt; 192.8236 193.6344 204.7337 206.5103</span></code></pre></div>
+<span class="co">#&gt;       AIC      AICc       BIC      BICc </span>
+<span class="co">#&gt;  91.36789  92.17870 103.27803 105.05452</span></code></pre></div>
 <p>After that we can produce forecasts using the data from the holdout sample:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">predict</span>(modelMixture,outSample,<span class="dt">interval=</span><span class="st">&quot;p&quot;</span>)
-<span class="co">#&gt;               Mean Lower 28.8% Upper 71.2%</span>
-<span class="co">#&gt;  [1,] 1.159513e-02   2.2273792    2.227379</span>
-<span class="co">#&gt;  [2,] 6.184523e-16   1.1750300    1.175030</span>
-<span class="co">#&gt;  [3,] 1.528366e-19   1.7731523    1.773152</span>
-<span class="co">#&gt;  [4,] 3.578313e+00   0.7312016   17.511345</span>
-<span class="co">#&gt;  [5,] 1.066322e-13   1.7502506    1.750251</span>
-<span class="co">#&gt;  [6,] 7.707532e-01   0.5590267    6.420726</span>
-<span class="co">#&gt;  [7,] 2.906148e+00   0.6127469   13.783332</span>
-<span class="co">#&gt;  [8,] 1.913058e-10   2.0567377    2.056738</span>
-<span class="co">#&gt;  [9,] 5.054802e+00   0.8039960   31.780038</span>
-<span class="co">#&gt; [10,] 3.842969e+00   0.8464556   17.447355</span>
-<span class="co">#&gt; [11,] 2.264285e-18   1.0387370    1.038737</span>
-<span class="co">#&gt; [12,] 1.473246e-12   1.1642075    1.164207</span>
-<span class="co">#&gt; [13,] 2.975084e-17   1.0263613    1.026361</span>
-<span class="co">#&gt; [14,] 1.860994e+00   0.3721032    9.370381</span>
-<span class="co">#&gt; [15,] 4.864669e-09   2.1186638    2.118664</span>
-<span class="co">#&gt; [16,] 3.408122e+00   0.7677899   15.128841</span>
-<span class="co">#&gt; [17,] 3.936571e+00   0.8051304   19.247307</span>
-<span class="co">#&gt; [18,] 4.295351e+00   0.8759265   21.063453</span>
-<span class="co">#&gt; [19,] 8.127399e-04   2.1383992    2.138399</span>
-<span class="co">#&gt; [20,] 2.029925e-02   3.6545254    3.654525</span></code></pre></div>
+<span class="co">#&gt;               Mean Lower 36.5% Upper 63.5%</span>
+<span class="co">#&gt;  [1,] 7.839546e-01   0.3025189   4.2807715</span>
+<span class="co">#&gt;  [2,] 5.115751e-02   1.0141454   1.0229402</span>
+<span class="co">#&gt;  [3,] 1.990658e-02   3.9835187   3.9835187</span>
+<span class="co">#&gt;  [4,] 5.940760e-03   2.0746160   2.0746160</span>
+<span class="co">#&gt;  [5,] 8.268171e-02   1.9870017   1.9870017</span>
+<span class="co">#&gt;  [6,] 7.623092e-05   1.2410894   1.2410894</span>
+<span class="co">#&gt;  [7,] 2.559207e+00   0.8926319  10.0967113</span>
+<span class="co">#&gt;  [8,] 2.671051e-03   1.4858892   1.4858892</span>
+<span class="co">#&gt;  [9,] 7.617030e-01   0.4921865   4.5450214</span>
+<span class="co">#&gt; [10,] 4.937827e-04   1.2650933   1.2650933</span>
+<span class="co">#&gt; [11,] 2.063009e-04   0.8853466   0.8853466</span>
+<span class="co">#&gt; [12,] 7.362472e-03   1.7778182   1.7778182</span>
+<span class="co">#&gt; [13,] 4.183442e-03   3.4039091   3.4039091</span>
+<span class="co">#&gt; [14,] 2.710491e+00   0.7751540  10.5963487</span>
+<span class="co">#&gt; [15,] 1.008821e-02   1.0672951   1.0672951</span>
+<span class="co">#&gt; [16,] 1.226517e-02   2.2113312   2.2113312</span>
+<span class="co">#&gt; [17,] 4.497735e-02   2.3774539   2.3774539</span>
+<span class="co">#&gt; [18,] 5.728770e-01   0.9944079   5.0003077</span>
+<span class="co">#&gt; [19,] 7.742773e-05   1.8470569   1.8470569</span>
+<span class="co">#&gt; [20,] 7.386667e-01   0.7657203   5.0571531</span></code></pre></div>
 <div id="references" class="section level3 unnumbered">
 <h3>References</h3>
 <div id="refs" class="references">
