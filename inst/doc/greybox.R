@@ -59,7 +59,7 @@ plot(ourModel)
 
 ## ----BJDynamicCoefficients-----------------------------------------------
 # Coefficients in dynamics
-head(ourModel$dynamic)
+head(ourModel$coefficientsDynamic)
 # Standard errors of the coefficients in dynamics
 head(ourModel$se)
 # Importance of parameters in dynamics

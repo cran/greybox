@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2018-11-29" />
+<meta name="date" content="2019-01-03" />
 
 <title>Advanced Linear Model</title>
 
@@ -70,7 +70,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 
 <h1 class="title toc-ignore">Advanced Linear Model</h1>
 <h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2018-11-29</em></h4>
+<h4 class="date"><em>2019-01-03</em></h4>
 
 
 
@@ -304,7 +304,7 @@ The model that is assumed in the case of Noncentral Chi Squared distribution is:
 </div>
 <div id="continuous-distributions-on-a-specific-interval" class="section level2">
 <h2>Continuous distributions on a specific interval</h2>
-<p>There is currently onle one distribution in this group:</p>
+<p>There is currently only one distribution in this group:</p>
 <ol style="list-style-type: decimal">
 <li>Beta distribution.</li>
 </ol>
@@ -429,7 +429,7 @@ where <span class="math inline">\(\nu_t = x_t' A\)</span>. Similarly to the Logi
 <p>Finally, mixture distribution models can be used in <code>alm()</code> by defining <code>distribution</code> and <code>occurrence</code> parameters. Currently only <code>plogis()</code> and <code>pnorm()</code> are supported for the occurrence variable, but all the other distributions discussed above can be used for the modelling of the non-zero values. If <code>occurrence=&quot;plogis&quot;</code> or <code>occurrence=&quot;pnorm&quot;</code>, then <code>alm()</code> is fit two times: first on the non-zero data only (defining the subset) and second - using the same data, substituting the response variable by the binary occurrence variable and specifying <code>distribution=occurrence</code>. As an alternative option, occurrence <code>alm()</code> model can be estimated separately and then provided as a variable in <code>occurrence</code>.</p>
 <p>As an example of mixture model, let’s generate some data:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">xreg &lt;-<span class="st"> </span><span class="kw">cbind</span>(<span class="kw">rlaplace</span>(<span class="dv">100</span>,<span class="dv">10</span>,<span class="dv">3</span>),<span class="kw">rnorm</span>(<span class="dv">100</span>,<span class="dv">50</span>,<span class="dv">5</span>))
-xreg &lt;-<span class="st"> </span><span class="kw">cbind</span>(<span class="dv">100</span><span class="op">+</span><span class="fl">0.5</span><span class="op">*</span>xreg[,<span class="dv">1</span>]<span class="op">-</span><span class="fl">0.75</span><span class="op">*</span>xreg[,<span class="dv">2</span>]<span class="op">+</span><span class="kw">rlaplace</span>(<span class="dv">100</span>,<span class="dv">0</span>,<span class="dv">3</span>),xreg,<span class="kw">rnorm</span>(<span class="dv">100</span>,<span class="dv">300</span>,<span class="dv">10</span>))
+xreg &lt;-<span class="st"> </span><span class="kw">cbind</span>(<span class="dv">100</span><span class="fl">+0.5</span><span class="op">*</span>xreg[,<span class="dv">1</span>]<span class="op">-</span><span class="fl">0.75</span><span class="op">*</span>xreg[,<span class="dv">2</span>]<span class="op">+</span><span class="kw">rlaplace</span>(<span class="dv">100</span>,<span class="dv">0</span>,<span class="dv">3</span>),xreg,<span class="kw">rnorm</span>(<span class="dv">100</span>,<span class="dv">300</span>,<span class="dv">10</span>))
 <span class="kw">colnames</span>(xreg) &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;y&quot;</span>,<span class="st">&quot;x1&quot;</span>,<span class="st">&quot;x2&quot;</span>,<span class="st">&quot;Noise&quot;</span>)
 
 xreg[,<span class="dv">1</span>] &lt;-<span class="st"> </span><span class="kw">round</span>(<span class="kw">exp</span>(xreg[,<span class="dv">1</span>]<span class="op">-</span><span class="dv">70</span>) <span class="op">/</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span><span class="kw">exp</span>(xreg[,<span class="dv">1</span>]<span class="op">-</span><span class="dv">70</span>)),<span class="dv">0</span>) <span class="op">*</span><span class="st"> </span><span class="kw">round</span>(xreg[,<span class="dv">1</span>]<span class="op">-</span><span class="dv">70</span>)
@@ -444,50 +444,60 @@ outSample &lt;-<span class="st"> </span>xreg[<span class="op">-</span><span clas
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">modelMixture &lt;-<span class="st"> </span><span class="kw">alm</span>(y<span class="op">~</span>x1<span class="op">+</span>x2<span class="op">+</span>Noise, inSample, <span class="dt">distribution=</span><span class="st">&quot;dlnorm&quot;</span>, <span class="dt">occurrence=</span>modelOccurrence)</code></pre></div>
 <p>The occurrence model will be return in the respective variable:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">summary</span>(modelMixture)
+<span class="co">#&gt; Response variable: y</span>
 <span class="co">#&gt; Distribution used in the estimation: Mixture of Log Normal and Cumulative logistic</span>
 <span class="co">#&gt; Coefficients:</span>
 <span class="co">#&gt;             Estimate Std. Error Lower 2.5% Upper 97.5%</span>
-<span class="co">#&gt; (Intercept) -9.19230    6.33870  -22.88622     4.50163</span>
-<span class="co">#&gt; x1           0.06249    0.03521   -0.01357     0.13855</span>
-<span class="co">#&gt; x2          -0.00674    0.03538   -0.08318     0.06970</span>
-<span class="co">#&gt; Noise        0.03211    0.01927   -0.00952     0.07374</span>
+<span class="co">#&gt; (Intercept) 14.91640    4.14235    6.21364    23.61915</span>
+<span class="co">#&gt; x1          -0.02743    0.03069   -0.09191     0.03705</span>
+<span class="co">#&gt; x2          -0.11098    0.02754   -0.16883    -0.05313</span>
+<span class="co">#&gt; Noise       -0.02753    0.01270   -0.05421    -0.00085</span>
 <span class="co">#&gt; ICs:</span>
 <span class="co">#&gt;      AIC     AICc      BIC     BICc </span>
-<span class="co">#&gt; 167.5472 158.3580 191.3675 171.2339</span>
+<span class="co">#&gt; 322.5595 315.7479 358.2899 343.3656 </span>
+<span class="co">#&gt; </span>
+<span class="co">#&gt; Sample size: 80</span>
+<span class="co">#&gt; Number of estimated parameters: 10</span>
+<span class="co">#&gt; Number of degrees of freedom: 70</span>
 <span class="kw">summary</span>(modelMixture<span class="op">$</span>occurrence)
+<span class="co">#&gt; Response variable: y</span>
 <span class="co">#&gt; Distribution used in the estimation: Cumulative logistic</span>
 <span class="co">#&gt; Coefficients:</span>
-<span class="co">#&gt;             Estimate Std. Error Lower 2.5% Upper 97.5%</span>
-<span class="co">#&gt; (Intercept) 23.81308    7.33202    9.20694    38.41921</span>
-<span class="co">#&gt; x1           0.40056    0.05237    0.29623     0.50489</span>
-<span class="co">#&gt; x2          -0.97031    0.03991   -1.04980    -0.89081</span>
-<span class="co">#&gt; Noise        0.05610    0.02264    0.01099     0.10120</span>
+<span class="co">#&gt;              Estimate Std. Error Lower 2.5% Upper 97.5%</span>
+<span class="co">#&gt; (Intercept) 294.78950   13.87487  267.14935   322.42965</span>
+<span class="co">#&gt; x1            0.19889    0.10871   -0.01767     0.41545</span>
+<span class="co">#&gt; x2           -1.85703    0.08485   -2.02606    -1.68801</span>
+<span class="co">#&gt; Noise        -0.70126    0.04571   -0.79232    -0.61020</span>
 <span class="co">#&gt; ICs:</span>
-<span class="co">#&gt;       AIC      AICc       BIC      BICc </span>
-<span class="co">#&gt;  91.36789  92.17870 103.27803 105.05452</span></code></pre></div>
+<span class="co">#&gt;      AIC     AICc      BIC     BICc </span>
+<span class="co">#&gt; 205.9299 206.7407 217.8400 219.6165 </span>
+<span class="co">#&gt; </span>
+<span class="co">#&gt; Sample size: 80</span>
+<span class="co">#&gt; Number of estimated parameters: 5</span>
+<span class="co">#&gt; Number of degrees of freedom: 75</span></code></pre></div>
 <p>After that we can produce forecasts using the data from the holdout sample:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">predict</span>(modelMixture,outSample,<span class="dt">interval=</span><span class="st">&quot;p&quot;</span>)
-<span class="co">#&gt;               Mean Lower 36.5% Upper 63.5%</span>
-<span class="co">#&gt;  [1,] 7.839546e-01   0.3025189   4.2807715</span>
-<span class="co">#&gt;  [2,] 5.115751e-02   1.0141454   1.0229402</span>
-<span class="co">#&gt;  [3,] 1.990658e-02   3.9835187   3.9835187</span>
-<span class="co">#&gt;  [4,] 5.940760e-03   2.0746160   2.0746160</span>
-<span class="co">#&gt;  [5,] 8.268171e-02   1.9870017   1.9870017</span>
-<span class="co">#&gt;  [6,] 7.623092e-05   1.2410894   1.2410894</span>
-<span class="co">#&gt;  [7,] 2.559207e+00   0.8926319  10.0967113</span>
-<span class="co">#&gt;  [8,] 2.671051e-03   1.4858892   1.4858892</span>
-<span class="co">#&gt;  [9,] 7.617030e-01   0.4921865   4.5450214</span>
-<span class="co">#&gt; [10,] 4.937827e-04   1.2650933   1.2650933</span>
-<span class="co">#&gt; [11,] 2.063009e-04   0.8853466   0.8853466</span>
-<span class="co">#&gt; [12,] 7.362472e-03   1.7778182   1.7778182</span>
-<span class="co">#&gt; [13,] 4.183442e-03   3.4039091   3.4039091</span>
-<span class="co">#&gt; [14,] 2.710491e+00   0.7751540  10.5963487</span>
-<span class="co">#&gt; [15,] 1.008821e-02   1.0672951   1.0672951</span>
-<span class="co">#&gt; [16,] 1.226517e-02   2.2113312   2.2113312</span>
-<span class="co">#&gt; [17,] 4.497735e-02   2.3774539   2.3774539</span>
-<span class="co">#&gt; [18,] 5.728770e-01   0.9944079   5.0003077</span>
-<span class="co">#&gt; [19,] 7.742773e-05   1.8470569   1.8470569</span>
-<span class="co">#&gt; [20,] 7.386667e-01   0.7657203   5.0571531</span></code></pre></div>
+<span class="co">#&gt;            Mean Lower 31.2% Upper 68.8%</span>
+<span class="co">#&gt; 1  2.655972e+00   1.1818231  16.9470853</span>
+<span class="co">#&gt; 2  6.450641e-15   0.2805942   0.2805942</span>
+<span class="co">#&gt; 3  1.213820e+00   1.3453343   7.7860063</span>
+<span class="co">#&gt; 4  1.113453e-06   1.3992106   1.3992106</span>
+<span class="co">#&gt; 5  2.297615e-01   2.6155733   4.1022882</span>
+<span class="co">#&gt; 6  6.038307e+00   1.8400154  19.8157669</span>
+<span class="co">#&gt; 7  4.137311e+00   1.3969354  14.3842162</span>
+<span class="co">#&gt; 8  4.852150e-17   0.3962775   0.3962775</span>
+<span class="co">#&gt; 9  1.764299e-14   0.7083581   0.7083581</span>
+<span class="co">#&gt; 10 5.858338e-01   1.7619813   6.4345091</span>
+<span class="co">#&gt; 11 6.269082e+00   1.8157836  21.6443145</span>
+<span class="co">#&gt; 12 1.159743e-23   0.1630436   0.1630436</span>
+<span class="co">#&gt; 13 3.166080e+00   1.0946138  10.2826389</span>
+<span class="co">#&gt; 14 1.289502e-04   2.2811606   2.2811606</span>
+<span class="co">#&gt; 15 6.488493e-06   1.8040794   1.8040794</span>
+<span class="co">#&gt; 16 1.360073e-09   1.2422394   1.2422394</span>
+<span class="co">#&gt; 17 8.748727e-11   0.7934033   0.7934033</span>
+<span class="co">#&gt; 18 2.374742e-04   2.3795201   2.3795201</span>
+<span class="co">#&gt; 19 4.316427e+00   1.2870975  14.4804352</span>
+<span class="co">#&gt; 20 1.891544e-03   2.0792082   2.0792082</span></code></pre></div>
 <div id="references" class="section level3 unnumbered">
 <h3>References</h3>
 <div id="refs" class="references">

@@ -7,6 +7,7 @@ vignette: >
   %\VignetteIndexEntry{Greybox main vignette}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
+bibliography: library.bib
 ---
 
 ```{r setup, include = FALSE}
@@ -34,8 +35,13 @@ The package includes the following functions:
 3. `lmCombine()` - combine the linear models into one using IC weights;
 4. `lmDynamic()` - produce model with dynamic weights and time varying parameters based on IC weight.
 5. `xregExpander()` - expand the provided data by including leads and lags of the variables.
-6. [ro()](ro.html) - produce forecasts with a specified function using rolling origin.
-7. `rmc()` - regression for multiple comparison of methods. This is a parametric counterpart of `nemenyi()`, which should work better than `nemenyi()` on large samples.
+6. `xregTransformer()` - produce non-linear transformations of the provided data (logs, inverse etc).
+7. `xregMultiplier()` - produce cross-products of the variables in the provided matrix. Could be useful when exploring interaction effects of dummy variables.
+8. `tableplot()` - creates a plot for two categorical variables based on table function with frequencies inside.
+9. `spread()` - function that plots scatter / boxplot / tableplot diagrams between variables depending on the their types.
+10. `graphmaker()` - produces linear plots for the variable, its forecasts and fitted values.
+11. [ro()](ro.html) - produce forecasts with a specified function using rolling origin.
+12. `rmc()` - regression for multiple comparison of methods. This is a parametric counterpart of `nemenyi()`, which is more informative than `nemenyi()` and should work better on large samples. This can be efficiently used together with RelMAE / RelMSE measures.
 <!--7. `nemenyi()` - test for the comparison of different classifiers. This can be useful when several forecasting methods need to be compared. This function not only reports the critical values of the test, but also produces the plots, showing how the different methods compare.-->
 
 The first two construct a model of a class `lm`, that could be used for the purposes of analysis or forecasting. The last one expands the exogenous variables to the matrix with lags and leads. Let's see how all of them work. Let's start from the end.
@@ -140,7 +146,7 @@ ourForecast <- predict(ourModel,BJHoldout)
 plot(ourForecast)
 ```
 
-These are the main functions implemented in the package for now. If you want to read more about IC model selection and combinations, I would recommend Burnham and Anderson (2002) textbook.
+These are the main functions implemented in the package for now. If you want to read more about IC model selection and combinations, I would recommend [@Burnham1998] textbook.
 
 ## lmDynamic
 
@@ -161,7 +167,7 @@ plot(ourModel)
 The coefficients in the summary are the averaged out over the whole sample. The more interesting elements are the time varying parameters, their standard errors (and respective confidence intervals) and time varying importance of the parameters. 
 ```{r BJDynamicCoefficients}
 # Coefficients in dynamics
-head(ourModel$dynamic)
+head(ourModel$coefficientsDynamic)
 # Standard errors of the coefficients in dynamics
 head(ourModel$se)
 # Importance of parameters in dynamics
@@ -187,4 +193,3 @@ This function is currently under development, so stay tuned.
 
 ## References
 
-1. Burnham Kenneth P. and Anderson David R. (2002). Model Selection and Multimodel Inference. A Practical Information-Theoretic Approach. Springer-Verlag New York. \url{http://dx.doi.org/10.1007/b97636}.

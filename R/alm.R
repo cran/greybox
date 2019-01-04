@@ -29,6 +29,10 @@
 #'
 #' The estimation is done using likelihood of respective distributions.
 #'
+#' ALM function currently does not work with factors and does not accept
+#' transformations of variables in the formula. So you need to do transformations
+#' separately before using the function.
+#'
 #' @template author
 #' @template keywords
 #'
@@ -63,8 +67,12 @@
 #' @param vcovProduce whether to produce variance-covariance matrix of
 #' coefficients or not. This is done via hessian calculation, so might be
 #' computationally costly.
-#' @param ... additional parameters to pass to distribution functions
-#' (e.g. \code{alpha} value for Asymmetric Laplace distribution).
+#' @param checks if \code{FALSE}, then the function won't check whether
+#' the data has variability and whether the regressors are correlated. Might
+#' cause trouble, especially in cases of multicollinearity.
+#' @param ... additional parameters to pass to distribution functions. This
+#' includes: \code{alpha} value for Asymmetric Laplace distribution,
+#' \code{size} for the Negative Binomial or \code{df} for the Chi-Squared.
 #'
 #' @return Function returns \code{model} - the final model of the class
 #' "alm", which contains:
@@ -90,23 +98,65 @@
 #' (e.g. \code{alpha} for Asymmetric Laplace).
 #' }
 #'
-#' @seealso \code{\link[greybox]{stepwise}, \link[greybox]{lmCombine}}
+#' @seealso \code{\link[greybox]{stepwise}, \link[greybox]{lmCombine},
+#' \link[greybox]{xregTransformer}}
 #'
 #' @examples
 #'
+#' ### An example with mtcars data and factors
+#' mtcars2 <- within(mtcars, {
+#'    vs <- factor(vs, labels = c("V", "S"))
+#'    am <- factor(am, labels = c("automatic", "manual"))
+#'    cyl  <- ordered(cyl)
+#'    gear <- ordered(gear)
+#'    carb <- ordered(carb)
+#' })
+#' # The standard model with Log Normal distribution
+#' ourModel <- alm(mpg~., mtcars2[1:30,], distribution="dlnorm")
+#' summary(ourModel)
+#' plot(ourModel)
+#'
+#' # Produce predictions with the one sided interval (upper bound)
+#' predict(ourModel, mtcars2[-c(1:30),], interval="p", side="u")
+#'
+#'
+#' ### Artificial data for the other examples
 #' xreg <- cbind(rlaplace(100,10,3),rnorm(100,50,5))
 #' xreg <- cbind(100+0.5*xreg[,1]-0.75*xreg[,2]+rlaplace(100,0,3),xreg,rnorm(100,300,10))
 #' colnames(xreg) <- c("y","x1","x2","Noise")
 #' inSample <- xreg[1:80,]
 #' outSample <- xreg[-c(1:80),]
 #'
+#' # An example with Laplace distribution
 #' ourModel <- alm(y~x1+x2, inSample, distribution="dlaplace")
 #' summary(ourModel)
 #' plot(predict(ourModel,outSample))
 #'
-#' # An example with binary response variable
-#' xreg[,1] <- round(exp(xreg[,1]-70) / (1 + exp(xreg[,1]-70)),0)
-#' colnames(xreg) <- c("y","x1","x2","Noise")
+#' # And another one with Asymmetric Laplace distribution (quantile regression)
+#' # with optimised alpha
+#' ourModel <- alm(y~x1+x2, inSample, distribution="dalaplace")
+#' summary(ourModel)
+#' plot(predict(ourModel,outSample))
+#'
+#'
+#' ### Examples with the count data
+#' xreg[,1] <- round(exp(xreg[,1]-70),0)
+#' inSample <- xreg[1:80,]
+#' outSample <- xreg[-c(1:80),]
+#'
+#' # Negative Binomial distribution
+#' ourModel <- alm(y~x1+x2, inSample, distribution="dnbinom")
+#' summary(ourModel)
+#' predict(ourModel,outSample,interval="p",side="u")
+#'
+#' # Poisson distribution
+#' ourModel <- alm(y~x1+x2, inSample, distribution="dpois")
+#' summary(ourModel)
+#' predict(ourModel,outSample,interval="p",side="u")
+#'
+#'
+#' ### Examples with binary response variable
+#' xreg[,1] <- round(xreg[,1] / (1 + xreg[,1]),0)
 #' inSample <- xreg[1:80,]
 #' outSample <- xreg[-c(1:80),]
 #'
@@ -122,7 +172,7 @@
 #'
 #' @importFrom numDeriv hessian
 #' @importFrom nloptr nloptr
-#' @importFrom stats model.frame sd terms
+#' @importFrom stats model.frame sd terms model.matrix
 #' @importFrom stats dchisq dlnorm dnorm dlogis dpois dnbinom dt dbeta
 #' @importFrom stats plogis
 #' @export alm
@@ -133,7 +183,7 @@ alm <- function(formula, data, subset, na.action,
                                "dbeta",
                                "plogis","pnorm"),
                 occurrence=c("none","plogis","pnorm"),
-                B=NULL, vcovProduce=FALSE, ...){
+                B=NULL, vcovProduce=FALSE, checks=TRUE, ...){
 # Useful stuff for dnbinom: https://scialert.net/fulltext/?doi=ajms.2010.1.15
 
     cl <- match.call();
@@ -157,12 +207,39 @@ alm <- function(formula, data, subset, na.action,
     # If this is ALD, then see if alpha was provided. Otherwise estimate it.
     if(distribution=="dalaplace"){
         if(is.null(ellipsis$alpha)){
-            ellipsis$alpha <- alpha <- 0.5
-            alphaEstimate <- TRUE;
+            ellipsis$alpha <- 0.5
+            aParameterProvided <- FALSE;
         }
         else{
             alpha <- ellipsis$alpha;
-            alphaEstimate <- FALSE;
+            aParameterProvided <- TRUE;
+        }
+    }
+    else if(distribution=="dchisq"){
+        if(is.null(ellipsis$df)){
+            aParameterProvided <- FALSE;
+        }
+        else{
+            df <- ellipsis$df;
+            aParameterProvided <- TRUE;
+        }
+    }
+    else if(distribution=="dnbinom"){
+        if(is.null(ellipsis$size)){
+            aParameterProvided <- FALSE;
+        }
+        else{
+            size <- ellipsis$size;
+            aParameterProvided <- TRUE;
+        }
+    }
+    else if(distribution=="dfnorm"){
+        if(is.null(ellipsis$sigma)){
+            aParameterProvided <- FALSE;
+        }
+        else{
+            sigma <- ellipsis$sigma;
+            aParameterProvided <- TRUE;
         }
     }
 
@@ -198,8 +275,15 @@ alm <- function(formula, data, subset, na.action,
 
     if(!is.data.frame(data)){
         data <- as.data.frame(data);
-        mf$data <- data;
     }
+    else{
+        dataOrders <- unlist(lapply(data,is.ordered));
+        # If there is an ordered factor, remove the bloody ordering!
+        if(any(dataOrders)){
+            data[dataOrders] <- lapply(data[dataOrders],function(x) factor(x, levels=levels(x), ordered=FALSE));
+        }
+    }
+    mf$data <- data;
 
     responseName <- all.vars(formula)[1];
     # If this is a model with occurrence, use only non-zero observations
@@ -212,8 +296,28 @@ alm <- function(formula, data, subset, na.action,
     y <- dataWork[,1];
 
     interceptIsNeeded <- attr(terms(dataWork),"intercept")!=0;
+    # Create a model from the provided stuff. This way we can work with factors
+    dataWork <- model.matrix(dataWork,data=dataWork);
     obsInsample <- nrow(dataWork);
-    variablesNames <- colnames(dataWork)[-1];
+
+    if(interceptIsNeeded){
+        variablesNames <- colnames(dataWork)[-1];
+        matrixXreg <- as.matrix(dataWork[,-1]);
+        # Include response to the data
+        dataWork <- cbind(y,dataWork[,-1]);
+    }
+    else{
+        variablesNames <- colnames(dataWork);
+        matrixXreg <- dataWork;
+        # Include response to the data
+        dataWork <- cbind(y,dataWork);
+        warning(paste0("You have asked not to include intercept in the model. We will try to fit the model, ",
+                      "but this is a very naughty thing to do, and we cannot guarantee that it will work..."), call.=FALSE);
+    }
+    colnames(dataWork) <- c(responseName, variablesNames);
+
+    nVariables <- length(variablesNames);
+    colnames(matrixXreg) <- variablesNames;
 
     # Record the subset used in the model
     if(is.null(mf$subset)){
@@ -222,10 +326,6 @@ alm <- function(formula, data, subset, na.action,
     else{
         subset <- mf$subset;
     }
-
-    matrixXreg <- as.matrix(dataWork[,-1]);
-    nVariables <- length(variablesNames);
-    colnames(matrixXreg) <- variablesNames;
 
     mu <- vector("numeric", obsInsample);
     yFitted <- vector("numeric", obsInsample);
@@ -279,54 +379,35 @@ alm <- function(formula, data, subset, na.action,
         ot[] <- rep(TRUE,obsInsample);
     }
 
-    #### Checks of the exogenous variables ####
-    # Remove the data for which sd=0
-    noVariability <- vector("logical",nVariables);
-    noVariability[] <- apply(matrixXreg==matrix(matrixXreg[1,],obsInsample,nVariables,byrow=TRUE),2,all);
-    if(any(noVariability)){
-        if(all(noVariability)){
-            warning("None of exogenous variables has variability. Fitting the straight line.",
-                    call.=FALSE);
-            matrixXreg <- matrix(1,obsInsample,1);
-            nVariables <- 1;
-            variablesNames <- "(Intercept)";
-        }
-        else{
-            warning("Some exogenous variables did not have any variability. We dropped them out.",
-                    call.=FALSE);
-            matrixXreg <- matrixXreg[,!noVariability];
-            nVariables <- ncol(matrixXreg);
-            variablesNames <- variablesNames[!noVariability];
-        }
-    }
-
-    corThreshold <- 0.999;
-    if(nVariables>1){
-        # Check perfectly correlated cases
-        corMatrix <- cor(matrixXreg);
-        corHigh <- upper.tri(corMatrix) & abs(corMatrix)>=corThreshold;
-        if(any(corHigh)){
-            removexreg <- unique(which(corHigh,arr.ind=TRUE)[,1]);
-            if(ncol(matrixXreg)-length(removexreg)>1){
-                matrixXreg <- matrixXreg[,-removexreg];
+    if(checks){
+        #### Checks of the exogenous variables ####
+        # Remove the data for which sd=0
+        noVariability <- vector("logical",nVariables);
+        noVariability[] <- apply(matrixXreg==matrix(matrixXreg[1,],obsInsample,nVariables,byrow=TRUE),2,all);
+        if(any(noVariability)){
+            if(all(noVariability)){
+                warning("None of exogenous variables has variability. Fitting the straight line.",
+                        call.=FALSE);
+                matrixXreg <- matrix(1,obsInsample,1);
+                nVariables <- 1;
+                variablesNames <- "(Intercept)";
             }
             else{
-                matrixXreg <- matrix(matrixXreg[,-removexreg],ncol=ncol(matrixXreg)-length(removexreg),
-                                     dimnames=list(rownames(matrixXreg),c(colnames(matrixXreg)[-removexreg])));
+                warning("Some exogenous variables did not have any variability. We dropped them out.",
+                        call.=FALSE);
+                matrixXreg <- matrixXreg[,!noVariability];
+                nVariables <- ncol(matrixXreg);
+                variablesNames <- variablesNames[!noVariability];
             }
-            nVariables <- ncol(matrixXreg);
-            variablesNames <- colnames(matrixXreg);
-            warning("Some exogenous variables were perfectly correlated. We've dropped them out.",
-                    call.=FALSE);
         }
-    }
 
-    if(nVariables>1){
-        # Check dummy variables trap
-        detHigh <- determination(matrixXreg)>=corThreshold;
-        if(any(detHigh)){
-            while(any(detHigh)){
-                removexreg <- which(detHigh>=corThreshold)[1];
+        corThreshold <- 0.999;
+        if(nVariables>1){
+            # Check perfectly correlated cases
+            corMatrix <- cor(matrixXreg);
+            corHigh <- upper.tri(corMatrix) & abs(corMatrix)>=corThreshold;
+            if(any(corHigh)){
+                removexreg <- unique(which(corHigh,arr.ind=TRUE)[,1]);
                 if(ncol(matrixXreg)-length(removexreg)>1){
                     matrixXreg <- matrixXreg[,-removexreg];
                 }
@@ -336,11 +417,33 @@ alm <- function(formula, data, subset, na.action,
                 }
                 nVariables <- ncol(matrixXreg);
                 variablesNames <- colnames(matrixXreg);
-
-                detHigh <- determination(matrixXreg)>=corThreshold;
+                warning("Some exogenous variables were perfectly correlated. We've dropped them out.",
+                        call.=FALSE);
             }
-            warning("Some combinations of exogenous variables were perfectly correlated. We've dropped them out.",
-                    call.=FALSE);
+        }
+
+        # Do these checks only when intercept is needed. Otherwise in case of dummies this might cause chaos
+        if(nVariables>1 & interceptIsNeeded){
+            # Check dummy variables trap
+            detHigh <- determination(matrixXreg)>=corThreshold;
+            if(any(detHigh)){
+                while(any(detHigh)){
+                    removexreg <- which(detHigh>=corThreshold)[1];
+                    if(ncol(matrixXreg)-length(removexreg)>1){
+                        matrixXreg <- matrixXreg[,-removexreg];
+                    }
+                    else{
+                        matrixXreg <- matrix(matrixXreg[,-removexreg],ncol=ncol(matrixXreg)-length(removexreg),
+                                             dimnames=list(rownames(matrixXreg),c(colnames(matrixXreg)[-removexreg])));
+                    }
+                    nVariables <- ncol(matrixXreg);
+                    variablesNames <- colnames(matrixXreg);
+
+                    detHigh <- determination(matrixXreg)>=corThreshold;
+                }
+                warning("Some combinations of exogenous variables were perfectly correlated. We've dropped them out.",
+                        call.=FALSE);
+            }
         }
     }
 
@@ -368,16 +471,49 @@ alm <- function(formula, data, subset, na.action,
 
     fitter <- function(B, distribution, y, matrixXreg){
         if(distribution=="dalaplace"){
-            if(alphaEstimate){
-                alpha <- B[1];
+            if(!aParameterProvided){
+                other <- B[1];
                 B <- B[-1];
             }
+            else{
+                other <- alpha;
+            }
+        }
+        else if(distribution=="dnbinom"){
+            if(!aParameterProvided){
+                other <- B[1];
+                B <- B[-1];
+            }
+            else{
+                other <- size;
+            }
+        }
+        else if(distribution=="dchisq"){
+            if(!aParameterProvided){
+                other <- B[1];
+                B <- B[-1];
+            }
+            else{
+                other <- df;
+            }
+        }
+        else if(distribution=="dfnorm"){
+            if(!aParameterProvided){
+                other <- B[1];
+                B <- B[-1];
+            }
+            else{
+                other <- sigma;
+            }
+        }
+        else{
+            other <- NULL;
         }
 
         mu[] <- switch(distribution,
-                       "dpois" = exp(matrixXreg %*% B),
-                       "dchisq" = ifelseFast(any(matrixXreg %*% B[-1] <0),1E+100,(matrixXreg %*% B[-1])^2),
-                       "dnbinom" = exp(matrixXreg %*% B[-1]),
+                       "dpois" =,
+                       "dnbinom" = exp(matrixXreg %*% B),
+                       "dchisq" = ifelseFast(any(matrixXreg %*% B <0),1E+100,(matrixXreg %*% B)^2),
                        "dbeta" = exp(matrixXreg %*% B[1:(length(B)/2)]),
                        "dnorm" =,
                        "dfnorm" =,
@@ -393,22 +529,22 @@ alm <- function(formula, data, subset, na.action,
 
         scale <- switch(distribution,
                         "dbeta" = exp(matrixXreg %*% B[-c(1:(length(B)/2))]),
-                        "dnorm" =,
-                        "dfnorm" = sqrt(meanFast((y-mu)^2)),
+                        "dnorm" = sqrt(meanFast((y-mu)^2)),
+                        "dfnorm" = abs(other),
                         "dlnorm" = sqrt(meanFast((log(y)-mu)^2)),
                         "dlaplace" = meanFast(abs(y-mu)),
-                        "dalaplace" = meanFast((y-mu) * (alpha - (y<=mu)*1)),
+                        "dalaplace" = meanFast((y-mu) * (other - (y<=mu)*1)),
                         "dlogis" = sqrt(meanFast((y-mu)^2) * 3 / pi^2),
                         "ds" = meanFast(sqrt(abs(y-mu))) / 2,
                         "dt" = max(2,2/(1-(meanFast((y-mu)^2))^{-1})),
                         "dchisq" =,
-                        "dnbinom" = abs(B[1]),
+                        "dnbinom" = abs(other),
                         "dpois" = mu,
                         "pnorm" = sqrt(meanFast(qnorm((y - pnorm(mu, 0, 1) + 1) / 2, 0, 1)^2)),
                         "plogis" = sqrt(meanFast(log((1 + y * (1 + exp(mu))) / (1 + exp(mu) * (2 - y) - y))^2)) # Here we use the proxy from Svetunkov et al. (2018)
         );
 
-        return(list(mu=mu,scale=scale));
+        return(list(mu=mu,scale=scale,other=other));
     }
 
     CF <- function(B, distribution, y, matrixXreg){
@@ -419,7 +555,7 @@ alm <- function(formula, data, subset, na.action,
                            "dfnorm" = dfnorm(y, mu=fitterReturn$mu, sigma=fitterReturn$scale, log=TRUE),
                            "dlnorm" = dlnorm(y, meanlog=fitterReturn$mu, sdlog=fitterReturn$scale, log=TRUE),
                            "dlaplace" = dlaplace(y, mu=fitterReturn$mu, scale=fitterReturn$scale, log=TRUE),
-                           "dalaplace" = dalaplace(y, mu=fitterReturn$mu, scale=fitterReturn$scale, alpha=alpha, log=TRUE),
+                           "dalaplace" = dalaplace(y, mu=fitterReturn$mu, scale=fitterReturn$scale, alpha=fitterReturn$other, log=TRUE),
                            "dlogis" = dlogis(y, location=fitterReturn$mu, scale=fitterReturn$scale, log=TRUE),
                            "dt" = dt(y-fitterReturn$mu, df=fitterReturn$scale, log=TRUE),
                            "ds" = ds(y, mu=fitterReturn$mu, scale=fitterReturn$scale, log=TRUE),
@@ -445,7 +581,7 @@ alm <- function(formula, data, subset, na.action,
     #### Estimate parameters of the model ####
     if(is.null(B)){
         if(any(distribution==c("dlnorm","dpois","dnbinom"))){
-            if(any(y[ot]==0)){
+            if(any(y==0)){
                 # Use Box-Cox if there are zeroes
                 B <- .lm.fit(matrixXreg,(y^0.01-1)/0.01)$coefficients;
             }
@@ -464,9 +600,16 @@ alm <- function(formula, data, subset, na.action,
             B <- c(B, -B);
         }
         else if(distribution=="dchisq"){
-            B <- c(1, .lm.fit(matrixXreg,sqrt(y))$coefficients);
-            BLower <- c(0,rep(-Inf,length(B)-1));
-            BUpper <- rep(Inf,length(B));
+            B <- .lm.fit(matrixXreg,sqrt(y))$coefficients;
+            if(aParameterProvided){
+                BLower <- rep(-Inf,length(B));
+                BUpper <- rep(Inf,length(B));
+            }
+            else{
+                B <- c(1, B);
+                BLower <- c(0,rep(-Inf,length(B)-1));
+                BUpper <- rep(Inf,length(B));
+            }
         }
         else{
             B <- .lm.fit(matrixXreg,y)$coefficients;
@@ -475,13 +618,19 @@ alm <- function(formula, data, subset, na.action,
         }
 
         if(distribution=="dnbinom"){
-            B <- c(var(y), B);
-            BLower <- c(0,rep(-Inf,length(B)-1));
-            BUpper <- rep(Inf,length(B));
+            if(!aParameterProvided){
+                B <- c(var(y), B);
+                BLower <- c(0,rep(-Inf,length(B)-1));
+                BUpper <- rep(Inf,length(B));
+            }
+            else{
+                BLower <- rep(-Inf,length(B));
+                BUpper <- rep(Inf,length(B));
+            }
         }
         else if(distribution=="dalaplace"){
-            if(alphaEstimate){
-                B <- c(alpha, B);
+            if(!aParameterProvided){
+                B <- c(0.5, B);
                 BLower <- c(0,rep(-Inf,length(B)-1));
                 BUpper <- c(1,rep(Inf,length(B)-1));
             }
@@ -489,6 +638,11 @@ alm <- function(formula, data, subset, na.action,
                 BLower <- rep(-Inf,length(B));
                 BUpper <- rep(Inf,length(B));
             }
+        }
+        else if(distribution=="dfnorm"){
+            B <- c(1,B);
+            BLower <- c(0,rep(-Inf,length(B)-1));
+            BUpper <- rep(Inf,length(B));
         }
         else{
             BLower <- rep(-Inf,length(B));
@@ -521,21 +675,32 @@ alm <- function(formula, data, subset, na.action,
     scale <- fitterReturn$scale;
 
     if(distribution=="dnbinom"){
-        names(B) <- c("size",variablesNames);
+        if(!aParameterProvided){
+            ellipsis$size <- B[1];
+            B <- B[-1];
+        }
+        names(B) <- c(variablesNames);
     }
     else if(distribution==c("dchisq")){
-        scale <- abs(B[1]);
-        names(B) <- c("df",variablesNames);
+        if(!aParameterProvided){
+            ellipsis$df <- df <- abs(B[1]);
+            B <- B[-1];
+        }
+        names(B) <- c(variablesNames);
+    }
+    else if(distribution==c("dfnorm")){
+        if(!aParameterProvided){
+            ellipsis$sigma <- sigma <- abs(B[1]);
+            B <- B[-1];
+        }
+        names(B) <- c(variablesNames);
     }
     else if(distribution=="dalaplace"){
-        if(alphaEstimate){
+        if(!aParameterProvided){
             ellipsis$alpha <- alpha <- B[1];
-            variablesNames <- c("alpha",variablesNames);
-            names(B) <- variablesNames;
+            B <- B[-1];
         }
-        else{
-            names(B) <- variablesNames;
-        }
+        names(B) <- variablesNames;
     }
     else if(distribution=="dbeta"){
         if(!vcovProduce){
@@ -547,16 +712,20 @@ alm <- function(formula, data, subset, na.action,
     }
 
     # Parameters of the model + scale
-    df <- nVariables + 1;
+    nParam <- nVariables + 1;
 
     if(distribution=="dalaplace"){
-        if(alphaEstimate){
-            df <- df + 1;
-            nVariables <- nVariables + 1;
+        if(!aParameterProvided){
+            nParam <- nParam + 1;
+        }
+    }
+    else if(any(distribution==c("dnbinom","dchisq","dfnorm"))){
+        if(aParameterProvided){
+            nParam <- nParam - 1;
         }
     }
     else if(distribution=="dbeta"){
-        df <- nVariables*2;
+        nParam <- nVariables*2;
         if(!vcovProduce){
             nVariables <- nVariables*2;
         }
@@ -573,7 +742,7 @@ alm <- function(formula, data, subset, na.action,
                        "ds" =,
                        "dpois" =,
                        "dnbinom" = mu,
-                       "dchisq" = mu + scale,
+                       "dchisq" = mu + df,
                        "dlnorm" = exp(mu),
                        "dbeta" = mu / (mu + scale),
                        "pnorm" = pnorm(mu, mean=0, sd=1),
@@ -597,6 +766,23 @@ alm <- function(formula, data, subset, na.action,
                        "pnorm" = qnorm((y - pnorm(mu, 0, 1) + 1) / 2, 0, 1),
                        "plogis" = log((1 + y * (1 + exp(mu))) / (1 + exp(mu) * (2 - y) - y)) # Here we use the proxy from Svetunkov et al. (2018)
     );
+
+    # If we had huge numbers for cumulative models, fix errors and scale
+    if(any(distribution==c("plogis","pnorm")) & any(is.nan(errors))){
+        errorsNaN <- is.nan(errors);
+
+        # Demand occurrs and we predict that
+        errors[y==1 & yFitted>0 & errorsNaN] <- 0;
+        # Demand occurrs, but we did not predict that
+        errors[y==1 & yFitted<0 & errorsNaN] <- 1E+100;
+        # Demand does not occurr, and we predict that
+        errors[y==0 & yFitted<0 & errorsNaN] <- 0;
+        # Demand does not occurr, but we did not predict that
+        errors[y==0 & yFitted>0 & errorsNaN] <- -1E+100;
+
+        # Recalculate scale
+        scale <- sqrt(meanFast(errors^2));
+    }
 
     #### Produce covariance matrix using hessian ####
     if(vcovProduce){
@@ -624,9 +810,9 @@ alm <- function(formula, data, subset, na.action,
                                   distribution=distribution, y=y, matrixXreg=matrixXreg);
         }
 
-        if(any(distribution==c("dchisq","dnbinom"))){
-            vcovMatrix <- vcovMatrix[-1,-1];
-        }
+        # if(any(distribution==c("dchisq","dnbinom"))){
+        #     vcovMatrix <- vcovMatrix[-1,-1];
+        # }
 
         if(any(is.nan(vcovMatrix))){
             warning(paste0("Something went wrong and we failed to produce the covariance matrix of the parameters.\n",
@@ -644,7 +830,7 @@ alm <- function(formula, data, subset, na.action,
                 vcovMatrix <- try(solve(vcovMatrix, diag(nVariables), tol=1e-20), silent=TRUE);
                 if(class(vcovMatrix)=="try-error"){
                     warning(paste0("Sorry, but the hessian is singular, so we could not invert it.\n",
-                                   "The estimate of the covariance matrix of parameters might be inacurate."),
+                                   "We failed to produce the covariance matrix of parameters."),
                             call.=FALSE);
                     vcovMatrix <- diag(1e+100,nVariables);
                 }
@@ -681,12 +867,13 @@ alm <- function(formula, data, subset, na.action,
 
         # New data and new response variable
         dataNew <- as.matrix(data);
+        dataNew <- data;
         y <- as.matrix(dataNew[,all.vars(formula)[1]]);
         ot <- y!=0;
         dataNew[,all.vars(formula)[1]] <- (ot)*1;
 
         if(!occurrenceProvided){
-            occurrence <- alm(formula, dataNew, distribution=occurrence);
+            occurrence <- do.call("alm", list(formula=formula, data=dataNew, distribution=occurrence));
         }
 
         # Corrected fitted (with zeroes, when y=0)
@@ -704,19 +891,25 @@ alm <- function(formula, data, subset, na.action,
         # Correction of the likelihood
         CFValue <- CFValue - occurrence$logLik;
 
+        # Form the final dataWork in order to return it in the data.
         dataWork <- eval(mf, parent.frame());
-    }
-
-    if(any(distribution==c("dchisq","dnbinom"))){
-        B <- B[-1];
-    }
-    else if(distribution=="dalaplace"){
-        if(alphaEstimate){
-            variablesNames <- variablesNames[-1];
-            nVariables <- nVariables - 1;
+        dataWork <- model.matrix(dataWork,data=dataWork);
+        if(interceptIsNeeded){
+            dataWork <- cbind(y,dataWork[,-1]);
+            variablesUsed <- variablesNames[variablesNames!="(Intercept)"];
+        }
+        else{
+            dataWork <- cbind(y,dataWork);
+            variablesUsed <- variablesNames;
+        }
+        colnames(dataWork)[1] <- responseName;
+        dataWork <- dataWork[,c(responseName, variablesUsed)]
+        if(!is.matrix(dataWork)){
+            dataWork <- matrix(dataWork,ncol=1,dimnames=list(names(dataWork),responseName));
         }
     }
-    else if(distribution=="dbeta"){
+
+    if(distribution=="dbeta"){
         variablesNames <- variablesNames[1:(nVariables/2)];
         nVariables <- nVariables/2;
 
@@ -730,9 +923,8 @@ alm <- function(formula, data, subset, na.action,
 
     finalModel <- list(coefficients=B, vcov=vcovMatrix, fitted.values=yFitted, residuals=as.vector(errors),
                        mu=mu, scale=scale, distribution=distribution, logLik=-CFValue,
-                       df.residual=obsInsample-df, df=df, call=cl, rank=df,
-                       data=matrix(as.matrix(dataWork[,c(responseName,variablesNames[-1])]), ncol=nVariables,
-                                   dimnames=list(NULL, c(responseName,variablesNames[-1]))),
+                       df.residual=obsInsample-nParam, df=nParam, call=cl, rank=nParam,
+                       data=dataWork,
                        occurrence=occurrence, subset=subset, other=ellipsis);
 
     return(structure(finalModel,class=c("alm","greybox")));

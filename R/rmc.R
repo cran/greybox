@@ -1,13 +1,14 @@
-#' RMC test
+#' Regression for Multiple Comparison
 #'
 #' RMC stands for "Regression for Methods Comparison". This is a parametric
 #' test for the comparison of means of several distributions
 #
-#' This test is a parametric counterpart of nemenyi / MCB test (Demsar, 2006) and
+#' This test is a parametric counterpart of Nemenyi / MCB test (Demsar, 2006) and
 #' uses asymptotic properties of regression models. It relies on distributional
 #' assumptions about the provided data. For instance, if the mean forecast errors
 #' are used, then it is safe to assume that the regression model constructed on
-#' them will have normally distributed residuals.
+#' them will have symmetrically distributed residuals, thus normal regression can
+#' be used for the parameters estimation.
 #'
 #' The test constructs the regression model of the kind:
 #'
@@ -22,24 +23,17 @@
 #' (\code{distribution="dnorm"}, when the data is normal), advanced linear regression with
 #' folded normal distribution (\code{distribution="dfnorm"}, for example, absolute errors,
 #' assuming that the original errors are normally distributed) and advanced linear
-#' regression with Chi-Squared distribution (\code{distribution="dchisq"}, when the data is
-#' distributed as Chi^2, for example squared normal standard errors).
+#' regression with log normal distribution (\code{distribution="dlnorm"}, which might be
+#' useful in case of relative error measures.
 #'
-#' The advisable error measures to use in the test are RelMAE and RelMSE, which are
-#' unbiased and whose logarithms are symmetrically distributed (Davydenko & Fildes,
-#' 2013). In fact RelMSE should have F-distribution with h and h degrees of freedom
-#' and its logarithm is a log F distribution, because each MSE * h has chi-square(h)
-#' (assuming that the forecast error is normal).
+#' The advisable error measures to use in the test are RelMAE and RelMSE together with
+#' \code{distribution="dlnorm"}. They are unbiased and their logarithms are
+#' symmetrically distributed (Davydenko & Fildes, 2013). Although their distributions
+#' are not normal, given the typically large samples of datasets, the Central Limit
+#' Theorem helps in the adequate construction of the confidence intervals for the
+#' parameters.
 #'
-#' As for RelMAE, its distribution is trickier, because each MAE has folded normal
-#' distribution (assuming that the original error is normal) and their ratio is
-#' something complicated, but tractable (Kim, 2006).
-#'
-#' Still, given large samples, the parameters of the regression on logarithms of
-#' the both RelMAE and RelMSE should have normal distribution. Thus
-#' \code{distribution="dnorm"} can be used in this case (see examples).
-#'
-#' The test is equivalent to nemenyi test, when applied to the ranks of the error
+#' The test is equivalent to Nemenyi test, when applied to the ranks of the error
 #' measures on large samples.
 #'
 #' There is also a \code{plot()} method that allows producing either "mcb" or "lines"
@@ -50,11 +44,12 @@
 #' @param distribution Type of the distribution to use. If this is a clear forecast error,
 #' then \code{"dnorm"} is appropriate, leading to a simple Gausian linear
 #' regression. \code{"dfnorm"} would lead to a alm model with folded normal
-#' distribution. Finally, \code{"dchisq"} would lead to the alm with Chi
-#' squared distribution. This value is passed to \code{alm()} function.
+#' distribution. Finally, \code{"dlnorm"} would lead to the alm with log normal
+#' distribution. This value is passed to \code{alm()} function. You can try some
+#' other distributions, but don't expect anything meaningful.
 #' @param level The width of the confidence interval. Default is 0.95.
 #' @param style What style of plot to use after the calculations. This can be
-#' either "MCB" style or "Vertical lines" one.
+#' either "MCB" (\code{"mcb"}) style or "Vertical lines" (\code{"lines"}).
 #' @param select What column of data to highlight on the plot. If NULL, then
 #' the method with the lowest value is selected.
 #' @param plot If \code{TRUE} then the graph is produced after the calculations.
@@ -65,7 +60,7 @@
 #' @return If \code{plot=TRUE}, then the function plots the results after all
 #' the calculations. In case of \code{distribution="dnorm"}, the closer to zero the
 #' intervals are, the better model performs. When \code{distribution="dfnorm"} or
-#' \code{distribution="dchisq"}, the smaller, the better.
+#' \code{distribution="dlnorm"}, the lower, the better.
 #'
 #' Function returns a list of a class "rmc", which contains the following
 #' variables:
@@ -110,71 +105,134 @@
 #' N <- 50
 #' M <- 4
 #' ourData <- matrix(rnorm(N*M,mean=0,sd=1), N, M)
-#' ourData[,2] <- ourData[,2]+1
-#' ourData[,3] <- ourData[,3]+0.7
-#' ourData[,4] <- ourData[,4]+0.5
+#' ourData[,2] <- ourData[,2]+4
+#' ourData[,3] <- ourData[,3]+3
+#' ourData[,4] <- ourData[,4]+2
 #' colnames(ourData) <- c("Method A","Method B","Method C - long name","Method D")
 #' rmc(ourData, distribution="dnorm", level=0.95)
 #
 #' # In case of AE-based measures, distribution="dfnorm" should be selected
 #' rmc(abs(ourData), distribution="dfnorm", level=0.95)
 #'
-#' # In case of SE-based measures, distribution="dchisq" should be selected
-#' rmc(ourData^2, distribution="dchisq", level=0.95)
-#'
 #' # APE-based measures should not be used in general...
 #'
 #' # If RelMAE or RelMSE is used for measuring data, then it makes sense to use
-#' # distribution="dnorm" and provide logarithms of the RelMAE, which can be approximated by
-#' # normal distribution
-#' ourData <- abs(ourData)
-#' rmc(ourData / ourData[,1], distribution="dnorm", level=0.95)
+#' # distribution="dlnorm" for the RelMAE / RelMSE, as it can be approximated by
+#' # log normal distribution, because according to Davydenko & Fildes (2013) the
+#' # logarithms of these measures have symmetric distribution.
+#' ourTest <- rmc((abs(ourData) / rfnorm(N, 0.3, 1)), distribution="dlnorm", level=0.95)
+#' # The exponents of mean values from this function will correspond to the
+#' # geometric means of RelMAE / RelMSE.
+#' exp(ourTest$mean)
+#' # The same is for the intervals:
+#' exp(ourTest$interval)
 #'
-#' # The following example should give similar results to nemenyi test on
+#' # You can also reproduce plots in different styles:
+#' plot(ourTest, style="lines")
+#'
+#' # Or you can use the default "mcb" style and set additional parameters for the plot():
+#' par(mar=c(2,2,4,0)+0.1)
+#' plot(ourTest, main="Four methods")
+#'
+#' # The following example should give similar results to Nemenyi test on
 #' # large samples, which compares medians of the distributions:
 #' rmc(t(apply(ourData,1,rank)), distribution="dnorm", level=0.95)
 #'
+#' # You can also give a try to SE-based measures with distribution="dchisq":
+#' rmc(ourData^2, distribution="dchisq", level=0.95)
+#'
 #' @importFrom stats pchisq
 #' @export rmc
-rmc <- function(data, distribution=c("dnorm","dfnorm","dchisq"),
+rmc <- function(data, distribution=c("dnorm","dfnorm","dlnorm"),
                 level=0.95, style=c("mcb","lines"), select=NULL, plot=TRUE, ...){
 
     distribution <- distribution[1];
     style <- substr(style[1],1,1);
 
-    if(is.data.frame(data)){
-        data <- as.matrix(data);
-    }
-    dataNew <- as.vector(data);
+    #### Prepare the data ####
     obs <- nrow(data);
     nMethods <- ncol(data);
-    obsAll <- length(dataNew);
+    if(nMethods>obs){
+        response <- readline(paste0("The number of methods is higher than the number of series. ",
+                                    "Are you sure that you want to continue? y/n?"));
+
+        if(all(response!=c("y","Y"))){
+            stop(paste0("Number of methods is higher than the number of series. ",
+                        "The user aborted the calculations."), call.=FALSE);
+        }
+    }
+    obsAll <- obs*nMethods;
     namesMethods <- colnames(data);
 
-    # Form the matrix of dummy variables
-    xreg <- matrix(0,obsAll,nMethods,dimnames=list(NULL,namesMethods));
-    for(i in 1:nMethods){
-        xreg[obs*(i-1)+1:obs,i] <- 1;
+    if(is.null(namesMethods)){
+        namesMethods <- paste0("Method",c(1:nMethods));
     }
-    # Collect stuff to form the data.frame
-    dataNew <- as.data.frame(cbind(dataNew,xreg));
-    colnames(dataNew)[1] <- "y";
 
+    # Form the matrix of dummy variables, excluding the first one
+    dataNew <- matrix(0,obsAll,nMethods+1);
+    for(i in 2:nMethods){
+        dataNew[obs*(i-1)+1:obs,i+1] <- 1;
+    }
+    dataNew[,2] <- 1;
+
+    # Collect stuff to form the matrix
+    if(is.data.frame(data)){
+        dataNew[,1] <- unlist(data);
+    }
+    else{
+        dataNew[,1] <- c(data);
+    }
+    # Remove data in order to preserve memory
+    rm(data);
+
+    colnames(dataNew) <- c("y","(Intercept)",namesMethods[-1]);
+
+    #### Fit the model ####
     # This is the model used for the confidence intervals calculation
-    lmModel <- alm(y~., data=dataNew[,-2], distribution=distribution);
+    if(distribution=="dnorm"){
+        lmModel <- .lm.fit(dataNew[,-1], dataNew[,1]);
+        lmModel$xreg <- dataNew[,-1];
+        lmModel$df.residual <- obsAll - nMethods;
+        class(lmModel) <- c("lmGreybox","lm");
+    }
+    else if(distribution=="dlnorm"){
+        lmModel <- .lm.fit(dataNew[,-1], log(dataNew[,1]));
+        lmModel$xreg <- dataNew[,-1];
+        lmModel$df.residual <- obsAll - nMethods;
+        class(lmModel) <- c("lmGreybox","lm");
+    }
+    else{
+        lmModel <- alm(y~., data=dataNew[,-2], distribution=distribution, checks=FALSE);
+    }
 
+    # Stuff needed for the importance and the p-value of the model
+    if(distribution=="dnorm"){
+        lmModel2 <- .lm.fit(as.matrix(dataNew[,2]), dataNew[,1]);
+        lmModel2$df.residual <- obsAll - 1;
+        class(lmModel2) <- c("lmGreybox","lm");
+    }
+    else if(distribution=="dlnorm"){
+        lmModel2 <- .lm.fit(as.matrix(dataNew[,2]), log(dataNew[,1]));
+        lmModel2$df.residual <- obsAll - 1;
+        class(lmModel2) <- c("lmGreybox","lm");
+    }
+    else{
+        lmModel2 <- alm(y~1,data=dataNew[,-2], distribution=distribution, checks=FALSE);
+    }
+    # Remove dataNew in order to preserve memory
+    rm(dataNew);
+
+    #### Extract the parameters ####
     # Construct intervals
     lmCoefs <- coef(lmModel);
     # Force confint to be estimated inside the function
     lmIntervals <- confint(lmModel, level=level)[,-1];
-    names(lmCoefs)[1] <- colnames(dataNew)[2];
-    rownames(lmIntervals)[1] <- colnames(dataNew)[2];
+    names(lmCoefs) <- namesMethods;
+    rownames(lmIntervals)[1] <- namesMethods[1];
     lmCoefs[-1] <- lmCoefs[1] + lmCoefs[-1];
     lmIntervals[-1,] <- lmCoefs[1] + lmIntervals[-1,];
 
-    # Stuff needed for the importance of the model
-    lmModel2 <- alm(y~1,data=dataNew, distribution=distribution);
-
+    #### Relative importance of the model and the test ####
     AICs <- c(AIC(lmModel2),AIC(lmModel));
     delta <- AICs - min(AICs);
     importance <- (exp(-0.5*delta) / sum(exp(-0.5*c(delta))))[2];
@@ -195,7 +253,8 @@ rmc <- function(data, distribution=c("dnorm","dfnorm","dchisq"),
     names(lmCoefs) <- gsub("[[:punct:]]", "", names(lmCoefs));
     rownames(lmIntervals) <- names(lmCoefs);
 
-    ### Prepare things for the groups for "lines" plot
+
+    #### Prepare things for the groups for "lines" plot ####
     # Find groups
     vlines <- matrix(NA, nrow=nMethods, ncol=2);
     for(i in 1:nMethods){
@@ -250,13 +309,9 @@ plot.rmc <- function(x, ...){
     args$pch <- NA;
 
     if(!("main" %in% argsNames)){
-        args$main <- paste0("Importance of the model is ", format(round(x$importance,3),nsmall=3),".\n",
+        args$main <- paste0("The p-value from the significance test is ", format(round(x$p.value,3),nsmall=3),".\n",
                          x$level*100,"% confidence intervals constructed.");
     }
-
-    # Save the current par() values
-    parDefault <- par(no.readonly=TRUE);
-    parMar <- parDefault$mar;
 
     if(ncol(x$groups)>1){
         pointCol <- "#0C6385";
@@ -291,19 +346,19 @@ plot.rmc <- function(x, ...){
             args$ylim <- c(args$ylim[1]-0.1,args$ylim[2]+0.1);
         }
 
-        if(all(parMar==(c(5,4,4,2)+0.1))){
-            parMar <- c(2, 2, 0, 0) + 0.1;
-        }
-        if(args$main!=""){
-            parMar <- parMar + c(0,0,4,0);
-        }
-        if(args$ylab!=""){
-            parMar <- parMar + c(0,2,0,0);
-        }
-        if(args$xlab!=""){
-            parMar <- parMar + c(2,0,0,0);
-        }
-        par(mar=parMar);
+        # if(all(parMar==(c(5,4,4,2)+0.1))){
+        #     parMar <- c(2, 2, 0, 0) + 0.1;
+        # }
+        # if(args$main!=""){
+        #     parMar <- parMar + c(0,0,4,0);
+        # }
+        # if(args$ylab!=""){
+        #     parMar <- parMar + c(0,2,0,0);
+        # }
+        # if(args$xlab!=""){
+        #     parMar <- parMar + c(2,0,0,0);
+        # }
+        # par(mar=parMar);
 
         # Use do.call to use manipulated ellipsis (...)
         do.call(plot, args);
@@ -318,6 +373,10 @@ plot.rmc <- function(x, ...){
         abline(h=x$interval[x$select,], lwd=2, lty=2, col="grey");
     }
     else if(style=="l"){
+        # Save the current par() values
+        parDefault <- par(no.readonly=TRUE);
+        parMar <- parDefault$mar;
+
         vlines <- x$vlines;
 
         k <- nrow(vlines);
@@ -356,7 +415,7 @@ plot.rmc <- function(x, ...){
         if(args$xlab!=""){
             parMar <- parMar + c(2,0,0,0);
         }
-        par(mar=parMar)
+        par(mar=parMar);
 
         # Use do.call to use manipulated ellipsis (...)
         do.call(plot, args);
@@ -374,19 +433,20 @@ plot.rmc <- function(x, ...){
             lines(c(0,1), rep(vlines[1,2],times=2), col=lineCol, lty=2);
         }
         axis(2,c(1:nMethods),namesMethods,las=2);
-    }
 
-    par(parDefault)
+        par(parDefault)
+    }
 }
 
 #' @export
 print.rmc <- function(x, ...){
     cat(paste0("Regression for Multiple Comparison with ",switch(x$distribution,
-                                                                 "dnorm"="normal",
-                                                                 "dfnorm"="folded normal",
-                                                                 "dchisq"="Chi-Squared"),
+                                                                 dnorm="normal",
+                                                                 dfnorm="folded normal",
+                                                                 dlnorm="log normal",
+                                                                 dchisq="Chi-Squared"),
                " distribution.\n"));
     cat(paste0("The siginificance level is ",(1-x$level)*100,"%\n"));
-    cat(paste0("Number of observations is ",nobs(x$model)," and number of dummies is ",length(x$mean),"\n"));
+    cat(paste0("The number of observations is ",nobs(x$model),", the number of methods is ",length(x$mean),"\n"));
     cat(paste0("Significance test p-value: ",round(x$p.value,5),"\n"));
 }

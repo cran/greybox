@@ -1,3 +1,43 @@
+greybox v0.4.0 (Release data: 2019-01-04)
+==============
+
+Changes:
+* Added Burnham & Anderson in the library.bib in the vignettes.
+* summary() now prints the name of the response variable.
+* lmCombine now returns logLik adequate to the selected distribution.
+* Sample size, estimated parameters and degrees of freedom are now also returned in the summary.
+* Use Choleski decomposition in vcov.alm function instead of solve.
+* xregMultiplier() function, allowing producing cross-products of variables.
+* Two new cool functions: tableplot() - produces plots for the two categorical variables, showing graphically, where the most frequent values happen; spread() - plots a matrix of scatterplots / boxplots / tableplots, depending on the type of the provided variable.
+* Added a clarification about the most efficient use of RMC (together with RelMAE / RelMSE).
+* alm() now works with factors.
+* spread() now allows doing log transforms of numerical data.
+* New function: cramer() - that calculates Cramer's V and the according statistics. Good for measuring the association between the categorical variables.
+* New function: mcor() - multiple correlation between the numerical and catgorical variables.
+* New function: association() aka assoc() - returns the matrix of measures of association (the values depend on the types of variables under consideration).
+* xregExpander() now has 'extrapolate' parameter which allows deciding whether the missing values need to be extrapolated or not.
+* graphmaker() now does not plot forecast if it is NA. In addition, the legend is now slightly more flexible.
+* summary() now prints the df for dchisq and size for the dnbinom.
+* tableplot() now also accepts dataframes, plotting the first two columns.
+* rmc() now should work much faster in cases of distribution=c("dnorm","dlnorm").
+* plot.rmc() now only resets par(), when style="lines". In the "mcb" style, it won't change par, so that the user can add any elements they want.
+* alm() now estimates sigma parameter for dfnorm directly using likelihood.
+
+Bugfixes:
+* lmCombine() and lmDynamic() did not work well when the data.frame was provided as data.
+* pointLik() did not work with lmCombine() because scale parameter was not available. Similarly, it did not work with stepwise() in case of normal distribution.
+* predict.alm() was misbehaving in case of non-null occurrence.
+* determination() now works with factors.
+* Additional explanations for RMC.
+* Bugfix in alm() for cases of occurrence and the provided factors.
+* vcov.alm would not work in cases of occurrence model having different set of variables than the sizes one.
+* nParam() did not take the number of parameters in the occurrence part into account.
+* plot.predict.alm() now works fine in case of newdata=NULL.
+* Fixes in alm() for dalaplace, dnbinom and dchisq distributions and the usage of factors.
+* predict.alm() would not work for the models with intercept only.
+* alm() in cases of distribution="plogis" or "pnorm" some times could not produce errors correctly (due to exp(huge number)). Now it does.
+
+
 greybox v0.3.3 (Release data: 2018-11-27)
 ==============
 

@@ -73,6 +73,9 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
     }
     else{
         useALM <- TRUE;
+        if(any(distribution==c("plogis","pnorm"))){
+            data[,1] <- (data[,1]!=0)*1;
+        }
     }
 
     # Check the data for NAs
@@ -100,6 +103,8 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
             rowsSelected <- rowsSelected | (data[,1]!=0);
         }
     }
+
+    #### Add checks for the variability in the data. If it is none, remove variables ####
 
     if(useALM){
         lmCall <- alm;
@@ -246,7 +251,7 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
 
         bestModel$distribution <- distribution;
         bestModel$logLik <- logLik(bestModel);
-        bestModel$fitted.values <- bestModel$data[[1]] - c(bestModel$residuals);
+        bestModel$mu <- bestModel$fitted.values <- bestModel$data[[1]] - c(bestModel$residuals);
         # This is number of variables + constant + variance
         bestModel$df <- length(varsNames) + 1 + 1;
         bestModel$df.residual <- nRows - bestModel$df;
@@ -261,6 +266,7 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         bestModel$call <- quote(alm(formula=bestFormula, data=data, distribution="dnorm"));
         bestModel$call$formula <- bestFormula;
         bestModel$subset <- rep(TRUE, nRows);
+        bestModel$scale <- sqrt(sum(bestModel$residuals^2) / nRows);
         class(bestModel) <- c("alm","greybox");
     }
     else{
