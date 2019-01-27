@@ -197,8 +197,8 @@ pointLik.alm <- function(object, ...){
                         "dt" = dt(y-mu, df=scale, log=TRUE),
                         "ds" = ds(y, mu=mu, scale=scale, log=TRUE),
                         "dpois" = dpois(y, lambda=mu, log=TRUE),
-                        "dnbinom" = dnbinom(y, mu=mu, size=scale, log=TRUE),
-                        "dchisq" = dchisq(y, df=scale, ncp=mu, log=TRUE),
+                        "dnbinom" = dnbinom(y, mu=mu, size=object$other$size, log=TRUE),
+                        "dchisq" = dchisq(y, df=object$other$df, ncp=mu, log=TRUE),
                         "dbeta" = dbeta(y, shape1=mu, shape2=scale, log=TRUE),
                         "plogis" = c(plogis(mu[ot], location=0, scale=1, log.p=TRUE),
                                      plogis(mu[!ot], location=0, scale=1, lower.tail=FALSE, log.p=TRUE)),
@@ -539,8 +539,8 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     else if(object$distribution=="dchisq"){
         greyboxForecast$mean <- greyboxForecast$mean^2;
         if(interval=="p"){
-            greyboxForecast$lower[] <- qchisq(levelLow,df=object$scale,ncp=greyboxForecast$mean);
-            greyboxForecast$upper[] <- qchisq(levelUp,df=object$scale,ncp=greyboxForecast$mean);
+            greyboxForecast$lower[] <- qchisq(levelLow,df=object$other$df,ncp=greyboxForecast$mean);
+            greyboxForecast$upper[] <- qchisq(levelUp,df=object$other$df,ncp=greyboxForecast$mean);
         }
         else if(interval=="c"){
             greyboxForecast$lower[] <- (greyboxForecast$lower)^2;
@@ -772,15 +772,14 @@ predict.greybox <- function(object, newdata=NULL, interval=c("none", "confidence
             }
         }
 
-        # if(!any(is.greyboxC(object),is.greyboxD(object))){
-        newdataExpanded <- model.frame(object$call$formula, newdata);
+        # Extract the formula and get rid of the response variable
+        testFormula <- formula(object)
+        testFormula[[2]] <- NULL;
+        # Expand the data frame
+        newdataExpanded <- model.frame(testFormula, newdata);
         interceptIsNeeded <- attr(terms(newdataExpanded),"intercept")!=0;
         matrixOfxreg <- model.matrix(newdataExpanded,data=newdataExpanded);
         matrixOfxreg <- matrixOfxreg[,parametersNames];
-        # }
-        # else{
-        #     matrixOfxreg <- newdata;
-        # }
     }
 
     nRows <- nrow(matrixOfxreg);
@@ -1155,7 +1154,7 @@ print.association <- function(x, ...){
         digits <- ellipsis$digits;
     }
 
-    cat("\nAssociations: ")
+    cat("Associations: ")
     cat("\nvalues:\n"); print(round(x$value,digits));
     cat("\np-values:\n"); print(round(x$p.value,digits));
     cat("\ntypes:\n"); print(x$type);
@@ -1172,7 +1171,7 @@ print.cramer <- function(x, ...){
         digits <- ellipsis$digits;
     }
 
-    cat("\nCramer's V: "); cat(round(x$value,digits));
+    cat("Cramer's V: "); cat(round(x$value,digits));
     cat("\nChi^2 statistics = "); cat(round(x$statistic,digits));
     cat(", df: "); cat(x$df);
     cat(", p-value: "); cat(round(x$p.value,digits));
@@ -1189,7 +1188,7 @@ print.mcor <- function(x, ...){
         digits <- ellipsis$digits;
     }
 
-    cat("\nMultiple correlations value: "); cat(round(x$value,digits));
+    cat("Multiple correlations value: "); cat(round(x$value,digits));
     cat("\nF-statistics = "); cat(round(x$statistic,digits));
     cat(", df: "); cat(x$df);
     cat(", df resid: "); cat(x$df.residual);
@@ -1319,7 +1318,7 @@ print.summary.greyboxC <- function(x, ...){
     cat("---\n");
     cat(paste0("Residual standard error: ",round(x$sigma,digits)," on ",
                round(x$df[2],digits)," degrees of freedom:\n"));
-    cat("Combined ICs:\n");
+    cat("Approximate combined ICs:\n");
     print(round(x$ICs,digits));
     cat("\nSample size: "); cat(x$dfTable[1]);
     cat("\nNumber of estimated parameters: "); cat(x$dfTable[2]);
@@ -1513,7 +1512,7 @@ summary.greyboxD <- function(object, level=0.95, ...){
                                 confintDynamic=parametersConfint, dynamic=coef(object)$dynamic,
                                 ICs=ICs, df=df, r.squared=R2, adj.r.squared=R2Adj,
                                 distribution=object$distribution, responseName=formula(object)[[2]],
-                                nobs=nobs(object), nParam=nParam(object)),
+                                nobs=nobs(object), nParam=nParam(object), dfTable=dfTable),
                            class="summary.greyboxC");
     return(ourReturn);
 }
@@ -1547,8 +1546,11 @@ vcov.alm <- function(object, ...){
             vcovMatrix <- vcovMatrixTry;
         }
         vcov <- object$scale^2 * vcovMatrix;
+        rownames(vcov) <- colnames(vcov) <- names(coef(object));
     }
     else if(object$distribution=="dnorm"){
+        # matrixXreg <- model.matrix(formula(object),data=object$data);
+        # rownames(vcov) <- colnames(vcov) <- names(coef(object));
         matrixXreg <- as.matrix(object$data[object$subset,-1]);
         if(any(names(coef(object))=="(Intercept)")){
             matrixXreg <- cbind(1,matrixXreg);
@@ -1572,6 +1574,7 @@ vcov.alm <- function(object, ...){
             vcovMatrix <- vcovMatrixTry;
         }
         vcov <- sigma(object)^2 * vcovMatrix;
+        rownames(vcov) <- colnames(vcov) <- names(coef(object));
     }
     else{
         # Form the call for alm

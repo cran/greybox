@@ -67,6 +67,16 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         df <- 0;
     }
 
+    # Check, whether the response is numeric
+    if(is.data.frame(data)){
+        if(!is.numeric(data[[1]])){
+            warning(paste0("The response variable (first column of the data) is not numeric! ",
+                           "We will make it numeric, but we cannot promise anything."),
+                    call.=FALSE);
+            data[[1]] <- as.numeric(data[[1]]);
+        }
+    }
+
     distribution <- distribution[1];
     if(distribution=="dnorm"){
         useALM <- FALSE;
@@ -86,6 +96,7 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         rowsSelected <- rep(TRUE,nrow(data));
     }
 
+    # Check occurrence. If it is not "none" then use alm().
     if(is.alm(occurrence)){
         useALM <- TRUE;
         rowsSelected <- rowsSelected & (data[,1]!=0);
@@ -104,50 +115,104 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         }
     }
 
-    #### Add checks for the variability in the data. If it is none, remove variables ####
-
+    # Define what function to use in the estimation
     if(useALM){
         lmCall <- alm;
-        listToCall <- list(distribution=distribution);
+        listToCall <- list(distribution=distribution, checks=FALSE);
     }
     else{
-        lmCall <- function(formula, data){
-            model <- .lm.fit(as.matrix(cbind(1,data[,all.vars(formula)[-1]])),
-                             as.matrix(data[,all.vars(formula)[1]]));
-            return(structure(model,class="lm"));
+        if(!is.data.frame(data)){
+            lmCall <- function(formula, data){
+                model <- .lm.fit(as.matrix(cbind(1,data[,all.vars(formula)[-1]])),
+                                 as.matrix(data[,all.vars(formula)[1]]));
+                colnames(model$qr) <- c("(Intercept)",all.vars(formula)[-1]);
+                return(structure(model,class="lm"));
+            }
+        }
+        else{
+            lmCall <- function(formula, data){
+                model <- .lm.fit(model.matrix(formula, data=data),
+                                 as.matrix(data[,all.vars(formula)[1]]));
+                return(structure(model,class="lm"));
+            }
         }
         listToCall <- vector("list");
     }
 
-    nCols <- ncol(data)+1;
-    nRows <- sum(rowsSelected);
-
     # Names of the variables
-    ourDataNames <- colnames(data);
+    variablesNames <- colnames(data);
+
+    # The number of explanatory variables and the number of observations
+    nVariables <- ncol(data)-1;
+    obsInsample <- sum(rowsSelected);
+
+    ## Check the variability in the data. If it is none, remove variables
+    noVariability <- vector("logical",nVariables+1);
+    # First column is the response variable, so we assume that it has variability
+    if(is.data.frame(data)){
+        noVariability[1] <- FALSE;
+        for(i in 1:nVariables){
+            noVariability[i+1] <- length(unique(data[[i]]))<=1;
+        }
+        # noVariability[] <- c(FALSE,sapply(apply(data[,-1],2,unique),length)<=1);
+    }
+    else{
+        noVariability[1] <- FALSE;
+        for(i in 1:nVariables){
+            noVariability[i+1] <- length(unique(data[,i]))<=1;
+        }
+        # noVariability[] <- c(FALSE,sapply(as.data.frame(apply(data[,-1],2,unique)),length)<=1);
+    }
+    if(any(noVariability)){
+        if(all(noVariability)){
+            stop("None of exogenous variables has variability. There's nothing to select!",
+                    call.=FALSE);
+        }
+        else{
+            warning("Some exogenous variables did not have any variability. We dropped them out.",
+                    call.=FALSE);
+            nVariables <- sum(!noVariability)-1;
+            variablesNames <- variablesNames[!noVariability];
+        }
+    }
 
     # Create data frame to work with
-    listToCall$data <- as.data.frame(data[rowsSelected,]);
-    listToCall$data$resid <- 0;
+    listToCall$data <- as.data.frame(data[rowsSelected,variablesNames]);
+    errors <- matrix(0,obsInsample,1);
 
     # Create substitute and remove the original data
     dataSubstitute <- substitute(data);
     rm(data)
 
-    responseName <- ourDataNames[1];
-    ourDataNames <- ourDataNames[-1];
-#
-#     if(any(sapply(data, is.factor))){
-#         if(any(sapply(data, is.ordered))){
-#             association <- Kendall
-#         }
-#         else{
-#             association <- Cramer's V
-#         }
-#     }
-#     else{
-#         association <- cor;
-#     }
-#
+    # Record the names of the response and the explanatory variables
+    responseName <- variablesNames[1];
+    variablesNames <- variablesNames[-1];
+
+    # Define, which of the variables are factors, excluding the response variable
+    numericData <- sapply(listToCall$data, is.numeric)[-1];
+
+    #### The function-analogue of mcor, but without checks ####
+    mcorFast <- function(x){
+        x <- model.matrix(~x);
+        lmFit <- .lm.fit(x,errors);
+        # abs() is needed for technical purposes - for some reason sometimes this stuff becomes
+        # very small negative (e.g. -1e-16).
+        return(sqrt(abs(1 - sum(residuals(lmFit)^2) / sum((errors-mean(errors))^2))));
+    }
+
+    assocValues <- vector("numeric",nVariables);
+    names(assocValues) <- variablesNames;
+    #### The function that works similar to association(), but faster ####
+    assocFast <- function(){
+        # Measures of association with numeric data
+        assocValues[which(numericData)] <- cor(errors,listToCall$data[,which(numericData)+1],use="complete.obs",method=method);
+
+        # Measures of association with categorical data
+        for(i in which(!numericData)+1){
+            assocValues[i-1] <- mcorFast(listToCall$data[[i]]);
+        }
+        return(assocValues);
+    }
 
     # Select IC
     ic <- ic[1];
@@ -181,7 +246,7 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
     names(currentIC) <- "Intercept";
     allICs[[1]] <- currentIC;
     # Add residuals to the ourData
-    listToCall$data$resid <- residuals(testModel);
+    errors[] <- residuals(testModel);
 
     bestFormula <- testFormula;
     if(!silent){
@@ -192,8 +257,9 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
     m <- 2;
     # Start the loop
     while(bestICNotFound){
-        ourCorrelation <- cor(listToCall$data$resid,listToCall$data,use="complete.obs",method=method)[-c(1,nCols)];
-        newElement <- ourDataNames[which(abs(ourCorrelation)==max(abs(ourCorrelation)))[1]];
+        ourCorrelation <- assocFast();
+
+        newElement <- variablesNames[which(abs(ourCorrelation)==max(abs(ourCorrelation)))[1]];
         # If the newElement is the same as before, stop
         if(any(newElement==all.vars(as.formula(bestFormula)))){
             bestICNotFound <- FALSE;
@@ -206,7 +272,7 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         # Modify logLik
         logLikValue <- logLik(testModel);
         attributes(logLikValue)$df <- nParam(logLikValue) + df;
-        if(attributes(logLikValue)$df >= (nRows+1)){
+        if(attributes(logLikValue)$df >= (obsInsample+1)){
             if(!silent){
                 warning("Number of degrees of freedom is greater than number of observations. Cannot proceed.");
             }
@@ -217,9 +283,10 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         # Calculate the IC
         currentIC <- IC(logLikValue);
         if(!silent){
+            cat(paste0("Step ",m-1,". "));
             cat("Formula: "); cat(testFormula);
             cat(", IC: "); cat(currentIC);
-            cat("\nCorrelations: "); cat(round(ourCorrelation,3)); cat("\n\n");
+            cat("\nCorrelations: \n"); print(round(ourCorrelation,3)); cat("\n");
         }
         # If IC is greater than the previous, then the previous model is the best
         if(currentIC >= bestIC){
@@ -228,7 +295,7 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         else{
             bestIC <- currentIC;
             bestFormula <- testFormula;
-            listToCall$data$resid <- residuals(testModel);
+            errors[] <- residuals(testModel);
         }
         names(currentIC) <- newElement;
         allICs[[m]] <- currentIC;
@@ -246,7 +313,9 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         listToCall$formula <- bestFormula;
 
         bestModel <- do.call(lmCall,listToCall);
-        bestModel$data <- listToCall$data[,all.vars(bestFormula)];
+        # Expand the data from the final model
+        bestModel$data <- cbind(listToCall$data[[1]],model.matrix(bestFormula,listToCall$data)[,-1]);
+        colnames(bestModel$data) <- c(responseName,colnames(bestModel$qr)[-1]);
         rm(listToCall);
 
         bestModel$distribution <- distribution;
@@ -254,8 +323,8 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         bestModel$mu <- bestModel$fitted.values <- bestModel$data[[1]] - c(bestModel$residuals);
         # This is number of variables + constant + variance
         bestModel$df <- length(varsNames) + 1 + 1;
-        bestModel$df.residual <- nRows - bestModel$df;
-        names(bestModel$coefficients) <- c("(Intercept)",varsNames);
+        bestModel$df.residual <- obsInsample - bestModel$df;
+        names(bestModel$coefficients) <- colnames(bestModel$qr);
         # Remove redundant bits
         bestModel$effects <- NULL;
         bestModel$qr <- NULL;
@@ -265,8 +334,8 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         # Form the pseudocall to alm
         bestModel$call <- quote(alm(formula=bestFormula, data=data, distribution="dnorm"));
         bestModel$call$formula <- bestFormula;
-        bestModel$subset <- rep(TRUE, nRows);
-        bestModel$scale <- sqrt(sum(bestModel$residuals^2) / nRows);
+        bestModel$subset <- rep(TRUE, obsInsample);
+        bestModel$scale <- sqrt(sum(bestModel$residuals^2) / obsInsample);
         class(bestModel) <- c("alm","greybox");
     }
     else{
