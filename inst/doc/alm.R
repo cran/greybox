@@ -70,3 +70,8 @@ summary(modelMixture$occurrence)
 ## ----mixturePredict------------------------------------------------------
 predict(modelMixture,outSample,interval="p")
 
+## ----mixtureExampleFinalAR-----------------------------------------------
+modelMixtureAR <- alm(y~x1+x2+Noise, inSample, distribution="dlnorm", occurrence=modelOccurrence, ar=1)
+summary(modelMixtureAR)
+plot(predict(modelMixtureAR,outSample,interval="p",side="u"))
+

@@ -1,8 +1,8 @@
 Package: greybox
 Type: Package
 Title: Toolbox for Model Building and Forecasting
-Version: 0.4.1
-Date: 2019-01-26
+Version: 0.5.0
+Date: 2019-04-20
 Authors@R: person("Ivan", "Svetunkov", email = "ivan@svetunkov.ru", role = c("aut", "cre"),
                   comment="Lecturer at Centre for Marketing Analytics and Forecasting, Lancaster University, UK")
 URL: https://github.com/config-i1/greybox
@@ -19,14 +19,16 @@ Description: Implements functions and instruments for regression model building 
 License: GPL (>= 2)
 Depends: R (>= 3.0.2)
 Imports: forecast, stats, graphics, utils, lamW, numDeriv, nloptr
+LinkingTo: Rcpp
 Suggests: smooth, doMC, doParallel, foreach, testthat, rmarkdown, knitr
+Enhances: vars
 RoxygenNote: 6.1.1
 VignetteBuilder: knitr
 Encoding: UTF-8
-NeedsCompilation: no
-Packaged: 2019-01-27 19:18:00 UTC; config
+NeedsCompilation: yes
+Packaged: 2019-04-19 20:23:28 UTC; config
 Author: Ivan Svetunkov [aut, cre] (Lecturer at Centre for Marketing Analytics
     and Forecasting, Lancaster University, UK)
 Maintainer: Ivan Svetunkov <ivan@svetunkov.ru>
 Repository: CRAN
-Date/Publication: 2019-01-27 22:50:47 UTC
+Date/Publication: 2019-04-21 15:20:07 UTC

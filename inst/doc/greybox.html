@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2019-01-27" />
+<meta name="date" content="2019-04-19" />
 
 <title>Greybox</title>
 
@@ -22,7 +22,7 @@
 <style type="text/css" data-origin="pandoc">
 a.sourceLine { display: inline-block; line-height: 1.25; }
 a.sourceLine { pointer-events: none; color: inherit; text-decoration: inherit; }
-a.sourceLine:empty { height: 1.2em; position: absolute; }
+a.sourceLine:empty { height: 1.2em; }
 .sourceCode { overflow: visible; }
 code.sourceCode { white-space: pre; position: relative; }
 div.sourceCode { margin: 1em 0; }
@@ -35,13 +35,11 @@ code.sourceCode { white-space: pre-wrap; }
 a.sourceLine { text-indent: -1em; padding-left: 1em; }
 }
 pre.numberSource a.sourceLine
-  { position: relative; }
-pre.numberSource a.sourceLine:empty
-  { position: absolute; }
+  { position: relative; left: -4em; }
 pre.numberSource a.sourceLine::before
   { content: attr(data-line-number);
-    position: absolute; left: -5em; text-align: right; vertical-align: baseline;
-    border: none; pointer-events: all;
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; pointer-events: all; display: inline-block;
     -webkit-touch-callout: none; -webkit-user-select: none;
     -khtml-user-select: none; -moz-user-select: none;
     -ms-user-select: none; user-select: none;
@@ -293,6 +291,9 @@ code > span.al { color: #ff0000; font-weight: bold; }
 code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61717; background-color: #e3d2d2; } 
 </style>
 
+
+
+
 </head>
 
 <body>
@@ -301,8 +302,8 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 
 
 <h1 class="title toc-ignore">Greybox</h1>
-<h4 class="author"><em>Ivan Svetunkov</em></h4>
-<h4 class="date"><em>2019-01-27</em></h4>
+<h4 class="author">Ivan Svetunkov</h4>
+<h4 class="date">2019-04-19</h4>
 
 
 
@@ -313,7 +314,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <h2>Main functions</h2>
 <p>The package includes the following functions for models construction:</p>
 <ol style="list-style-type: decimal">
-<li><a href="alm.html">alm()</a> - Advanced Linear Model. This is something similar to GLM, but with a focus on forecasting and the information criteria usage.</li>
+<li><a href="alm.html">alm()</a> - Advanced Linear Model. This is something similar to GLM, but with a focus on forecasting and the information criteria usage for time series. It also supports mixture distribution models for the intermittent data.</li>
 <li><code>stepwise()</code> - select the linear model with the lowest IC from all the possible in the provided data. Uses partial correlations. Works fast;</li>
 <li><code>lmCombine()</code> - combine the linear models into one using IC weights;</li>
 <li><code>lmDynamic()</code> - produce model with dynamic weights and time varying parameters based on IC weight.</li>
@@ -324,6 +325,8 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <h2>Models evaluation functions</h2>
 <ol style="list-style-type: decimal">
 <li><a href="ro.html">ro()</a> - produce forecasts with a specified function using rolling origin.</li>
+<li><code>rmc()</code> - regression for multiple comparison of methods. This is a parametric counterpart of <code>nemenyi()</code>, which is more informative than <code>nemenyi()</code> and should work better on large samples. This can be efficiently used together with RelMAE / RelMSE measures.</li>
+<li><code>measures()</code> - function, returning a bunch of error measures for the provided forecast and the holdout sample.</li>
 </ol>
 </div>
 <div id="marketing-analytics-tools" class="section level2">
@@ -360,8 +363,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <div id="additional-functions" class="section level2">
 <h2>Additional functions</h2>
 <ol style="list-style-type: decimal">
-<li><code>graphmaker()</code> - produces linear plots for the variable, its forecasts and fitted values.</li>
-<li><code>rmc()</code> - regression for multiple comparison of methods. This is a parametric counterpart of <code>nemenyi()</code>, which is more informative than <code>nemenyi()</code> and should work better on large samples. This can be efficiently used together with RelMAE / RelMSE measures. <!--7. `nemenyi()` - test for the comparison of different classifiers. This can be useful when several forecasting methods need to be compared. This function not only reports the critical values of the test, but also produces the plots, showing how the different methods compare.--></li>
+<li><code>graphmaker()</code> - produces linear plots for the variable, its forecasts and fitted values. <!--7. `nemenyi()` - test for the comparison of different classifiers. This can be useful when several forecasting methods need to be compared. This function not only reports the critical values of the test, but also produces the plots, showing how the different methods compare.--></li>
 </ol>
 <p>The first two construct a model of a class <code>lm</code>, that could be used for the purposes of analysis or forecasting. The last one expands the exogenous variables to the matrix with lags and leads. Let’s see how all of them work. Let’s start from the end.</p>
 </div>
@@ -647,7 +649,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <h2>References</h2>
 <div id="refs" class="references">
 <div id="ref-Burnham1998">
-<p>Burnham, Kenneth P, and David R Anderson. 2004. <em>Model Selection and Multimodel Inference</em>. Edited by Kenneth P Burnham and David R Anderson. Springer New York. <a href="https://doi.org/10.1007/b97636" class="uri">https://doi.org/10.1007/b97636</a>.</p>
+<p>Burnham, Kenneth P, and David R Anderson. 2004. <em>Model Selection and Multimodel Inference</em>. Edited by Kenneth P Burnham and David R Anderson. Springer New York. <a href="https://doi.org/10.1007/b97636">https://doi.org/10.1007/b97636</a>.</p>
 </div>
 </div>
 </div>
