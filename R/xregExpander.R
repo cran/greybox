@@ -15,7 +15,7 @@
 #' \code{ts} object, so the frequency of the data is taken into account.
 #' @param lags Vector of lags / leads that we need to have. Negative values
 #' mean lags, positive ones mean leads.
-#' @param silent If \code{silent=FALSE}, then the progress is printed out.
+#' @param quiet If \code{quiet=FALSE}, then the progress is printed out.
 #' Otherwise the function won't print anything in the console.
 #' @param gaps Defines how to fill in the gaps in the data. \code{"NAs"} will
 #' leave missing values, \code{"zero"} will substitute them by zeroes,
@@ -24,6 +24,8 @@
 #' (if present, otherwise - naive) in order to fill in values. Finally,
 #' \code{"auto"} will let the function select between \code{"extrapolate"} and
 #' \code{"NAs"} depending on the length of series.
+#' @param ... This is temporary and is needed in order to capture "quiet"
+#' parameter if it is provided.
 #'
 #' @return \code{ts} matrix with the expanded variables is returned.
 #'
@@ -41,7 +43,10 @@
 #' @export xregExpander
 
 xregExpander <- function(xreg, lags=c(-frequency(xreg):frequency(xreg)),
-                         silent=TRUE, gaps=c("auto","NAs","zero","naive","extrapolate")){
+                         quiet=TRUE, gaps=c("auto","NAs","zero","naive","extrapolate"), ...){
+
+    #### This is temporary and needs to be removed at some point! ####
+    quiet[] <- depricator(quiet, list(...));
 
     gaps <- substr(gaps[1],1,1);
 
@@ -77,7 +82,7 @@ xregExpander <- function(xreg, lags=c(-frequency(xreg):frequency(xreg)),
         maxLag <- 0;
     }
 
-    if(!silent){
+    if(!quiet){
         cat("Preparing matrices...    ");
     }
 
@@ -122,10 +127,9 @@ xregExpander <- function(xreg, lags=c(-frequency(xreg):frequency(xreg)),
         nExovars <- ncol(xreg);
         xregNew <- matrix(NA,obs,(lagsLengthAll+1)*nExovars);
         xregNew <- ts(xregNew,start=xregStart,frequency=xregFrequency);
-        # xregDataNew <- rep(NA,obs);
 
         for(i in 1:nExovars){
-            if(!silent){
+            if(!quiet){
                 if(i==1){
                     cat("\b");
                 }
@@ -136,7 +140,7 @@ xregExpander <- function(xreg, lags=c(-frequency(xreg):frequency(xreg)),
             xregNew[,chosenColumn+1] <- xregData <- xreg[,i];
             xregCurrentName <- xregNames[i];
             colnames(xregNew)[(lagsLengthAll+1)*(i-1)+1] <- xregCurrentName;
-            # xregDataNew <- xregData;
+            xregDataNew <- xregData;
             if(leadsLength!=0){
                 if(extrapolate){
                     # Produce forecasts for leads
@@ -149,10 +153,10 @@ xregExpander <- function(xreg, lags=c(-frequency(xreg):frequency(xreg)),
                     }
                     else{
                         if(all((xregData==0) | (xregData==1))){
-                            xregModel <- suppressWarnings(smooth::iss(xregData,model="XXX", h=maxLead,intermittent="l"));
+                            xregModel <- suppressWarnings(smooth::oes(xregData, model="MNN", h=maxLead, occurrence="i"));
                         }
                         else{
-                            xregModel <- suppressWarnings(smooth::es(xregData,h=maxLead,intermittent="a"));
+                            xregModel <- suppressWarnings(smooth::es(xregData, h=maxLead, occurrence="a"));
                         }
                         xregDataNew <- c(xregData,xregModel$forecast);
                     }
@@ -174,22 +178,23 @@ xregExpander <- function(xreg, lags=c(-frequency(xreg):frequency(xreg)),
                         if(leadsLength!=0){
                             # If this is a binary variable, use iss function.
                             if(all((xregData==0) | (xregData==1))){
-                                xregModel <- suppressWarnings(smooth::iss(rev(xregData), model=xregModel$model, intermittent=xregModel$intermittent,
+                                xregModel <- suppressWarnings(smooth::oes(rev(xregData), model=smooth::modelType(xregModel), occurrence="i",
                                                                           persistence=xregModel$persistence, h=maxLag));
                             }
                             else{
                                 xregModel <- suppressWarnings(smooth::es(rev(xregData), model=smooth::modelType(xregModel), persistence=xregModel$persistence,
-                                                                         intermittent=xregModel$intermittent, imodel=xregModel$imodel, h=maxLag));
+                                                                         occurrence=xregModel$occurrence, oesmodel=smooth::modelType(xregModel$occurrence),
+                                                                         h=maxLag));
                             }
                             xregDataNew <- c(rev(xregModel$forecast),xregDataNew);
                         }
                         else{
                             # If this is a binary variable, use iss function.
                             if(all((xregData==0) | (xregData==1))){
-                                xregModel <- suppressWarnings(smooth::iss(rev(xregData),model="XXX", h=maxLag,intermittent="l"));
+                                xregModel <- suppressWarnings(smooth::oes(rev(xregData), model="MNN", h=maxLag, occurrence="i"));
                             }
                             else{
-                                xregModel <- suppressWarnings(smooth::es(rev(xregData),h=maxLag,intermittent="a"));
+                                xregModel <- suppressWarnings(smooth::es(rev(xregData), h=maxLag, occurrence="a"));
                             }
                             xregDataNew <- c(rev(xregModel$forecast),xregData);
                         }
@@ -215,7 +220,7 @@ xregExpander <- function(xreg, lags=c(-frequency(xreg):frequency(xreg)),
                 }
             }
         }
-        if(!silent){
+        if(!quiet){
             cat(paste0(rep("\b",4),collapse=""));
             cat(" Done! \n");
         }

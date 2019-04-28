@@ -75,3 +75,6 @@ modelMixtureAR <- alm(y~x1+x2+Noise, inSample, distribution="dlnorm", occurrence
 summary(modelMixtureAR)
 plot(predict(modelMixtureAR,outSample,interval="p",side="u"))
 
+## ----mixtureExampleFinalARForecast---------------------------------------
+plot(forecast(modelMixtureAR, h=10, interval="p",side="u"))
+

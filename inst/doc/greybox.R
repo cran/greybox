@@ -32,17 +32,17 @@ ourModel <- stepwise(BJxreg)
 ourModel
 
 ## ----BJcombine1----------------------------------------------------------
-ourModel <- lmCombine(BJxreg[,-c(3:7,18:22)],bruteForce=TRUE)
+ourModel <- lmCombine(BJxreg[,-c(3:7,18:22)],bruteforce=TRUE)
 summary(ourModel)
 
 ## ----BJcombine2----------------------------------------------------------
-ourModel <- lmCombine(BJxreg,bruteForce=FALSE)
+ourModel <- lmCombine(BJxreg,bruteforce=FALSE)
 summary(ourModel)
 
 ## ----BJcombine3----------------------------------------------------------
 BJInsample <- BJxreg[1:130,];
 BJHoldout <- BJxreg[-(1:130),];
-ourModel <- lmCombine(BJInsample,bruteForce=FALSE)
+ourModel <- lmCombine(BJInsample,bruteforce=FALSE)
 
 ## ----BJcombinePlot-------------------------------------------------------
 summary(ourModel)
@@ -53,7 +53,7 @@ ourForecast <- predict(ourModel,BJHoldout)
 plot(ourForecast)
 
 ## ----BJDynamicModel------------------------------------------------------
-ourModel <- lmDynamic(BJInsample,bruteForce=FALSE)
+ourModel <- lmDynamic(BJInsample,bruteforce=FALSE)
 
 ## ----BJDynamicPlot-------------------------------------------------------
 ourSummary <- summary(ourModel)

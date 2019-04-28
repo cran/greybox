@@ -66,12 +66,12 @@
 #' orders are accepted.
 #' @param i the order of I to include in the model. Only non-seasonal
 #' orders are accepted.
-#' @param B vector of parameters of the linear model. When \code{NULL}, it
+#' @param parameters vector of parameters of the linear model. When \code{NULL}, it
 #' is estimated.
 #' @param vcovProduce whether to produce variance-covariance matrix of
 #' coefficients or not. This is done via hessian calculation, so might be
 #' computationally costly.
-#' @param checks if \code{FALSE}, then the function won't check whether
+#' @param fast if \code{FALSE}, then the function won't check whether
 #' the data has variability and whether the regressors are correlated. Might
 #' cause trouble, especially in cases of multicollinearity.
 #' @param ... additional parameters to pass to distribution functions. This
@@ -91,7 +91,7 @@
 #' \item coefficients - estimated parameters of the model,
 #' \item vcov - covariance matrix of parameters of the model (based on Fisher
 #' Information). Returned only when \code{vcovProduce=TRUE},
-#' \item fitted.values - fitted values,
+#' \item fitted - fitted values,
 #' \item residuals - residuals of the model,
 #' \item mu - the estimated location parameter of the distribution,
 #' \item scale - the estimated scale parameter of the distribution,
@@ -199,10 +199,14 @@ alm <- function(formula, data, subset, na.action,
                                "plogis","pnorm"),
                 occurrence=c("none","plogis","pnorm"),
                 ar=0, i=0,
-                B=NULL, vcovProduce=FALSE, checks=TRUE, ...){
+                parameters=NULL, vcovProduce=FALSE, fast=TRUE, ...){
 # Useful stuff for dnbinom: https://scialert.net/fulltext/?doi=ajms.2010.1.15
 
     cl <- match.call();
+
+    #### This is temporary and needs to be removed at some point! ####
+    B <- depricator(parameters, list(...));
+    fast <- depricator(fast, list(...));
 
     distribution <- distribution[1];
     if(all(distribution!=c("dnorm","dlogis","dlaplace","dalaplace","ds","dt","dfnorm","dlnorm","dchisq",
@@ -664,11 +668,11 @@ alm <- function(formula, data, subset, na.action,
         obsZero <- 0;
     }
 
-    if(checks){
+    if(!fast){
         #### Checks of the exogenous variables ####
         # Remove the data for which sd=0
         noVariability <- vector("logical",nVariables);
-        noVariability[] <- apply((matrixXreg==matrix(matrixXreg[1,],obsInsample,nVariables,byrow=TRUE))[otU,],2,all);
+        noVariability[] <- apply((matrixXreg==matrix(matrixXreg[1,],obsInsample,nVariables,byrow=TRUE))[otU,,drop=FALSE],2,all);
         if(any(noVariability)){
             if(all(noVariability)){
                 warning("None of exogenous variables has variability. Fitting the straight line.",
@@ -691,7 +695,7 @@ alm <- function(formula, data, subset, na.action,
         corThreshold <- 0.999;
         if(nVariables>1){
             # Check perfectly correlated cases
-            corMatrix <- cor(matrixXreg[otU,]);
+            corMatrix <- cor(matrixXreg[otU,,drop=FALSE]);
             corHigh <- upper.tri(corMatrix) & abs(corMatrix)>=corThreshold;
             if(any(corHigh)){
                 removexreg <- unique(which(corHigh,arr.ind=TRUE)[,1]);
@@ -708,7 +712,7 @@ alm <- function(formula, data, subset, na.action,
         # Do these checks only when intercept is needed. Otherwise in case of dummies this might cause chaos
         if(nVariables>1 & interceptIsNeeded){
             # Check dummy variables trap
-            detHigh <- determination(matrixXreg[otU,])>=corThreshold;
+            detHigh <- determination(matrixXreg[otU,,drop=FALSE])>=corThreshold;
             if(any(detHigh)){
                 while(any(detHigh)){
                     removexreg <- which(detHigh>=corThreshold)[1];
@@ -737,7 +741,7 @@ alm <- function(formula, data, subset, na.action,
     nVariablesExo <- nVariables;
 
     #### Estimate parameters of the model ####
-    if(is.null(B)){
+    if(is.null(parameters)){
         #### Add AR and I elements in the regression ####
         # This is only done, if the regression is estimated. In the other cases it will already have the expanded values
         if(ariModel){
@@ -750,7 +754,7 @@ alm <- function(formula, data, subset, na.action,
                     yNew[] <- log(yNew / (1-yNew));
                 }
                 else{
-                    yNew <- smooth::iss(y,intermittent="l",model="ANN",h=1)$states[1:obsInsample]
+                    yNew <- smooth::oes(y, occurrence="i", model="MNN", h=1)$states[1:obsInsample]
                 }
                 ariElements <- xregExpander(yNew, lags=-c(1:ariOrder), gaps="auto")[,-1,drop=FALSE];
                 ariZeroes <- matrix(TRUE,nrow=obsInsample,ncol=ariOrder);
@@ -1326,7 +1330,7 @@ alm <- function(formula, data, subset, na.action,
         mu <- yFitted;
     }
 
-    finalModel <- list(coefficients=B, vcov=vcovMatrix, fitted.values=yFitted, residuals=as.vector(errors),
+    finalModel <- list(coefficients=B, vcov=vcovMatrix, fitted=yFitted, residuals=as.vector(errors),
                        mu=mu, scale=scale, distribution=distribution, logLik=-CFValue,
                        df.residual=obsInsample-nParam, df=nParam, call=cl, rank=nParam,
                        data=dataWork,
