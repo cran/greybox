@@ -8,6 +8,9 @@
 #' present in some of models, it is assumed that they are equal to zero. Thus,
 #' there is a shrinkage effect in the combination.
 #'
+#' Some details and examples of application are also given in the vignette
+#' "Greybox": \code{vignette("greybox","greybox")}
+#'
 #' @template AICRef
 #' @template author
 #' @template keywords
@@ -18,7 +21,7 @@
 #' @param bruteforce If \code{TRUE}, then all the possible models are generated
 #' and combined. Otherwise the best model is found and then models around that
 #' one are produced and then combined.
-#' @param quiet If \code{FALSE}, then nothing is quiet, everything is printed
+#' @param silent If \code{FALSE}, then nothing is silent, everything is printed
 #' out. \code{TRUE} means that nothing is produced.
 #' @param distribution Distribution to pass to \code{alm()}.
 #' @param parallel If \code{TRUE}, then the model fitting is done in parallel.
@@ -79,7 +82,7 @@
 #' @importFrom stats dnorm
 #'
 #' @export lmCombine
-lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, quiet=TRUE,
+lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, silent=TRUE,
                       distribution=c("dnorm","dfnorm","dlnorm","dlaplace","ds","dchisq","dlogis",
                                      "plogis","pnorm"),
                       parallel=FALSE, ...){
@@ -88,7 +91,6 @@ lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, q
     cl$formula <- as.formula(paste0(colnames(data)[1]," ~ ."));
 
     #### This is temporary and needs to be removed at some point! ####
-    quiet[] <- depricator(quiet, list(...));
     bruteforce[] <- depricator(bruteforce, list(...));
 
     ellipsis <- list(...);
@@ -179,7 +181,7 @@ lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, q
     #         useALM <- TRUE;
     #         rowsSelected <- rowsSelected | (data[,1]!=0);
     #
-    #         occurrenceModel <- lmCombine(data, ic=ic, bruteforce=bruteforce, quiet=quiet,
+    #         occurrenceModel <- lmCombine(data, ic=ic, bruteforce=bruteforce, silent=silent,
     #                                      distribution=occurrence, parallel=parallel, ...);
     #         occurrenceModel$call <- cl;
     #     }
@@ -234,7 +236,7 @@ lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, q
     }
 
     if(!bruteforce){
-        if(!quiet){
+        if(!silent){
             cat("Selecting the best model...\n");
         }
         ourModel <- stepwise(data, ic=ic, distribution=distribution);
@@ -319,7 +321,7 @@ lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, q
         # If the number of variables is small, do bruteforce
         if(nparam(ourModel)<14){
             ourModel <- lmCombine(listToCall$data[,c(responseName,bestExoNames)], ic=ic,
-                                   bruteforce=TRUE, quiet=quiet, distribution=distribution, parallel=parallel, ...);
+                                   bruteforce=TRUE, silent=silent, distribution=distribution, parallel=parallel, ...);
             ourModel$call <- cl;
             return(ourModel);
         }
@@ -382,7 +384,7 @@ lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, q
 
     # Go for the loop of lm models
     if(parallel){
-        if(!quiet){
+        if(!silent){
             cat("Estimation progress: ...");
         }
         forLoopReturns <- foreach::`%dopar%`(foreach::foreach(i=2:nCombinations),{
@@ -420,11 +422,11 @@ lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, q
         }
     }
     else{
-        if(!quiet){
+        if(!silent){
             cat(paste0("Estimation progress: ", round(1/nCombinations,2)*100,"%"));
         }
         for(i in 2:nCombinations){
-            if(!quiet){
+            if(!silent){
                 cat(paste0(rep("\b",nchar(round((i-1)/nCombinations,2)*100)+1),collapse=""));
                 cat(paste0(round(i/nCombinations,2)*100,"%"));
             }
@@ -440,6 +442,10 @@ lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, q
                 otherParameters[i] <- ourModel$other[[1]];
             }
         }
+    }
+
+    if(!silent){
+        cat(" Done!\n");
     }
 
     # Calculate IC weights

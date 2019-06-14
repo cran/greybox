@@ -5,7 +5,7 @@
 \title{Combine regressions based on information criteria}
 \usage{
 lmCombine(data, ic = c("AICc", "AIC", "BIC", "BICc"),
-  bruteforce = FALSE, quiet = TRUE, distribution = c("dnorm",
+  bruteforce = FALSE, silent = TRUE, distribution = c("dnorm",
   "dfnorm", "dlnorm", "dlaplace", "ds", "dchisq", "dlogis", "plogis",
   "pnorm"), parallel = FALSE, ...)
 }
@@ -19,7 +19,7 @@ the others in the rest.}
 and combined. Otherwise the best model is found and then models around that
 one are produced and then combined.}
 
-\item{quiet}{If \code{FALSE}, then nothing is quiet, everything is printed
+\item{silent}{If \code{FALSE}, then nothing is silent, everything is printed
 out. \code{TRUE} means that nothing is produced.}
 
 \item{distribution}{Distribution to pass to \code{alm()}.}
@@ -58,6 +58,9 @@ The algorithm uses alm() to fit different models and then combines the models
 based on the selected IC. The parameters are combined so that if they are not
 present in some of models, it is assumed that they are equal to zero. Thus,
 there is a shrinkage effect in the combination.
+
+Some details and examples of application are also given in the vignette
+"Greybox": \code{vignette("greybox","greybox")}
 }
 \examples{
 

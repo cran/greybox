@@ -1,3 +1,23 @@
+greybox v0.5.2 (Release data: 2019-06-15)
+==============
+
+Changes:
+* Added references to the vignettes in the documentation.
+* Functions for Box-Cox Normal distribution (based on the original 1964 paper): dbcnorm(), pbcnorm(), rbcnorm() and qbcnorm().
+* alm() now supports Box-Cox Normal distribution (thus box-cox transform of the data).
+* Tuned the initial parameters in alm() for recursive models.
+* Tuning in the code for the recursive model. It should work approximately 2 times faster now...
+* Cosmetic changes in rmc(). In case of "mcb", the methods in the same group as the selected one, have the same darker colour of the mean.
+* Rolling back the "quiet" parameter to "silent".
+* Switch off entropy of NegBin and Poisson in alm() for now... Otherwise it becomes too inflated and unreasonably difficult.
+
+Bugfixes:
+* Fixed a bug with the estimation of models, where some of the variables did not have any variability (i.e. in cases of occurrence model).
+* alm() with distribution="plogis" sometimes would not work well with Arima() function.
+* A bugfix in plot(forecast), where a list was used in some of the cases for the holdout.
+* A bugfix for dropping dummies in case of a multicollinearity in reused regression.
+
+
 greybox v0.5.1 (Release data: 2019-04-27)
 ==============
 

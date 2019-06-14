@@ -8,6 +8,9 @@
 #' The algorithm uses alm() to fit different models and cor() to select the next
 #' regressor in the sequence.
 #'
+#' Some details and examples of application are also given in the vignette
+#' "Greybox": \code{vignette("greybox","greybox")}
+#'
 #' @template AICRef
 #' @template author
 #' @template keywords
@@ -15,8 +18,8 @@
 #' @param data Data frame containing dependant variable in the first column and
 #' the others in the rest.
 #' @param ic Information criterion to use.
-#' @param quiet If \code{quiet=FALSE}, then nothing is quiet, everything is
-#' printed out. \code{quiet=TRUE} means that nothing is produced.
+#' @param silent If \code{silent=FALSE}, then nothing is silent, everything is
+#' printed out. \code{silent=TRUE} means that nothing is produced.
 #' @param df Number of degrees of freedom to add (should be used if stepwise is
 #' used on residuals).
 #' @param method Method of correlations calculation. The default is Kendall's
@@ -24,7 +27,7 @@
 #' @param distribution Distribution to pass to \code{alm()}.
 #' @param occurrence what distribution to use for occurrence part. See
 #' \link[greybox]{alm} for details.
-#' @param ... This is temporary and is needed in order to capture "quiet"
+#' @param ... This is temporary and is needed in order to capture "silent"
 #' parameter if it is provided.
 #'
 #' @return Function returns \code{model} - the final model of the class "alm".
@@ -59,7 +62,7 @@
 #'
 #' @importFrom stats .lm.fit
 #' @export stepwise
-stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), quiet=TRUE, df=NULL,
+stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL,
                      method=c("pearson","kendall","spearman"),
                      distribution=c("dnorm","dfnorm","dlnorm","dlaplace","ds","dchisq","dlogis",
                                     "plogis","pnorm"),
@@ -68,9 +71,6 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), quiet=TRUE, df=NULL,
     if(is.null(df)){
         df <- 0;
     }
-
-    #### This is temporary and needs to be removed at some point! ####
-    quiet[] <- depricator(quiet, list(...));
 
     # Check, whether the response is numeric
     if(is.data.frame(data)){
@@ -256,7 +256,7 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), quiet=TRUE, df=NULL,
     errors[] <- residuals(testModel);
 
     bestFormula <- testFormula;
-    if(!quiet){
+    if(!silent){
         cat("Formula: "); cat(testFormula);
         cat(", IC: "); cat(currentIC); cat("\n\n");
     }
@@ -280,7 +280,7 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), quiet=TRUE, df=NULL,
         logLikValue <- logLik(testModel);
         attributes(logLikValue)$df <- nparam(logLikValue) + df;
         if(attributes(logLikValue)$df >= (obsInsample+1)){
-            if(!quiet){
+            if(!silent){
                 warning("Number of degrees of freedom is greater than number of observations. Cannot proceed.");
             }
             bestICNotFound <- FALSE;
@@ -289,7 +289,7 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), quiet=TRUE, df=NULL,
 
         # Calculate the IC
         currentIC <- IC(logLikValue);
-        if(!quiet){
+        if(!silent){
             cat(paste0("Step ",m-1,". "));
             cat("Formula: "); cat(testFormula);
             cat(", IC: "); cat(currentIC);
