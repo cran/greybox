@@ -1317,7 +1317,7 @@ alm <- function(formula, data, subset, na.action,
             vcovMatrixTry <- try(chol2inv(chol(vcovMatrix)), silent=TRUE);
             if(class(vcovMatrixTry)=="try-error"){
                 warning(paste0("Choleski decomposition of hessian failed, so we had to revert to the simple inversion.\n",
-                               "The estimate of the covariance matrix of parameters might be inacurate."),
+                               "The estimate of the covariance matrix of parameters might be inaccurate."),
                         call.=FALSE);
                 vcovMatrix <- try(solve(vcovMatrix, diag(nVariables), tol=1e-20), silent=TRUE);
                 if(class(vcovMatrix)=="try-error"){
@@ -1354,6 +1354,7 @@ alm <- function(formula, data, subset, na.action,
         vcovMatrix <- NULL;
     }
 
+    #### Deal with the occurrence part of the model ####
     if(occurrenceModel){
         mf$subset <- NULL;
 
@@ -1367,17 +1368,17 @@ alm <- function(formula, data, subset, na.action,
 
         # New data and new response variable
         dataNew <- mf$data[mf$subset,,drop=FALSE];
-        if(ncol(dataNew)>1){
-            y <- as.matrix(dataNew[,all.vars(formula)[1],drop=FALSE]);
-        }
-        else{
-            y <- dataNew[,1,drop=FALSE]
-        }
+        # if(ncol(dataNew)>1){
+        #     y <- as.matrix(dataNew[,all.vars(formula)[1],drop=FALSE]);
+        # }
+        # else{
+        #     y <- dataNew[,1,drop=FALSE]
+        # }
         # If there are NaN values, substitute them by zeroes
         # if(any(is.nan(y))){
         #     y[is.nan(y)] <- 0;
         # }
-        ot <- y!=0;
+        # ot <- y!=0;
         dataNew[,all.vars(formula)[1]] <- (ot)*1;
 
         if(!occurrenceProvided){

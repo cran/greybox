@@ -901,6 +901,13 @@ predict.greybox <- function(object, newdata=NULL, interval=c("none", "confidence
     if(is.null(newdata)){
         matrixOfxreg <- object$data;
         newdataProvided <- FALSE;
+        # The first column is the response variable. Either substitute it by ones or remove it.
+        if(any(parametersNames=="(Intercept)")){
+            matrixOfxreg[,1] <- 1;
+        }
+        else{
+            matrixOfxreg <- matrixOfxreg[,-1];
+        }
     }
     else{
         newdataProvided <- TRUE;
@@ -1650,7 +1657,7 @@ print.mcor <- function(x, ...){
 print.summary.alm <- function(x, ...){
     ellipsis <- list(...);
     if(!any(names(ellipsis)=="digits")){
-        digits <- 5;
+        digits <- 4;
     }
     else{
         digits <- ellipsis$digits;
@@ -1688,20 +1695,19 @@ print.summary.alm <- function(x, ...){
     }
     cat("\nCoefficients:\n");
     print(round(x$coefficients,digits));
-    cat("ICs:\n");
-    print(round(x$ICs,digits));
     cat("\nError standard deviation: "); cat(round(sqrt(x$s2),digits));
     cat("\nSample size: "); cat(x$dfTable[1]);
     cat("\nNumber of estimated parameters: "); cat(x$dfTable[2]);
     cat("\nNumber of degrees of freedom: "); cat(x$dfTable[3]);
-    cat("\n");
+    cat("\nInformation criteria:\n");
+    print(round(x$ICs,digits));
 }
 
 #' @export
 print.summary.greybox <- function(x, ...){
     ellipsis <- list(...);
     if(!any(names(ellipsis)=="digits")){
-        digits <- 5;
+        digits <- 4;
     }
     else{
         digits <- ellipsis$digits;
@@ -1732,22 +1738,19 @@ print.summary.greybox <- function(x, ...){
     }
     cat("\nCoefficients:\n");
     print(round(x$coefficients,digits));
-    cat("---\n");
-    cat(paste0("Residual standard error: ",round(x$sigma,digits)," on ",
-               round(x$df[2],digits)," degrees of freedom:\n"));
-    cat("ICs:\n");
-    print(round(x$ICs,digits));
+    cat("\nError standard deviation: "); cat(round(x$sigma,digits));
     cat("\nSample size: "); cat(x$dfTable[1]);
     cat("\nNumber of estimated parameters: "); cat(x$dfTable[2]);
     cat("\nNumber of degrees of freedom: "); cat(x$dfTable[3]);
-    cat("\n");
+    cat("Information criteria:\n");
+    print(round(x$ICs,digits));
 }
 
 #' @export
 print.summary.greyboxC <- function(x, ...){
     ellipsis <- list(...);
     if(!any(names(ellipsis)=="digits")){
-        digits <- 5;
+        digits <- 4;
     }
     else{
         digits <- ellipsis$digits;
@@ -1775,15 +1778,12 @@ print.summary.greyboxC <- function(x, ...){
     cat(paste0("Distribution used in the estimation: ", distrib));
     cat("\nCoefficients:\n");
     print(round(x$coefficients,digits));
-    cat("---\n");
-    cat(paste0("Residual standard error: ",round(x$sigma,digits)," on ",
-               round(x$df[2],digits)," degrees of freedom:\n"));
-    cat("Approximate combined ICs:\n");
+    cat("\nError standard deviation: "); cat(round(x$sigma,digits));
+    cat("\nSample size: "); cat(round(x$dfTable[1],digits));
+    cat("\nNumber of estimated parameters: "); cat(round(x$dfTable[2],digits));
+    cat("\nNumber of degrees of freedom: "); cat(round(x$dfTable[3],digits));
+    cat("\nApproximate combined information criteria:\n");
     print(round(x$ICs,digits));
-    cat("\nSample size: "); cat(x$dfTable[1]);
-    cat("\nNumber of estimated parameters: "); cat(x$dfTable[2]);
-    cat("\nNumber of degrees of freedom: "); cat(x$dfTable[3]);
-    cat("\n");
 }
 
 #' @export
@@ -2007,7 +2007,7 @@ vcov.alm <- function(object, ...){
         vcovMatrixTry <- try(chol2inv(chol(matrixXreg)), silent=TRUE);
         if(class(vcovMatrixTry)=="try-error"){
             warning(paste0("Choleski decomposition of covariance matrix failed, so we had to revert to the simple inversion.\n",
-                           "The estimate of the covariance matrix of parameters might be inacurate."),
+                           "The estimate of the covariance matrix of parameters might be inaccurate."),
                     call.=FALSE);
             vcovMatrix <- try(solve(matrixXreg, diag(nVariables), tol=1e-20), silent=TRUE);
             if(class(vcovMatrix)=="try-error"){
@@ -2036,7 +2036,7 @@ vcov.alm <- function(object, ...){
         vcovMatrixTry <- try(chol2inv(chol(matrixXreg)), silent=TRUE);
         if(class(vcovMatrixTry)=="try-error"){
             warning(paste0("Choleski decomposition of covariance matrix failed, so we had to revert to the simple inversion.\n",
-                           "The estimate of the covariance matrix of parameters might be inacurate."),
+                           "The estimate of the covariance matrix of parameters might be inaccurate."),
                     call.=FALSE);
             vcovMatrix <- try(solve(matrixXreg, diag(nVariables), tol=1e-20), silent=TRUE);
             if(class(vcovMatrix)=="try-error"){
