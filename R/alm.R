@@ -5,33 +5,33 @@
 #' This is a function, similar to \link[stats]{lm}, but for the cases of several
 #' non-normal distributions. These include:
 #' \enumerate{
-#' \item Normal distribution, \link[stats]{dnorm},
-#' \item Logistic Distribution, \link[stats]{dlogis},
-#' \item Laplace distribution, \link[greybox]{dlaplace},
-#' \item Asymmetric Laplace distribution, \link[greybox]{dalaplace},
-#' \item T-distribution, \link[stats]{dt},
-#' \item S-distribution, \link[greybox]{ds},
-#' \item Folded normal distribution, \link[greybox]{dfnorm},
-#' \item Log normal distribution, \link[stats]{dlnorm},
-#' \item Chi-Squared Distribution, \link[stats]{dchisq},
-#' \item Beta distribution, \link[stats]{dbeta},
-#' \item Poisson Distribution, \link[stats]{dpois},
-#' \item Negative Binomial Distribution, \link[stats]{dnbinom},
-#' \item Cumulative Logistic Distribution, \link[stats]{plogis},
-#' \item Cumulative Normal distribution, \link[stats]{pnorm}.
+#' \item \link[stats]{dnorm} - Normal distribution,
+#' \item \link[stats]{dlogis} - Logistic Distribution,
+#' \item \link[greybox]{dlaplace} - Laplace distribution,
+#' \item \link[greybox]{dalaplace} - Asymmetric Laplace distribution,
+#' \item \link[stats]{dt} - T-distribution,
+#' \item \link[greybox]{ds} - S-distribution,
+#' \item \link[greybox]{dfnorm} - Folded normal distribution,
+#' \item \link[stats]{dlnorm} - Log normal distribution,
+#' \item \link[greybox]{dbcnorm} - Box-Cox normal distribution,
+#' \item \link[stats]{dchisq} - Chi-Squared Distribution,
+#' \item \link[statmod]{dinvgauss} - Inverse Gaussian distribution,
+#' \item \link[stats]{dbeta} - Beta distribution,
+#' \item \link[stats]{dpois} - Poisson Distribution,
+#' \item \link[stats]{dnbinom} - Negative Binomial Distribution,
+#' \item \link[stats]{plogis} - Cumulative Logistic Distribution,
+#' \item \link[stats]{pnorm} - Cumulative Normal distribution.
 #' }
+#'
+#' This function can be considered as an analogue of \link[stats]{glm}, but with the
+#' focus on time series. This is why, for example, the function has \code{ar} and
+#' \code{i} parameters and produces time series analysis plots with \code{plot(alm(...))}.
 #'
 #' This function is slower than \code{lm}, because it relies on likelihood estimation
 #' of parameters, hessian calculation and matrix multiplication. So think twice when
 #' using \code{distribution="dnorm"} here.
 #'
-#' Probably some other distributions will be added to this function at some point...
-#'
 #' The estimation is done using likelihood of respective distributions.
-#'
-#' ALM function currently does not work with factors and does not accept
-#' transformations of variables in the formula. So you need to do transformations
-#' separately before using the function.
 #'
 #' See more details and examples in the vignette "ALM":
 #' \code{vignette("alm","greybox")}
@@ -192,11 +192,12 @@
 #' @importFrom stats model.frame sd terms model.matrix
 #' @importFrom stats dchisq dlnorm dnorm dlogis dpois dnbinom dt dbeta
 #' @importFrom stats plogis
+#' @importFrom statmod dinvgauss
 #' @importFrom forecast Arima
 #' @export alm
 alm <- function(formula, data, subset, na.action,
                 distribution=c("dnorm","dlogis","dlaplace","dalaplace","ds","dt",
-                               "dfnorm","dlnorm","dchisq","dbcnorm",
+                               "dfnorm","dlnorm","dbcnorm","dinvgauss",
                                "dpois","dnbinom",
                                "dbeta",
                                "plogis","pnorm"),
@@ -212,7 +213,8 @@ alm <- function(formula, data, subset, na.action,
     fast <- depricator(fast, list(...));
 
     distribution <- distribution[1];
-    if(all(distribution!=c("dnorm","dlogis","dlaplace","dalaplace","ds","dt","dfnorm","dlnorm","dchisq","dbcnorm",
+    if(all(distribution!=c("dnorm","dlogis","dlaplace","dalaplace","ds","dt","dfnorm","dlnorm",
+                           "dchisq","dbcnorm","dinvgauss",
                            "dpois","dnbinom","dbeta","plogis","pnorm"))){
         if(any(distribution==c("norm","fnorm","lnorm","laplace","s","chisq","logis"))){
             warning(paste0("You are using the old value of the distribution parameter.\n",
@@ -346,10 +348,11 @@ alm <- function(formula, data, subset, na.action,
                        "dnbinom" = exp(matrixXreg %*% B),
                        "dchisq" = ifelseFast(any(matrixXreg %*% B <0),1E+100,(matrixXreg %*% B)^2),
                        "dbeta" = exp(matrixXreg %*% B[1:(length(B)/2)]),
-                       "dbcnorm"=,
                        "dnorm" =,
                        "dfnorm" =,
                        "dlnorm" =,
+                       "dbcnorm"=,
+                       "dinvgauss" =,
                        "dlaplace" =,
                        "dalaplace" =,
                        "dlogis" =,
@@ -365,6 +368,7 @@ alm <- function(formula, data, subset, na.action,
                         "dfnorm" = abs(other),
                         "dlnorm" = sqrt(sum((log(y[otU])-mu[otU])^2)/obsInsample),
                         "dbcnorm" = sqrt(sum((bcTransform(y[otU],other)-mu[otU])^2)/obsInsample),
+                        "dinvgauss" = sum((y[otU]/mu[otU]-1)^2 / (y[otU]/mu[otU]))/obsInsample,
                         "dlaplace" = sum(abs(y[otU]-mu[otU]))/obsInsample,
                         "dalaplace" = sum((y[otU]-mu[otU]) * (other - (y[otU]<=mu[otU])*1))/obsInsample,
                         "dlogis" = sqrt(sum((y[otU]-mu[otU])^2)/obsInsample * 3 / pi^2),
@@ -416,6 +420,8 @@ alm <- function(formula, data, subset, na.action,
                                 "dlnorm" = dlnorm(y[otU], meanlog=fitterReturn$mu[otU], sdlog=fitterReturn$scale, log=TRUE),
                                 "dbcnorm" = dbcnorm(y[otU], mu=fitterReturn$mu[otU], sigma=fitterReturn$scale,
                                                     lambda=fitterReturn$other, log=TRUE),
+                                "dinvgauss" = dinvgauss(y[otU], mean=fitterReturn$mu[otU],
+                                                        dispersion=fitterReturn$scale/fitterReturn$mu[otU], log=TRUE),
                                 "dlaplace" = dlaplace(y[otU], mu=fitterReturn$mu[otU], scale=fitterReturn$scale, log=TRUE),
                                 "dalaplace" = dalaplace(y[otU], mu=fitterReturn$mu[otU], scale=fitterReturn$scale,
                                                         alpha=fitterReturn$other, log=TRUE),
@@ -439,6 +445,7 @@ alm <- function(formula, data, subset, na.action,
                                             "dfnorm" =,
                                             "dbcnorm" =,
                                             "dlnorm" = obsZero*(log(sqrt(2*pi)*fitterReturn$scale)+0.5),
+                                            "dinvgauss" = obsZero*0.5*(log(pi)+1-suppressWarnings(log(2/fitterReturn$scale))),
                                             "dlaplace" =,
                                             "dalaplace" = obsZero*(1 + log(2*fitterReturn$scale)),
                                             "dlogis" = obsZero*2,
@@ -679,8 +686,13 @@ alm <- function(formula, data, subset, na.action,
     errors <- vector("numeric", obsInsample);
     ot <- vector("logical", obsInsample);
 
-    if(any(y<0) & any(distribution==c("dfnorm","dlnorm","dbcnorm","dchisq","dpois","dnbinom"))){
+    if(any(y<0) & any(distribution==c("dfnorm","dlnorm","dbcnorm","dinvgauss","dchisq","dpois","dnbinom"))){
         stop(paste0("Negative values are not allowed in the response variable for the distribution '",distribution,"'"),
+             call.=FALSE);
+    }
+
+    if(any(y==0) & any(distribution==c("dinvgauss")) & !occurrenceModel){
+        stop(paste0("Zero values are not allowed in the response variable for the distribution '",distribution,"'"),
              call.=FALSE);
     }
 
@@ -813,6 +825,7 @@ alm <- function(formula, data, subset, na.action,
         if(is.null(parameters)){
             # Check, if redundant dummies are left. Remove the first if this is the case
             determValues <- determination(matrixXreg[otU, -1, drop=FALSE]);
+            determValues[is.nan(determValues)] <- 0;
             if(any(determValues==1)){
                 matrixXreg <- matrixXreg[,-(which(determValues==1)[1]+1),drop=FALSE];
                 variablesNames <- colnames(matrixXreg);
@@ -1098,7 +1111,7 @@ alm <- function(formula, data, subset, na.action,
         }
         if(is.null(ellipsis$algorithm)){
             # if(recursiveModel){
-                algorithm <- "NLOPT_LN_BOBYQA";
+                # algorithm <- "NLOPT_LN_BOBYQA";
             # }
             # else{
                 algorithm <- "NLOPT_LN_SBPLX";
@@ -1242,6 +1255,7 @@ alm <- function(formula, data, subset, na.action,
     yFitted[] <- switch(distribution,
                        "dfnorm" = sqrt(2/pi)*scale*exp(-mu^2/(2*scale^2))+mu*(1-2*pnorm(-mu/scale)),
                        "dnorm" =,
+                       "dinvgauss" =,
                        "dlaplace" =,
                        "dalaplace" =,
                        "dlogis" =,
@@ -1269,6 +1283,7 @@ alm <- function(formula, data, subset, na.action,
                        "dnorm" =,
                        "dnbinom" =,
                        "dpois" = y - mu,
+                       "dinvgauss" = y / mu,
                        "dchisq" = sqrt(y) - sqrt(mu),
                        "dlnorm"= log(y) - mu,
                        "dbcnorm"= bcTransform(y,lambda) - mu,
@@ -1328,14 +1343,15 @@ alm <- function(formula, data, subset, na.action,
     if(vcovProduce){
         # Only vcov is needed, no point in redoing the occurrenceModel
         occurrenceModel <- FALSE;
-        method.args <- list(eps=1e-4, d=0.1, r=4)
+        method.args <- list(eps=1e-4, d=0.1, r=4);
         # if(CDF){
         #     method.args <- list(d=1e-6, r=6);
         # }
         # else{
         #     if(any(distribution==c("dnbinom","dlaplace","dalaplace","dbcnorm"))){
-        #         method.args <- list(d=1e-6, r=6);
-        #     }
+        if(distribution==c("dinvgauss")){
+            method.args <- list(d=1e-6, r=6);
+        }
         #     else{
         #         method.args <- list(d=1e-4, r=4);
         #     }
@@ -1370,12 +1386,12 @@ alm <- function(formula, data, subset, na.action,
         else{
             # See if Choleski works... It sometimes fails, when we don't get to the max of likelihood.
             vcovMatrixTry <- try(chol2inv(chol(vcovMatrix)), silent=TRUE);
-            if(class(vcovMatrixTry)=="try-error"){
+            if(any(class(vcovMatrixTry)=="try-error")){
                 warning(paste0("Choleski decomposition of hessian failed, so we had to revert to the simple inversion.\n",
                                "The estimate of the covariance matrix of parameters might be inaccurate."),
                         call.=FALSE);
                 vcovMatrix <- try(solve(vcovMatrix, diag(nVariables), tol=1e-20), silent=TRUE);
-                if(class(vcovMatrix)=="try-error"){
+                if(any(class(vcovMatrix)=="try-error")){
                     warning(paste0("Sorry, but the hessian is singular, so we could not invert it.\n",
                                    "We failed to produce the covariance matrix of parameters."),
                             call.=FALSE);

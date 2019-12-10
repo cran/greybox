@@ -227,6 +227,7 @@ pointLik.alm <- function(object, ...){
                             "dfnorm" = dfnorm(y, mu=mu, sigma=scale, log=TRUE),
                             "dlnorm" = dlnorm(y, meanlog=mu, sdlog=scale, log=TRUE),
                             "dbcnorm" = dbcnorm(y, mu=mu, sigma=scale, lambda=object$other$lambda, log=TRUE),
+                            "dinvgauss" = dinvgauss(y, mean=mu, dispersion=scale/mu, log=TRUE),
                             "dlaplace" = dlaplace(y, mu=mu, scale=scale, log=TRUE),
                             "dalaplace" = dalaplace(y, mu=mu, scale=scale, alpha=object$other$alpha, log=TRUE),
                             "dlogis" = dlogis(y, location=mu, scale=scale, log=TRUE),
@@ -249,6 +250,7 @@ pointLik.alm <- function(object, ...){
                                    "dfnorm" =,
                                    "dbcnorm" =,
                                    "dlnorm" = log(sqrt(2*pi)*scale)+0.5,
+                                   "dinvgauss" = 0.5*(log(pi)+1-log(2/scale)),
                                    "dlaplace" =,
                                    "dalaplace" = (1 + log(2*scale)),
                                    "dlogis" = 2,
@@ -538,6 +540,7 @@ confint.lmGreybox <- function(object, parm, level=0.95, ...){
 
 #' @rdname predict.greybox
 #' @importFrom stats predict qchisq qlnorm qlogis qpois qnbinom qbeta
+#' @importFrom statmod qinvgauss
 #' @export
 predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "prediction"),
                             level=0.95, side=c("both","upper","lower"), ...){
@@ -687,6 +690,28 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
             greyboxForecast$mean[] <- (greyboxForecast$mean*object$other$lambda+1)^{1/object$other$lambda};
         }
         greyboxForecast$scale <- sigma;
+    }
+    else if(object$distribution=="dinvgauss"){
+        # This is a multiplicative model, so the variance is different
+        # if(interval=="p"){
+        #     residualsVariance <- sigma(object)^2;
+        #     greyboxForecast$variance[] <- greyboxForecast$variance - residualsVariance;
+        #     greyboxForecast$variance[] <- (greyboxForecast$variance * (residualsVariance+1) +
+        #                                        residualsVariance * greyboxForecast$mean^2);
+        # }
+        # greyboxForecast$scale <- greyboxForecast$variance / greyboxForecast$mean^3;
+        if(interval=="p"){
+            greyboxForecast$scale <- object$scale;
+        }
+        else if(interval=="c"){
+            greyboxForecast$scale <- greyboxForecast$variance / greyboxForecast$mean^3;
+        }
+        if(interval!="n"){
+            greyboxForecast$lower[] <- greyboxForecast$mean*qinvgauss(levelLow,mean=1,
+                                                                      dispersion=greyboxForecast$scale);
+            greyboxForecast$upper[] <- greyboxForecast$mean*qinvgauss(levelUp,mean=1,
+                                                                      dispersion=greyboxForecast$scale);
+        }
     }
     else if(object$distribution=="dlogis"){
         # Use the connection between the variance and scale in logistic distribution
@@ -1481,6 +1506,7 @@ plot.coef.greyboxD <- function(x, ...){
 #' (6) and (7)
 #' @param legend If \code{TRUE}, then the legend is produced on plots (1) and (2).
 #' @param ask Logical; if \code{TRUE}, the user is asked to press Enter before each plot.
+#' @param lowess Logical; if \code{TRUE}, LOWESS lines are drawn on scatterplots, see \link[stats]{lowess}.
 #' @param ... The parameters passed to the plot functions. Recommended to use with separate plots.
 #' @return The function produces 4 plots and, if \code{any(which==2)} also reports the number
 #' of residuals outside the bounds.
@@ -1499,12 +1525,13 @@ plot.coef.greyboxD <- function(x, ...){
 #' par(mfcol=c(2,3))
 #' plot(ourModel, c(1,2,4,5,7,8))
 #'
-#' @importFrom stats ppoints qqline qqnorm qqplot acf pacf
+#' @importFrom stats ppoints qqline qqnorm qqplot acf pacf lowess
 #' @importFrom grDevices dev.interactive devAskNewPage
 #' @aliases plot.alm
 #' @export
 plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
-                         ask=prod(par("mfcol")) < length(which) && dev.interactive(), ...){
+                         ask=prod(par("mfcol")) < length(which) && dev.interactive(),
+                         lowess=TRUE, ...){
 
     # Define, whether to wait for the hit of "Enter"
     if(ask){
@@ -1603,10 +1630,9 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         }
 
         if(is.alm(x$occurrence)){
-            ellipsis$x <- ellipsis$x[ellipsis$y!=0];
-            ellipsis$y <- ellipsis$y[ellipsis$y!=0];
+            ellipsis$x <- ellipsis$x[actuals(x$occurrence)!=0];
+            ellipsis$y <- ellipsis$y[actuals(x$occurrence)!=0];
         }
-        ellipsis$y[] <- ellipsis$y;
 
         if(!any(names(ellipsis)=="main")){
             ellipsis$main <- paste0(yName," Residuals vs Fitted");
@@ -1626,16 +1652,6 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             else{
                 legendPosition <- "topright";
             }
-
-            if(!any(names(ellipsis)=="ylim")){
-                ellipsis$ylim <- range(ellipsis$y);
-                if(legendPosition=="bottomright"){
-                    ellipsis$ylim[1] <- ellipsis$ylim[1] - 0.2*diff(ellipsis$ylim);
-                }
-                else{
-                    ellipsis$ylim[2] <- ellipsis$ylim[2] + 0.2*diff(ellipsis$ylim);
-                }
-            }
         }
 
         zValues <- switch(x$distribution,
@@ -1644,9 +1660,24 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
                           "dlogis"=qlogis(c((1-level)/2, (1+level)/2), 0, 1),
                           "dt"=qt(c((1-level)/2, (1+level)/2), nobs(x)-nparam(x)),
                           "ds"=qs(c((1-level)/2, (1+level)/2), 0, 1),
+                          # In the next one, the scale is debiased, taking n-k into account
+                          "dinvgauss"=qinvgauss(c((1-level)/2, (1+level)/2), mean=1,
+                                                dispersion=x$scale * nobs(x) / (nobs(x)-nparam(x))),
                           qnorm(c((1-level)/2, (1+level)/2), 0, 1));
-        outliers <- which(abs(ellipsis$y)>zValues[2]);
-        cat(paste0(round(length(outliers)/length(ellipsis$y),3)*100,"% of values are outside the bounds\n"));
+        outliers <- which(ellipsis$y >zValues[2] | ellipsis$y <zValues[1]);
+        # cat(paste0(round(length(outliers)/length(ellipsis$y),3)*100,"% of values are outside the bounds\n"));
+
+        if(!any(names(ellipsis)=="ylim")){
+            ellipsis$ylim <- range(c(ellipsis$y,zValues));
+            if(legend){
+                if(legendPosition=="bottomright"){
+                    ellipsis$ylim[1] <- ellipsis$ylim[1] - 0.2*diff(ellipsis$ylim);
+                }
+                else{
+                    ellipsis$ylim[2] <- ellipsis$ylim[2] + 0.2*diff(ellipsis$ylim);
+                }
+            }
+        }
 
         xRange <- range(ellipsis$x);
         xRange[1] <- xRange[1] - sd(ellipsis$x);
@@ -1661,11 +1692,21 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             points(ellipsis$x[outliers], ellipsis$y[outliers], pch=16);
             text(ellipsis$x[outliers], ellipsis$y[outliers], labels=outliers, pos=4);
         }
+        if(lowess){
+            lines(lowess(ellipsis$x, ellipsis$y), col="red");
+        }
 
         if(legend){
-            legend(legendPosition,
-                   legend=c(paste0(round(level,3)*100,"% bounds"),"outside the bounds"),
-                   col=c("red", "black"), lwd=c(1,NA), lty=c(2,1), pch=c(NA, 16));
+            if(lowess){
+                legend(legendPosition,
+                       legend=c(paste0(round(level,3)*100,"% bounds"),"outside the bounds","LOWESS line"),
+                       col=c("red", "black","red"), lwd=c(1,NA,1), lty=c(2,1,1), pch=c(NA,16,NA));
+            }
+            else{
+                legend(legendPosition,
+                       legend=c(paste0(round(level,3)*100,"% bounds"),"outside the bounds"),
+                       col=c("red", "black"), lwd=c(1,NA), lty=c(2,1), pch=c(NA,16));
+            }
         }
     }
 
@@ -1708,6 +1749,9 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
 
         do.call(plot,ellipsis);
         abline(h=0, col="grey", lty=2);
+        if(lowess){
+            lines(lowess(ellipsis$x, ellipsis$y), col="red");
+        }
     }
 
     # 6. Q-Q with the specified distribution
@@ -1716,7 +1760,7 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
 
         ellipsis$y <- residuals(x);
         if(is.alm(x$occurrence)){
-            ellipsis$y <- ellipsis$y[ellipsis$y!=0];
+            ellipsis$y <- ellipsis$y[actuals(x$occurrence)!=0];
         }
 
         if(!any(names(ellipsis)=="xlab")){
@@ -1780,6 +1824,17 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
 
             do.call(qqplot, ellipsis);
             qqline(ellipsis$y, distribution=function(p) qt(p, df=x$scale));
+        }
+        else if(x$distribution=="dinvgauss"){
+            # Transform residuals for something meaningful
+            # This is not 100% accurate, because the dispersion should change as well as mean...
+            if(!any(names(ellipsis)=="main")){
+                ellipsis$main <- "QQ-plot of Inverse Gaussian distribution";
+            }
+            ellipsis$x <- qinvgauss(ppoints(500), mean=1, dispersion=x$scale);
+
+            do.call(qqplot, ellipsis);
+            qqline(ellipsis$y, distribution=function(p) qinvgauss(p, mean=1, dispersion=x$scale));
         }
         else if(x$distribution=="dchisq"){
             message("Sorry, but we don't produce QQ plots for the Chi-Squared distribution");
@@ -2076,6 +2131,7 @@ print.summary.alm <- function(x, ...){
                       "dfnorm" = "Folded Normal",
                       "dlnorm" = "Log Normal",
                       "dbcnorm" = paste0("Box-Cox Normal with lambda=",round(x$other$lambda,2)),
+                      "dinvgauss" = "Inverse Gaussian",
                       "dchisq" = paste0("Chi-Squared with df=",round(x$other$df,2)),
                       "dpois" = "Poisson",
                       "dnbinom" = paste0("Negative Binomial with size=",round(x$other$size,2)),
@@ -2126,6 +2182,7 @@ print.summary.greybox <- function(x, ...){
                       "dfnorm" = "Folded Normal",
                       "dlnorm" = "Log Normal",
                       "dbcnorm" = "Box-Cox Normal",
+                      "dinvgauss" = "Inverse Gaussian",
                       "dchisq" = "Chi-Squared",
                       "dpois" = "Poisson",
                       "dnbinom" = "Negative Binomial",
@@ -2169,6 +2226,7 @@ print.summary.greyboxC <- function(x, ...){
                       "dfnorm" = "Folded Normal",
                       "dlnorm" = "Log Normal",
                       "dbcnorm" = "Box-Cox Normal",
+                      "dinvgauss" = "Inverse Gaussian",
                       "dchisq" = "Chi-Squared",
                       "dpois" = "Poisson",
                       "dnbinom" = "Negative Binomial",
@@ -2235,14 +2293,24 @@ rstandard.greybox <- function(model, ...){
     obs <- nobs(model);
     df <- obs - nparam(model);
     errors <- residuals(model);
-    if(any(model$distribution==c("dt","dnorm","dlnorm","dbcnorm","dnbinom","dpois"))){
-        return((errors - mean(errors)) / sqrt(sum(residuals(model)^2) / df));
-    }
-    else if(model$distribution=="ds"){
-            return((errors - mean(errors)) / (model$scale * obs / df)^2);
+    # If this is an occurrence model, then only modify the non-zero obs
+    if(is.alm(model$occurrence)){
+        residsToGo <- actuals(model$occurrence)!=0;
     }
     else{
-        return((errors - mean(errors)) / model$scale * obs / df);
+        residsToGo <- c(1:obs);
+    }
+    if(any(model$distribution==c("dt","dnorm","dlnorm","dbcnorm","dnbinom","dpois"))){
+        return((errors - mean(errors[residsToGo])) / sqrt(sum(residuals(model)^2) / df));
+    }
+    else if(model$distribution=="ds"){
+            return((errors - mean(errors[residsToGo])) / (model$scale * obs / df)^2);
+    }
+    else if(model$distribution=="dinvgauss"){
+            return(errors / mean(errors[residsToGo]));
+    }
+    else{
+        return((errors - mean(errors[residsToGo])) / model$scale * obs / df);
     }
 }
 
@@ -2253,33 +2321,46 @@ rstudent.greybox <- function(model, ...){
     df <- obs - nparam(model) - 1;
     rstudentised <- errors <- residuals(model);
     errors[] <- errors - mean(errors);
+    # If this is an occurrence model, then only modify the non-zero obs
+    if(is.alm(model$occurrence)){
+        residsToGo <- actuals(model$occurrence)!=0;
+    }
+    else{
+        residsToGo <- c(1:obs);
+    }
     if(any(model$distribution==c("dt","dnorm","dlnorm","dbcnorm"))){
-        for(i in 1:obs){
+        for(i in residsToGo){
             rstudentised[i] <- errors[i] / sqrt(sum(errors[-i]^2) / df)
         }
     }
     else if(model$distribution=="ds"){
-        for(i in 1:obs){
+        for(i in residsToGo){
             rstudentised[i] <- errors[i] / (sum(sqrt(abs(errors[-i]))) / (2*df))^2;
         }
     }
     else if(model$distribution=="dlaplace"){
-        for(i in 1:obs){
+        for(i in residsToGo){
             rstudentised[i] <- errors[i] / (sum(abs(errors[-i])) / df);
         }
     }
     else if(model$distribution=="dalaplace"){
-        for(i in 1:obs){
+        for(i in residsToGo){
             rstudentised[i] <- errors[i] / (sum(errors[-i] * (model$other$alpha - (errors[-i]<=0)*1)) / df);
         }
     }
     else if(model$distribution=="dlogis"){
-        for(i in 1:obs){
+        for(i in residsToGo){
             rstudentised[i] <- errors[i] / (sqrt(sum(errors[-i]^2) / df) * sqrt(3) / pi);
         }
     }
+    else if(model$distribution=="dinvgauss"){
+        errors[] <- residuals(model);
+        for(i in residsToGo){
+            rstudentised[i] <- errors[i] / mean(errors[residsToGo][-i]);
+        }
+    }
     else{
-        for(i in 1:obs){
+        for(i in residsToGo){
             rstudentised[i] <- errors[i] / sqrt(sum(errors[-i]^2) / df)
         }
     }
@@ -2472,12 +2553,12 @@ vcov.alm <- function(object, ...){
         nVariables <- ncol(matrixXreg);
         matrixXreg <- crossprod(matrixXreg);
         vcovMatrixTry <- try(chol2inv(chol(matrixXreg)), silent=TRUE);
-        if(class(vcovMatrixTry)=="try-error"){
+        if(any(class(vcovMatrixTry)=="try-error")){
             warning(paste0("Choleski decomposition of covariance matrix failed, so we had to revert to the simple inversion.\n",
                            "The estimate of the covariance matrix of parameters might be inaccurate."),
                     call.=FALSE);
             vcovMatrix <- try(solve(matrixXreg, diag(nVariables), tol=1e-20), silent=TRUE);
-            if(class(vcovMatrix)=="try-error"){
+            if(any(class(vcovMatrix)=="try-error")){
                 warning(paste0("Sorry, but the covariance matrix is singular, so we could not invert it.\n",
                                "We failed to produce the covariance matrix of parameters."),
                         call.=FALSE);
@@ -2501,12 +2582,12 @@ vcov.alm <- function(object, ...){
         # colnames(matrixXreg) <- names(coef(object));
         matrixXreg <- crossprod(matrixXreg);
         vcovMatrixTry <- try(chol2inv(chol(matrixXreg)), silent=TRUE);
-        if(class(vcovMatrixTry)=="try-error"){
+        if(any(class(vcovMatrixTry)=="try-error")){
             warning(paste0("Choleski decomposition of covariance matrix failed, so we had to revert to the simple inversion.\n",
                            "The estimate of the covariance matrix of parameters might be inaccurate."),
                     call.=FALSE);
             vcovMatrix <- try(solve(matrixXreg, diag(nVariables), tol=1e-20), silent=TRUE);
-            if(class(vcovMatrix)=="try-error"){
+            if(any(class(vcovMatrix)=="try-error")){
                 warning(paste0("Sorry, but the covariance matrix is singular, so we could not invert it.\n",
                                "We failed to produce the covariance matrix of parameters."),
                         call.=FALSE);
@@ -2523,10 +2604,10 @@ vcov.alm <- function(object, ...){
         # Form the call for alm
         newCall <- object$call;
         if(interceptIsNeeded){
-            newCall$formula <- as.formula(paste0(all.vars(newCall$formula)[1],"~."));
+            newCall$formula <- as.formula(paste0("`",all.vars(newCall$formula)[1],"`~."));
         }
         else{
-            newCall$formula <- as.formula(paste0(all.vars(newCall$formula)[1],"~.-1"));
+            newCall$formula <- as.formula(paste0("`",all.vars(newCall$formula)[1],"`~.-1"));
         }
         newCall$data <- object$data;
         newCall$subset <- object$subset;
