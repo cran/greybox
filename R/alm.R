@@ -74,13 +74,13 @@
 #' @param vcovProduce whether to produce variance-covariance matrix of
 #' coefficients or not. This is done via hessian calculation, so might be
 #' computationally costly.
-#' @param fast if \code{FALSE}, then the function won't check whether
+#' @param fast if \code{TRUE}, then the function won't check whether
 #' the data has variability and whether the regressors are correlated. Might
 #' cause trouble, especially in cases of multicollinearity.
 #' @param ... additional parameters to pass to distribution functions. This
 #' includes: \code{alpha} value for Asymmetric Laplace distribution,
 #' \code{size} for the Negative Binomial or \code{df} for the Chi-Squared and
-#' Student's t. You can also pass two parameters to the optimiser: 1.
+#' Student's t. You can also pass parameters to the optimiser: 1.
 #' \code{maxeval} - maximum number of evaluations to carry out (default is
 #' 100); 2. \code{xtol_rel} - the precision of the optimiser (the default is
 #' 1E-6); 3. \code{algorithm} - the algorithm to use in optimisation
@@ -120,9 +120,9 @@
 #' mtcars2 <- within(mtcars, {
 #'    vs <- factor(vs, labels = c("V", "S"))
 #'    am <- factor(am, labels = c("automatic", "manual"))
-#'    cyl  <- ordered(cyl)
-#'    gear <- ordered(gear)
-#'    carb <- ordered(carb)
+#'    cyl  <- factor(cyl)
+#'    gear <- factor(gear)
+#'    carb <- factor(carb)
 #' })
 #' # The standard model with Log Normal distribution
 #' ourModel <- alm(mpg~., mtcars2[1:30,], distribution="dlnorm")
@@ -203,7 +203,7 @@ alm <- function(formula, data, subset, na.action,
                                "plogis","pnorm"),
                 occurrence=c("none","plogis","pnorm"),
                 ar=0, i=0,
-                parameters=NULL, vcovProduce=FALSE, fast=TRUE, ...){
+                parameters=NULL, vcovProduce=FALSE, fast=FALSE, ...){
 # Useful stuff for dnbinom: https://scialert.net/fulltext/?doi=ajms.2010.1.15
 
     cl <- match.call();
@@ -445,7 +445,7 @@ alm <- function(formula, data, subset, na.action,
                                             "dfnorm" =,
                                             "dbcnorm" =,
                                             "dlnorm" = obsZero*(log(sqrt(2*pi)*fitterReturn$scale)+0.5),
-                                            "dinvgauss" = obsZero*0.5*(log(pi)+1-suppressWarnings(log(2/fitterReturn$scale))),
+                                            "dinvgauss" = obsZero*(0.5*(log(pi/2)+1+suppressWarnings(log(fitterReturn$scale)))),
                                             "dlaplace" =,
                                             "dalaplace" = obsZero*(1 + log(2*fitterReturn$scale)),
                                             "dlogis" = obsZero*2,
@@ -602,33 +602,36 @@ alm <- function(formula, data, subset, na.action,
     mf$drop.unused.levels <- TRUE;
     mf[[1L]] <- quote(stats::model.frame);
 
-    if(!is.data.frame(data)){
-        data <- as.data.frame(data);
-    }
-    else{
-        dataOrders <- unlist(lapply(data,is.ordered));
-        # If there is an ordered factor, remove the bloody ordering!
-        if(any(dataOrders)){
-            data[dataOrders] <- lapply(data[dataOrders],function(x) factor(x, levels=levels(x), ordered=FALSE));
-        }
-    }
-    mf$data <- data;
-
-    # If there are NaN values, remove the respective observations
-    if(any(sapply(mf$data,is.nan))){
-        warning("There are NaN values in the data. This might cause problems. Removing these observations.", call.=FALSE);
-        NonNaNValues <- !apply(sapply(mf$data,is.nan),1,any);
-        # If subset was not provided, change it
-        if(is.null(mf$subset)){
-            mf$subset <- NonNaNValues
+    # If data is provided explicitly, check it
+    if(exists("data",inherits=FALSE,mode="numeric") || exists("data",inherits=FALSE,mode="list")){
+        if(!is.data.frame(data)){
+            data <- as.data.frame(data);
         }
         else{
-            mf$subset <- NonNaNValues & mf$subset;
+            dataOrders <- unlist(lapply(data,is.ordered));
+            # If there is an ordered factor, remove the bloody ordering!
+            if(any(dataOrders)){
+                data[dataOrders] <- lapply(data[dataOrders],function(x) factor(x, levels=levels(x), ordered=FALSE));
+            }
         }
-        dataContainsNaNs <- TRUE;
-    }
-    else{
-        dataContainsNaNs <- FALSE;
+        mf$data <- data;
+
+        # If there are NaN values, remove the respective observations
+        if(any(sapply(mf$data,is.nan))){
+            warning("There are NaN values in the data. This might cause problems. Removing these observations.", call.=FALSE);
+            NonNaNValues <- !apply(sapply(mf$data,is.nan),1,any);
+            # If subset was not provided, change it
+            if(is.null(mf$subset)){
+                mf$subset <- NonNaNValues
+            }
+            else{
+                mf$subset <- NonNaNValues & mf$subset;
+            }
+            dataContainsNaNs <- TRUE;
+        }
+        else{
+            dataContainsNaNs <- FALSE;
+        }
     }
 
     responseName <- all.vars(formula)[1];
@@ -822,7 +825,7 @@ alm <- function(formula, data, subset, na.action,
         variablesNames <- c("(Intercept)",variablesNames);
         colnames(matrixXreg) <- variablesNames;
 
-        if(is.null(parameters)){
+        if(is.null(parameters) && !fast){
             # Check, if redundant dummies are left. Remove the first if this is the case
             determValues <- determination(matrixXreg[otU, -1, drop=FALSE]);
             determValues[is.nan(determValues)] <- 0;
@@ -1096,6 +1099,10 @@ alm <- function(formula, data, subset, na.action,
             if(any(distribution==c("dchisq","dpois","dnbinom","dbcnorm","plogis","pnorm")) || recursiveModel){
                 maxeval <- 500;
             }
+            # The following ones don't really need the estimation. This is for consistency only
+            else if(any(distribution==c("dnorm","dlnorm")) & !recursiveModel){
+                maxeval <- 2;
+            }
             else{
                 maxeval <- 100;
             }
@@ -1173,13 +1180,14 @@ alm <- function(formula, data, subset, na.action,
             ellipsis$arima <- paste0("ARIMA(",paste0(ellipsis$arima,collapse=","),")");
         }
     }
+    # If the parameters are provided
     else{
         # The data are provided, so no need to do recursive fitting
         recursiveModel <- FALSE;
         # If this was ARI, then don't count the AR parameters
-        if(ariModel){
-            nVariablesExo <- nVariablesExo - ariOrder;
-        }
+        # if(ariModel){
+        #     nVariablesExo <- nVariablesExo - ariOrder;
+        # }
         nVariables <- length(B);
         variablesNames <- names(B);
         CFValue <- CF(B, distribution, y, matrixXreg, recursiveModel);

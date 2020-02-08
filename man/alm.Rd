@@ -8,7 +8,7 @@ alm(formula, data, subset, na.action, distribution = c("dnorm", "dlogis",
   "dlaplace", "dalaplace", "ds", "dt", "dfnorm", "dlnorm", "dbcnorm",
   "dinvgauss", "dpois", "dnbinom", "dbeta", "plogis", "pnorm"),
   occurrence = c("none", "plogis", "pnorm"), ar = 0, i = 0,
-  parameters = NULL, vcovProduce = FALSE, fast = TRUE, ...)
+  parameters = NULL, vcovProduce = FALSE, fast = FALSE, ...)
 }
 \arguments{
 \item{formula}{an object of class "formula" (or one that can be coerced to
@@ -56,14 +56,14 @@ is estimated.}
 coefficients or not. This is done via hessian calculation, so might be
 computationally costly.}
 
-\item{fast}{if \code{FALSE}, then the function won't check whether
+\item{fast}{if \code{TRUE}, then the function won't check whether
 the data has variability and whether the regressors are correlated. Might
 cause trouble, especially in cases of multicollinearity.}
 
 \item{...}{additional parameters to pass to distribution functions. This
 includes: \code{alpha} value for Asymmetric Laplace distribution,
 \code{size} for the Negative Binomial or \code{df} for the Chi-Squared and
-Student's t. You can also pass two parameters to the optimiser: 1.
+Student's t. You can also pass parameters to the optimiser: 1.
 \code{maxeval} - maximum number of evaluations to carry out (default is
 100); 2. \code{xtol_rel} - the precision of the optimiser (the default is
 1E-6); 3. \code{algorithm} - the algorithm to use in optimisation
@@ -139,9 +139,9 @@ See more details and examples in the vignette "ALM":
 mtcars2 <- within(mtcars, {
    vs <- factor(vs, labels = c("V", "S"))
    am <- factor(am, labels = c("automatic", "manual"))
-   cyl  <- ordered(cyl)
-   gear <- ordered(gear)
-   carb <- ordered(carb)
+   cyl  <- factor(cyl)
+   gear <- factor(gear)
+   carb <- factor(carb)
 })
 # The standard model with Log Normal distribution
 ourModel <- alm(mpg~., mtcars2[1:30,], distribution="dlnorm")

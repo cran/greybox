@@ -28,6 +28,18 @@
 #' @param y The numerical variable.
 #' @param use What observations to use. See \link[stats]{cor} function for details.
 #' The only option that is not available here is \code{"pairwise.complete.obs"}.
+#' @param method Which method to use for the calculation of measures of association.
+#' By default this is \code{"auto"}, which means that the function will use:
+#' \link[stats]{cor}, \link[greybox]{mcor} or \link[greybox]{cramer} - depending on
+#' the scales of variables. The other options force the function to use one and
+#' the same method for all the variables:
+#' \itemize{
+#' \item \code{"pearson"} - Pearson's correlation coefficient using \link[stats]{cor};
+#' \item \code{"spearman"} - Spearman's correlation coefficient based on \link[stats]{cor};
+#' \item \code{"kendall"} - Kendall's correlation coefficient via \link[stats]{cor};
+#' \item \code{"cramer"} - Cramer's V using \link[greybox]{cramer};
+#' }
+#' Be aware that the wrong usage of measures of association might give misleading results.
 #'
 #' @return The following list of values is returned:
 #' \itemize{
@@ -46,10 +58,12 @@
 #' @aliases assoc
 #' @rdname association
 #' @export association
-association <- function(x, y=NULL, use=c("na.or.complete","complete.obs","everything","all.obs")){
+association <- function(x, y=NULL, use=c("na.or.complete","complete.obs","everything","all.obs"),
+                        method=c("auto","pearson","spearman","kendall","cramer")){
     # Function returns the measures of association between the variables based on their type
 
     use <- substr(use[1],1,1);
+    method <- match.arg(method,c("auto","pearson","spearman","kendall","cramer"));
 
     if(is.matrix(x) | is.data.frame(x)){
         nVariablesX <- ncol(x);
@@ -97,58 +111,90 @@ association <- function(x, y=NULL, use=c("na.or.complete","complete.obs","everyt
         }
     }
 
-    matrixAssociation <- matrix(1,nVariables,nVariables, dimnames=list(namesData,namesData));
-    matrixPValues <- matrix(0,nVariables,nVariables, dimnames=list(namesData,namesData));
-    matrixTypes <- matrix("none",nVariables,nVariables, dimnames=list(namesData,namesData));
-
     numericDataX <- vector(mode="logical", length=nVariablesX);
-    if(is.data.frame(x)){
-        for(i in 1:nVariablesX){
-            numericDataX[i] <- is.numeric(x[[i]]);
-            if(numericDataX[i]){
-                if(length(unique(x[[i]]))<=10){
-                    numericDataX[i] <- FALSE;
-                }
-            }
-        }
-    }
-    else{
-        for(i in 1:nVariablesX){
-            numericDataX[i] <- is.numeric(x[,i]);
-            if(numericDataX[i]){
-                if(length(unique(x[,i]))<=10){
-                    numericDataX[i] <- FALSE;
-                }
-            }
-        }
-    }
-
-    if(!is.null(y)){
-        numericDataY <- vector(mode="logical", length=nVariablesY);
-        if(is.data.frame(y)){
-            for(i in 1:nVariablesY){
-                numericDataY[i] <- is.numeric(y[[i]]);
-                if(numericDataY[i]){
-                    if(length(unique(y[[i]]))<=10){
-                        numericDataY[i] <- FALSE;
+    if(method=="auto"){
+        if(is.data.frame(x)){
+            for(i in 1:nVariablesX){
+                numericDataX[i] <- is.numeric(x[[i]]);
+                if(numericDataX[i]){
+                    if(length(unique(x[[i]]))<=10){
+                        numericDataX[i] <- FALSE;
                     }
                 }
             }
         }
         else{
-            for(i in 1:nVariablesY){
-                numericDataY[i] <- is.numeric(y[,i]);
-                if(numericDataY[i]){
-                    if(length(unique(y[,i]))<=10){
-                        numericDataY[i] <- FALSE;
+            for(i in 1:nVariablesX){
+                numericDataX[i] <- is.numeric(x[,i]);
+                if(numericDataX[i]){
+                    if(length(unique(x[,i]))<=10){
+                        numericDataX[i] <- FALSE;
                     }
                 }
             }
         }
-        numericData <- c(numericDataX, numericDataY);
+
+        if(!is.null(y)){
+            numericDataY <- vector(mode="logical", length=nVariablesY);
+            if(is.data.frame(y)){
+                for(i in 1:nVariablesY){
+                    numericDataY[i] <- is.numeric(y[[i]]);
+                    if(numericDataY[i]){
+                        if(length(unique(y[[i]]))<=10){
+                            numericDataY[i] <- FALSE;
+                        }
+                    }
+                }
+            }
+            else{
+                for(i in 1:nVariablesY){
+                    numericDataY[i] <- is.numeric(y[,i]);
+                    if(numericDataY[i]){
+                        if(length(unique(y[,i]))<=10){
+                            numericDataY[i] <- FALSE;
+                        }
+                    }
+                }
+            }
+            numericData <- c(numericDataX, numericDataY);
+        }
+        else{
+            numericData <- numericDataX;
+        }
+        corMethod <- "pearson";
+    }
+    else if(method=="cramer"){
+        numericDataX[] <- FALSE;
+        if(!is.null(y)){
+            numericData <- c(numericDataX, rep(FALSE, nVariablesY));
+        }
+        else{
+            numericData <- numericDataX;
+        }
+        corMethod <- "pearson";
     }
     else{
-        numericData <- numericDataX;
+        if(any(sapply(x,is.factor)) | (!is.null(y) && any(sapply(y,is.factor)))){
+            warning(paste0("Some of the variables are in categorical scales. ",
+                           "Using \"",method,"\" correlation for the calculations might be meaningless!"),
+                    call.=FALSE);
+            if(any(sapply(x,is.factor))){
+                x <- sapply(x,as.numeric);
+                data <- x;
+            }
+            if(any(sapply(y,is.factor))){
+                y <- sapply(y,as.numeric);
+                data <- cbind(x,y);
+            }
+        }
+        numericDataX[] <- TRUE;
+        if(!is.null(y)){
+            numericData <- c(numericDataX, rep(TRUE, nVariablesY));
+        }
+        else{
+            numericData <- numericDataX;
+        }
+        corMethod <- method;
     }
 
     if(any(is.na(data))){
@@ -169,41 +215,81 @@ association <- function(x, y=NULL, use=c("na.or.complete","complete.obs","everyt
         }
     }
 
-    for(i in 1:nVariables){
-        for(j in 1:nVariables){
-            if(i>=j){
-                next;
-            }
+    if(is.null(y)){
+        matrixAssociation <- matrix(1,nVariables,nVariables, dimnames=list(namesData,namesData));
+        matrixPValues <- matrix(0,nVariables,nVariables, dimnames=list(namesData,namesData));
+        matrixTypes <- matrix("none",nVariables,nVariables, dimnames=list(namesData,namesData));
 
-            if(numericData[i] & numericData[j]){
-                matrixAssociation[i,j] <- cor(data[,i],data[,j],use=use);
-                matrixPValues[i,j] <- cor.test(data[,i],data[,j])$p.value;
-                matrixTypes[i,j] <- "cor";
+        for(i in 1:nVariables){
+            for(j in 1:nVariables){
+                if(i>=j){
+                    next;
+                }
+
+                if(numericData[i] & numericData[j]){
+                    corOutput <- suppressWarnings(cor.test(data[,i],data[,j],method=corMethod));
+                    matrixAssociation[i,j] <- corOutput$estimate;
+                    matrixPValues[i,j] <- corOutput$p.value
+                    matrixTypes[i,j] <- corMethod;
+                }
+                else if(!numericData[i] & !numericData[j]){
+                    cramerOutput <- cramer(data[,i],data[,j],use=use);
+                    matrixAssociation[i,j] <- cramerOutput$value;
+                    matrixPValues[i,j] <- cramerOutput$p.value;
+                    matrixTypes[i,j] <- "cramer";
+                }
+                else if(!numericData[i] & numericData[j]){
+                    mcorOutput <- mcor(data[,i],data[,j],use=use);
+                    matrixAssociation[i,j] <- mcorOutput$value;
+                    matrixPValues[i,j] <- mcorOutput$p.value;
+                    matrixTypes[i,j] <- "mcor";
+                }
+                else{
+                    mcorOutput <- mcor(data[,j],data[,i],use=use);
+                    matrixAssociation[i,j] <- mcorOutput$value;
+                    matrixPValues[i,j] <- mcorOutput$p.value;
+                    matrixTypes[i,j] <- "mcor";
+                }
             }
-            else if(!numericData[i] & !numericData[j]){
-                cramerOutput <- cramer(data[,i],data[,j],use=use);
-                matrixAssociation[i,j] <- cramerOutput$value;
-                matrixPValues[i,j] <- cramerOutput$p.value;
-                matrixTypes[i,j] <- "cramer";
-            }
-            else if(!numericData[i] & numericData[j]){
-                mcorOutput <- mcor(data[,i],data[,j],use=use);
-                matrixAssociation[i,j] <- mcorOutput$value;
-                matrixPValues[i,j] <- mcorOutput$p.value;
-                matrixTypes[i,j] <- "mcor";
-            }
-            else{
-                mcorOutput <- mcor(data[,j],data[,i],use=use);
-                matrixAssociation[i,j] <- mcorOutput$value;
-                matrixPValues[i,j] <- mcorOutput$p.value;
-                matrixTypes[i,j] <- "mcor";
+        }
+
+        matrixAssociation[lower.tri(matrixAssociation)] <- t(matrixAssociation)[lower.tri(matrixAssociation)];
+        matrixPValues[lower.tri(matrixPValues)] <- t(matrixPValues)[lower.tri(matrixPValues)];
+        matrixTypes[lower.tri(matrixTypes)] <- t(matrixTypes)[lower.tri(matrixTypes)];
+    }
+    else{
+        matrixAssociation <- matrix(1,nVariablesY,nVariablesX, dimnames=list(namesY,namesX));
+        matrixPValues <- matrix(0,nVariablesY,nVariablesX, dimnames=list(namesY,namesX));
+        matrixTypes <- matrix("none",nVariablesY,nVariablesX, dimnames=list(namesY,namesX));
+        for(i in 1:nVariablesY){
+            for(j in 1:nVariablesX){
+                if(numericDataY[i] & numericDataX[j]){
+                    corOutput <- suppressWarnings(cor.test(y[,i],x[,j],method=corMethod));
+                    matrixAssociation[i,j] <- corOutput$estimate;
+                    matrixPValues[i,j] <- corOutput$p.value
+                    matrixTypes[i,j] <- corMethod;
+                }
+                else if(!numericDataY[i] & !numericDataX[j]){
+                    cramerOutput <- cramer(y[,i],x[,j],use=use);
+                    matrixAssociation[i,j] <- cramerOutput$value;
+                    matrixPValues[i,j] <- cramerOutput$p.value;
+                    matrixTypes[i,j] <- "cramer";
+                }
+                else if(!numericDataY[i] & numericDataX[j]){
+                    mcorOutput <- mcor(y[,i],x[,j],use=use);
+                    matrixAssociation[i,j] <- mcorOutput$value;
+                    matrixPValues[i,j] <- mcorOutput$p.value;
+                    matrixTypes[i,j] <- "mcor";
+                }
+                else{
+                    mcorOutput <- mcor(x[,j],y[,i],use=use);
+                    matrixAssociation[i,j] <- mcorOutput$value;
+                    matrixPValues[i,j] <- mcorOutput$p.value;
+                    matrixTypes[i,j] <- "mcor";
+                }
             }
         }
     }
-
-    matrixAssociation[lower.tri(matrixAssociation)] <- t(matrixAssociation)[lower.tri(matrixAssociation)];
-    matrixPValues[lower.tri(matrixPValues)] <- t(matrixPValues)[lower.tri(matrixPValues)];
-    matrixTypes[lower.tri(matrixTypes)] <- t(matrixTypes)[lower.tri(matrixTypes)];
 
     return(structure(list(value=matrixAssociation, p.value=matrixPValues, type=matrixTypes),
                      class="association"));

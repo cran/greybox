@@ -1,4 +1,4 @@
-## ----setup, include = FALSE----------------------------------------------
+## ----setup, include = FALSE---------------------------------------------------
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
@@ -7,60 +7,60 @@ knitr::opts_chunk$set(
   fig.width=6
 )
 
-## ---- echo=FALSE, message=FALSE------------------------------------------
+## ---- echo=FALSE, message=FALSE-----------------------------------------------
 library(greybox)
 
-## ----BJxreg1-------------------------------------------------------------
+## ----BJxreg1------------------------------------------------------------------
 BJxreg <- xregExpander(BJsales.lead,lags=c(-5,-10))
 
-## ----BJxreg2-------------------------------------------------------------
+## ----BJxreg2------------------------------------------------------------------
 BJxreg <- xregExpander(BJsales.lead,lags=c(7,-5,-10))
 
-## ----BJxreg3-------------------------------------------------------------
+## ----BJxreg3------------------------------------------------------------------
 BJxreg <- xregExpander(BJsales.lead,lags=c(-10:10))
 
-## ----BJData--------------------------------------------------------------
+## ----BJData-------------------------------------------------------------------
 BJxreg <- as.data.frame(xregExpander(BJsales.lead,lags=c(-10:10)))
 BJxreg <- cbind(as.matrix(BJsales),BJxreg)
 colnames(BJxreg)[1] <- "y"
 ourModel <- stepwise(BJxreg)
 
-## ----BJStepwise----------------------------------------------------------
+## ----BJStepwise---------------------------------------------------------------
 ourModel <- stepwise(BJxreg)
 
-## ----BJStepwiseResult----------------------------------------------------
+## ----BJStepwiseResult---------------------------------------------------------
 ourModel
 
-## ----BJcombine1----------------------------------------------------------
+## ----BJcombine1---------------------------------------------------------------
 ourModel <- lmCombine(BJxreg[,-c(3:7,18:22)],bruteforce=TRUE)
 summary(ourModel)
 
-## ----BJcombine2----------------------------------------------------------
+## ----BJcombine2---------------------------------------------------------------
 ourModel <- lmCombine(BJxreg,bruteforce=FALSE)
 summary(ourModel)
 
-## ----BJcombine3----------------------------------------------------------
+## ----BJcombine3---------------------------------------------------------------
 BJInsample <- BJxreg[1:130,];
 BJHoldout <- BJxreg[-(1:130),];
 ourModel <- lmCombine(BJInsample,bruteforce=FALSE)
 
-## ----BJcombinePlot-------------------------------------------------------
+## ----BJcombinePlot------------------------------------------------------------
 summary(ourModel)
 plot(ourModel)
 
-## ----BJcombineForecast---------------------------------------------------
+## ----BJcombineForecast--------------------------------------------------------
 ourForecast <- predict(ourModel,BJHoldout)
 plot(ourForecast)
 
-## ----BJDynamicModel------------------------------------------------------
+## ----BJDynamicModel-----------------------------------------------------------
 ourModel <- lmDynamic(BJInsample,bruteforce=FALSE)
 
-## ----BJDynamicPlot-------------------------------------------------------
+## ----BJDynamicPlot------------------------------------------------------------
 ourSummary <- summary(ourModel)
 ourSummary
 plot(ourModel)
 
-## ----BJDynamicCoefficients-----------------------------------------------
+## ----BJDynamicCoefficients----------------------------------------------------
 # Coefficients in dynamics
 head(ourModel$coefficientsDynamic)
 # Standard errors of the coefficients in dynamics
@@ -68,14 +68,14 @@ head(ourModel$se)
 # Importance of parameters in dynamics
 head(ourModel$importance)
 
-## ----BJDynamicCoefficientsPlots, eval=FALSE, include=FALSE---------------
+## ----BJDynamicCoefficientsPlots, eval=FALSE, include=FALSE--------------------
 #  plot(coef(ourModel))
 
-## ----BJDynamicdf---------------------------------------------------------
+## ----BJDynamicdf--------------------------------------------------------------
 ourModel$dfDynamic
 ourModel$df.residualDynamic
 
-## ----BJDynamicForecast---------------------------------------------------
+## ----BJDynamicForecast--------------------------------------------------------
 ourForecast <- predict(ourModel,BJHoldout)
 plot(ourForecast)
 
