@@ -32,11 +32,6 @@ xreg[,1] <- xreg[,1]^2
 inSample <- xreg[1:80,]
 outSample <- xreg[-c(1:80),]
 
-## ----chisqREgression----------------------------------------------------------
-ourModel <- alm(y~x1+x2, data=inSample, distribution="dchisq",df=1)
-summary(ourModel)
-plot(predict(ourModel,outSample))
-
 ## ----dataRound----------------------------------------------------------------
 xreg[,1] <- round(sqrt(xreg[,1]))
 inSample <- xreg[1:80,]

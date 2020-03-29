@@ -21,14 +21,14 @@ There are several groups of functions in the package.
 1. cramer - calculates Cramer's V for two categorical variables. Plus tests the significance of such association.
 2. mcor - function returns the coefficients of multiple correlation between the variables. This is useful when measuring association between categorical and numerical variables.
 3. association (aka 'assoc()') - function returns matrix of measures of association, choosing between cramer(), mcor() and cor() depending on the types of variables.
-4. determination (aka 'determ()') - function returns the vector of coefficients of determination (R^2) for the provided data. This is useful for the diagnostics of multicollinearity.
+4. determination (and the method 'determ()') - function returns the vector of coefficients of determination (R^2) for the provided data. This is useful for the diagnostics of multicollinearity.
 5. tableplot - plots the graph for two categorical variables.
 6. spread - plots the matrix of scatter / boxplot / tableplot diagrams - depending on the type of the provided variables.
 7. graphmaker - plots the original series, the fitted values and the forecasts.
 
 ### Models evaluation functions
 1. ro - rolling origin evaluation (see the vignette).
-2. rmc - Regression for Multiple Comparison of forecasting methods. Can be used, for example, when RelMAE is calculated for several forecasting methods and an analysis of statistical significance in accuracy of methods needs to be carried out. This can be especially useful when you have a lot of methods to compare. The test is faster than Nemenyi in this case and becomes more powerful and accurate.
+2. rmcb - Regression for Multiple Comparison with the Best. This is a simplified version of the nemenyi / MCB test, relying on regression on ranks of methods.
 3. measures - the error measures for the provided forecasts. Includes MPE, MAPE, MASE, sMAE, sMSE, RelMAE, RelRMSE, MIS, sMIS, RelMIS, pinball and others.
 <!--5. nemenyi - non-parametric test for comparison of multiple classifiers / methods. This function not only conducts the test, but also provide the plots, showing the ranks of the different methods together with their confidence intervals.-->
 

@@ -117,7 +117,7 @@ BICc.varest <- function(object, ...){
 #'
 #' @param object Model estimated using one of the functions of smooth package.
 #' @param ... Currently nothing is accepted via ellipsis.
-#' @return     Either \code{"A"} for additive error or \code{"M"} for multiplicative.
+#' @return Either \code{"A"} for additive error or \code{"M"} for multiplicative.
 #' All the other functions return strings of character.
 #' @examples
 #'
@@ -149,7 +149,7 @@ errorType.ets <- function(object, ...){
 #' @importFrom stats logLik
 #' @export
 logLik.alm <- function(object, ...){
-    if(is.alm(object$occurrence)){
+    if(is.occurrence(object$occurrence)){
         return(structure(object$logLik,nobs=nobs(object),df=nparam(object)+nparam(object$occurrence),class="logLik"));
     }
     else{
@@ -210,7 +210,7 @@ pointLik.alm <- function(object, ...){
     distribution <- object$distribution;
     y <- actuals(object);
     ot <- y!=0;
-    if(is.alm(object$occurrence)){
+    if(is.occurrence(object$occurrence)){
         otU <- y!=0;
         y <- y[otU];
         mu <- object$mu[otU];
@@ -229,10 +229,12 @@ pointLik.alm <- function(object, ...){
                             "dbcnorm" = dbcnorm(y, mu=mu, sigma=scale, lambda=object$other$lambda, log=TRUE),
                             "dinvgauss" = dinvgauss(y, mean=mu, dispersion=scale/mu, log=TRUE),
                             "dlaplace" = dlaplace(y, mu=mu, scale=scale, log=TRUE),
+                            "dllaplace" = dlaplace(log(y), mu=mu, scale=scale, log=TRUE),
                             "dalaplace" = dalaplace(y, mu=mu, scale=scale, alpha=object$other$alpha, log=TRUE),
                             "dlogis" = dlogis(y, location=mu, scale=scale, log=TRUE),
                             "dt" = dt(y-mu, df=scale, log=TRUE),
                             "ds" = ds(y, mu=mu, scale=scale, log=TRUE),
+                            "dls" = ds(log(y), mu=mu, scale=scale, log=TRUE),
                             "dpois" = dpois(y, lambda=mu, log=TRUE),
                             "dnbinom" = dnbinom(y, mu=mu, size=object$other$size, log=TRUE),
                             "dchisq" = dchisq(y, df=object$other$df, ncp=mu, log=TRUE),
@@ -244,7 +246,7 @@ pointLik.alm <- function(object, ...){
     );
 
     # If this is a mixture model, take the respective probabilities into account (differential entropy)
-    if(is.alm(object$occurrence)){
+    if(is.occurrence(object$occurrence)){
         likValues[!otU] <- -switch(distribution,
                                    "dnorm" =,
                                    "dfnorm" =,
@@ -252,12 +254,14 @@ pointLik.alm <- function(object, ...){
                                    "dlnorm" = log(sqrt(2*pi)*scale)+0.5,
                                    "dinvgauss" = 0.5*(log(pi/2)+1+log(scale)),
                                    "dlaplace" =,
+                                   "dllaplace" =,
                                    "dalaplace" = (1 + log(2*scale)),
                                    "dlogis" = 2,
                                    "dt" = ((scale+1)/2 *
                                                (digamma((scale+1)/2)-digamma(scale/2)) +
                                                log(sqrt(scale) * beta(scale/2,0.5))),
-                                   "ds" = (2 + 2*log(2*scale)),
+                                   "ds" = ,
+                                   "dls" = (2 + 2*log(2*scale)),
                                    "dchisq" = (log(2)*gamma(scale/2)-
                                                    (1-scale/2)*digamma(scale/2)+
                                                    scale/2),
@@ -567,7 +571,7 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     greyboxForecast$distribution <- object$distribution;
 
     # If there is an occurrence part of the model, use it
-    if(is.alm(object$occurrence)){
+    if(is.occurrence(object$occurrence)){
         occurrence <- predict(object$occurrence, newdata, interval=interval, level=level, side=side, ...);
         # The probability of having zero should be subtracted from that thing...
         if(interval=="p"){
@@ -594,7 +598,7 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     levelUp[levelUp<0] <- 0;
 
     if(object$distribution=="dnorm"){
-        if(is.alm(object$occurrence) & interval!="n"){
+        if(is.occurrence(object$occurrence) & interval!="n"){
             greyboxForecast$lower[] <- qnorm(levelLow,greyboxForecast$mean,greyboxForecast$scale);
             greyboxForecast$upper[] <- qnorm(levelUp,greyboxForecast$mean,greyboxForecast$scale);
         }
@@ -606,6 +610,16 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
             greyboxForecast$lower[] <- qlaplace(levelLow,greyboxForecast$mean,scaleValues);
             greyboxForecast$upper[] <- qlaplace(levelUp,greyboxForecast$mean,scaleValues);
         }
+        greyboxForecast$scale <- scaleValues;
+    }
+    else if(object$distribution=="dllaplace"){
+        # Use the connection between the variance and MAE in Laplace distribution
+        scaleValues <- sqrt(greyboxForecast$variances/2);
+        if(interval!="n"){
+            greyboxForecast$lower[] <- exp(qlaplace(levelLow,greyboxForecast$mean,scaleValues));
+            greyboxForecast$upper[] <- exp(qlaplace(levelUp,greyboxForecast$mean,scaleValues));
+        }
+        greyboxForecast$mean[] <- exp(greyboxForecast$mean);
         greyboxForecast$scale <- scaleValues;
     }
     else if(object$distribution=="dalaplace"){
@@ -634,6 +648,16 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
             greyboxForecast$lower[] <- qs(levelLow,greyboxForecast$mean,scaleValues);
             greyboxForecast$upper[] <- qs(levelUp,greyboxForecast$mean,scaleValues);
         }
+        greyboxForecast$scale <- scaleValues;
+    }
+    else if(object$distribution=="dls"){
+        # Use the connection between the variance and scale in S distribution
+        scaleValues <- (greyboxForecast$variances/120)^0.25;
+        if(interval!="n"){
+            greyboxForecast$lower[] <- exp(qs(levelLow,greyboxForecast$mean,scaleValues));
+            greyboxForecast$upper[] <- exp(qs(levelUp,greyboxForecast$mean,scaleValues));
+        }
+        greyboxForecast$mean <- exp(greyboxForecast$mean);
         greyboxForecast$scale <- scaleValues;
     }
     else if(object$distribution=="dfnorm"){
@@ -692,14 +716,7 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
         greyboxForecast$scale <- sigma;
     }
     else if(object$distribution=="dinvgauss"){
-        # This is a multiplicative model, so the variance is different
-        # if(interval=="p"){
-        #     residualsVariance <- sigma(object)^2;
-        #     greyboxForecast$variance[] <- greyboxForecast$variance - residualsVariance;
-        #     greyboxForecast$variance[] <- (greyboxForecast$variance * (residualsVariance+1) +
-        #                                        residualsVariance * greyboxForecast$mean^2);
-        # }
-        # greyboxForecast$scale <- greyboxForecast$variance / greyboxForecast$mean^3;
+        greyboxForecast$mean <- exp(greyboxForecast$mean);
         if(interval=="p"){
             greyboxForecast$scale <- object$scale;
         }
@@ -798,7 +815,7 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     }
 
     # If there is an occurrence part of the model, use it
-    if(is.alm(object$occurrence)){
+    if(is.occurrence(object$occurrence)){
         greyboxForecast$mean <- greyboxForecast$mean * occurrence$mean;
         #### This is weird and probably wrong. But I don't know yet what the confidence intervals mean in case of occurrence model.
         if(interval=="c"){
@@ -1154,8 +1171,8 @@ predict.almari <- function(object, newdata=NULL, interval=c("none", "confidence"
         }
 
         # Transform the lagged response variables
-        if(any(object$distribution==c("dlnorm","dpois","dnbinom"))){
-            if(any(y==0) & !is.alm(object$occurrence)){
+        if(any(object$distribution==c("dlnorm","dllaplace","dls","dpois","dnbinom"))){
+            if(any(y==0) & !is.occurrence(object$occurrence)){
                 # Use Box-Cox if there are zeroes
                 matrixOfxregFull[,nonariParametersNumber+c(1:ariOrder)] <- (matrixOfxregFull[,nonariParametersNumber+c(1:ariOrder)]^0.01-1)/0.01;
                 colnames(matrixOfxregFull)[nonariParametersNumber+c(1:ariOrder)] <- paste0(ariNames,"Box-Cox");
@@ -1584,7 +1601,7 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         }
 
         # If the mixture distribution, then do the upper bound
-        if(is.alm(x$occurrence)){
+        if(is.occurrence(x$occurrence)){
             zValues <- suppressWarnings(predict(x, interval="p", side="u", level=level));
             if(any(is.infinite(zValues$lower))){
                 zValues$lower[is.infinite(zValues$lower)] <- 0;
@@ -1634,7 +1651,7 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             yName <- "Studentised";
         }
 
-        if(is.alm(x$occurrence)){
+        if(is.occurrence(x$occurrence)){
             ellipsis$x <- ellipsis$x[actuals(x$occurrence)!=0];
             ellipsis$y <- ellipsis$y[actuals(x$occurrence)!=0];
         }
@@ -1660,15 +1677,22 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         }
 
         zValues <- switch(x$distribution,
-                          "dlaplace"=qlaplace(c((1-level)/2, (1+level)/2), 0, 1),
+                          "dlaplace"=,
+                          "dllaplace"=qlaplace(c((1-level)/2, (1+level)/2), 0, 1),
                           "dalaplace"=qalaplace(c((1-level)/2, (1+level)/2), 0, 1, x$other$alpha),
                           "dlogis"=qlogis(c((1-level)/2, (1+level)/2), 0, 1),
                           "dt"=qt(c((1-level)/2, (1+level)/2), nobs(x)-nparam(x)),
-                          "ds"=qs(c((1-level)/2, (1+level)/2), 0, 1),
+                          "ds"=,
+                          "dls"=qs(c((1-level)/2, (1+level)/2), 0, 1),
                           # In the next one, the scale is debiased, taking n-k into account
                           "dinvgauss"=qinvgauss(c((1-level)/2, (1+level)/2), mean=1,
                                                 dispersion=x$scale * nobs(x) / (nobs(x)-nparam(x))),
                           qnorm(c((1-level)/2, (1+level)/2), 0, 1));
+        # Analyse stuff in logarithms if the error is multiplicative
+        if(x$distribution=="dinvgauss"){
+            ellipsis$y[] <- log(ellipsis$y);
+            zValues[] <- log(zValues);
+        }
         outliers <- which(ellipsis$y >zValues[2] | ellipsis$y <zValues[1]);
         # cat(paste0(round(length(outliers)/length(ellipsis$y),3)*100,"% of values are outside the bounds\n"));
 
@@ -1720,14 +1744,18 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         ellipsis <- list(...);
 
         ellipsis$x <- fitted(x);
+        ellipsis$y <- as.vector(residuals(x));
+        if(x$distribution=="dinvgauss"){
+            ellipsis$y[] <- log(ellipsis$y);
+        }
         if(type=="abs"){
-            ellipsis$y <- abs(residuals(x));
+            ellipsis$y[] <- abs(ellipsis$y);
         }
         else{
-            ellipsis$y <- residuals(x)^2;
+            ellipsis$y[] <- as.vector(ellipsis$y)^2;
         }
 
-        if(is.alm(x$occurrence)){
+        if(is.occurrence(x$occurrence)){
             ellipsis$x <- ellipsis$x[ellipsis$y!=0];
             ellipsis$y <- ellipsis$y[ellipsis$y!=0];
         }
@@ -1764,7 +1792,7 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         ellipsis <- list(...);
 
         ellipsis$y <- residuals(x);
-        if(is.alm(x$occurrence)){
+        if(is.occurrence(x$occurrence)){
             ellipsis$y <- ellipsis$y[actuals(x$occurrence)!=0];
         }
 
@@ -1783,7 +1811,7 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             do.call(qqnorm, ellipsis);
             qqline(ellipsis$y);
         }
-        else if(x$distribution=="dlaplace"){
+        else if(any(x$distribution==c("dlaplace","dllaplace"))){
             if(!any(names(ellipsis)=="main")){
                 ellipsis$main <- "QQ-plot of Laplace distribution";
             }
@@ -1810,7 +1838,7 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             do.call(qqplot, ellipsis);
             qqline(ellipsis$y, distribution=function(p) qlogis(p, location=0, scale=x$scale));
         }
-        else if(x$distribution=="ds"){
+        else if(any(x$distribution==c("ds","dls"))){
             if(!any(names(ellipsis)=="main")){
                 ellipsis$main <- "QQ-plot of S distribution";
             }
@@ -2146,9 +2174,11 @@ print.summary.alm <- function(x, ...){
                       "dnorm" = "Normal",
                       "dlogis" = "Logistic",
                       "dlaplace" = "Laplace",
+                      "dllaplace" = "Log Laplace",
                       "dalaplace" = paste0("Asymmetric Laplace with alpha=",round(x$other$alpha,2)),
                       "dt" = paste0("Student t with df=",round(x$other$df, digits)),
                       "ds" = "S",
+                      "dls" = "Log S",
                       "dfnorm" = "Folded Normal",
                       "dlnorm" = "Log Normal",
                       "dbcnorm" = paste0("Box-Cox Normal with lambda=",round(x$other$lambda,2)),
@@ -2160,7 +2190,7 @@ print.summary.alm <- function(x, ...){
                       "plogis" = "Cumulative logistic",
                       "pnorm" = "Cumulative normal"
     );
-    if(is.alm(x$occurrence)){
+    if(is.occurrence(x$occurrence)){
         distribOccurrence <- switch(x$occurrence$distribution,
                                     "plogis" = "Cumulative logistic",
                                     "pnorm" = "Cumulative normal"
@@ -2197,9 +2227,11 @@ print.summary.greybox <- function(x, ...){
                       "dnorm" = "Normal",
                       "dlogis" = "Logistic",
                       "dlaplace" = "Laplace",
+                      "dllaplace" = "Log Laplace",
                       "dalaplace" = "Asymmetric Laplace",
                       "dt" = "Student t",
                       "ds" = "S",
+                      "ds" = "Log S",
                       "dfnorm" = "Folded Normal",
                       "dlnorm" = "Log Normal",
                       "dbcnorm" = "Box-Cox Normal",
@@ -2241,9 +2273,11 @@ print.summary.greyboxC <- function(x, ...){
                       "dnorm" = "Normal",
                       "dlogis" = "Logistic",
                       "dlaplace" = "Laplace",
+                      "dllaplace" = "Log Laplace",
                       "dalaplace" = "Asymmetric Laplace",
                       "dt" = "Student t",
                       "ds" = "S",
+                      "dls" = "Log S",
                       "dfnorm" = "Folded Normal",
                       "dlnorm" = "Log Normal",
                       "dbcnorm" = "Box-Cox Normal",
@@ -2315,7 +2349,7 @@ rstandard.greybox <- function(model, ...){
     df <- obs - nparam(model);
     errors <- residuals(model);
     # If this is an occurrence model, then only modify the non-zero obs
-    if(is.alm(model$occurrence)){
+    if(is.occurrence(model$occurrence)){
         residsToGo <- which(actuals(model$occurrence)!=0);
     }
     else{
@@ -2324,14 +2358,14 @@ rstandard.greybox <- function(model, ...){
     if(any(model$distribution==c("dt","dnorm","dlnorm","dbcnorm","dnbinom","dpois"))){
         return((errors - mean(errors[residsToGo])) / sqrt(sum(residuals(model)^2) / df));
     }
-    else if(model$distribution=="ds"){
+    else if(any(model$distribution==c("ds","dls"))){
             return((errors - mean(errors[residsToGo])) / (model$scale * obs / df)^2);
     }
     else if(model$distribution=="dinvgauss"){
             return(errors / mean(errors[residsToGo]));
     }
     else{
-        return((errors - mean(errors[residsToGo])) / model$scale * obs / df);
+        return(errors / model$scale * obs / df);
     }
 }
 
@@ -2341,25 +2375,27 @@ rstudent.greybox <- function(model, ...){
     obs <- nobs(model);
     df <- obs - nparam(model) - 1;
     rstudentised <- errors <- residuals(model);
-    errors[] <- errors - mean(errors);
     # If this is an occurrence model, then only modify the non-zero obs
-    if(is.alm(model$occurrence)){
+    if(is.occurrence(model$occurrence)){
         residsToGo <- which(actuals(model$occurrence)!=0);
     }
     else{
         residsToGo <- c(1:obs);
     }
     if(any(model$distribution==c("dt","dnorm","dlnorm","dbcnorm"))){
+        errors[] <- errors - mean(errors);
         for(i in residsToGo){
             rstudentised[i] <- errors[i] / sqrt(sum(errors[-i]^2) / df);
         }
     }
-    else if(model$distribution=="ds"){
+    else if(any(model$distribution==c("ds","dls"))){
+        errors[] <- errors - mean(errors);
         for(i in residsToGo){
             rstudentised[i] <- errors[i] / (sum(sqrt(abs(errors[-i]))) / (2*df))^2;
         }
     }
-    else if(model$distribution=="dlaplace"){
+    else if(any(model$distribution==c("dlaplace","dllaplace"))){
+        errors[] <- errors - mean(errors);
         for(i in residsToGo){
             rstudentised[i] <- errors[i] / (sum(abs(errors[-i])) / df);
         }
@@ -2370,12 +2406,12 @@ rstudent.greybox <- function(model, ...){
         }
     }
     else if(model$distribution=="dlogis"){
+        errors[] <- errors - mean(errors);
         for(i in residsToGo){
             rstudentised[i] <- errors[i] / (sqrt(sum(errors[-i]^2) / df) * sqrt(3) / pi);
         }
     }
     else if(model$distribution=="dinvgauss"){
-        errors[] <- residuals(model);
         for(i in residsToGo){
             rstudentised[i] <- errors[i] / mean(errors[residsToGo][-i]);
         }
@@ -2577,7 +2613,7 @@ vcov.alm <- function(object, ...){
     interceptIsNeeded <- any(names(coef(object))=="(Intercept)");
 
     if(iOrderNone & any(object$distribution==c("dnorm","dlnorm","dbcnorm"))){
-        matrixXreg <- object$data[object$subset,-1,drop=FALSE];
+        matrixXreg <- object$data[eval(object$subset),-1,drop=FALSE];
         if(interceptIsNeeded){
             matrixXreg <- cbind(1,matrixXreg);
             colnames(matrixXreg)[1] <- "(Intercept)";
@@ -2709,4 +2745,15 @@ vcov.greyboxD <- function(object, ...){
 vcov.lmGreybox <- function(object, ...){
     vcov <- sigma(object)^2 * solve(crossprod(object$xreg));
     return(vcov);
+}
+
+#' @export
+summary.lmGreybox <- function(object, level=0.95, ...){
+    parametersTable <- cbind(coef(object),sqrt(diag(vcov(object))));
+    parametersTable <- cbind(parametersTable, parametersTable[,1]+qnorm((1-level)/2,0,parametersTable[,2]),
+                             parametersTable[,1]+qnorm((1+level)/2,0,parametersTable[,2]));
+    colnames(parametersTable) <- c("Estimate","Std. Error",
+                                   paste0("Lower ",(1-level)/2*100,"%"),
+                                   paste0("Upper ",(1+level)/2*100,"%"));
+    return(parametersTable)
 }

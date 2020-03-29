@@ -1,3 +1,27 @@
+greybox v0.5.9 (Release data: 2020-03-29)
+==============
+
+Changes:
+* A parameter lowess is added to the spread() function. It plots lowess lines on scatterplots and connects means on boxplots of the function.
+* Inverse Gaussian now implies a pure multiplicative model - we take exponent of the (x'B). This way the mean is always positive.
+* Moved to Hessian from pracma package instead of numDeriv. It is faster.
+* rmc() is renamed into rmcb() and now focuses on doing regression on ranks. This is equivalent to MCB, but faster.
+* determ() is now a method that returns determination for different classes.
+* Removed dchisq from the alm().
+* RMSSE in error measures().
+* plot.rmcb() now has a "select" parameter.
+* alm() now returns class "occurrence" if occurrence was used. This is needed in order to connect alm() with es() / mes() from smooth.
+* Introduced a proper is.occurrence() method.
+* Log Laplace and Log S distributions in alm.
+
+Bugfixes:
+* A fix of a bug in case the data is not provided explicitly.
+* Fix for vcov, which used subset without evaluating it.
+* A bugfix in rstandard and rstudent for distribution="dalaplace".
+* graphmaker() would fail if start was not a vector.
+* stepwise() would sometimes fail in case of distribution="dnorm", returing NULL qr.
+
+
 greybox v0.5.8 (Release data: 2020-02-08)
 ==============
 

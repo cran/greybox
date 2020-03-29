@@ -24,7 +24,8 @@
 #' used on residuals).
 #' @param method Method of correlations calculation. The default is Kendall's
 #' Tau, which should be applicable to a wide range of data in different scales.
-#' @param distribution Distribution to pass to \code{alm()}.
+#' @param distribution Distribution to pass to \code{alm()}. See \link[greybox]{alm}
+#' for details.
 #' @param occurrence what distribution to use for occurrence part. See
 #' \link[greybox]{alm} for details.
 #' @param ... This is temporary and is needed in order to capture "silent"
@@ -64,7 +65,9 @@
 #' @export stepwise
 stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL,
                      method=c("pearson","kendall","spearman"),
-                     distribution=c("dnorm","dfnorm","dlnorm","dlaplace","ds","dchisq","dlogis",
+                     distribution=c("dnorm","dlogis","dlaplace","dalaplace","ds","dt",
+                                    "dfnorm","dlnorm","dllaplace","dls","dbcnorm","dinvgauss",
+                                    "dpois","dnbinom",
                                     "plogis","pnorm"),
                      occurrence=c("none","plogis","pnorm"), ...){
 ##### Function that selects variables based on IC and using partial correlations
@@ -101,19 +104,17 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         rowsSelected <- rep(TRUE,nrow(data));
     }
 
+    # If occurrence is not provideded, then set it to "none"
+    if(is.null(occurrence)){
+        occurrence <- "none";
+    }
     # Check occurrence. If it is not "none" then use alm().
-    if(is.alm(occurrence)){
+    if(is.occurrence(occurrence)){
         useALM <- TRUE;
         rowsSelected <- rowsSelected & (data[,1]!=0);
     }
     else{
-        occurrence <- occurrence[1];
-        if(all(occurrence!=c("none","plogis","pnorm"))){
-            warning(paste0("Sorry, but we don't know what to do with the occurrence '",occurrence,
-                        "'. Switching to 'none'."), call.=FALSE);
-            occurrence <- "none";
-        }
-
+        occurrence <- match.arg(occurrence);
         if(any(occurrence==c("plogis","pnorm"))){
             useALM <- TRUE;
             rowsSelected <- rowsSelected & (data[,1]!=0);
@@ -324,7 +325,7 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         bestModel <- do.call(lmCall,listToCall);
         # Expand the data from the final model
         bestModel$data <- cbind(listToCall$data[[1]],model.matrix(bestFormula,listToCall$data)[,-1]);
-        colnames(bestModel$data) <- c(responseName,colnames(bestModel$qr)[-1]);
+        colnames(bestModel$data) <- c(responseName,varsNames);
         rm(listToCall);
 
         bestModel$distribution <- distribution;
@@ -333,7 +334,7 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         # This is number of variables + constant + variance
         bestModel$df <- length(bestModel$coefficients) + 1;
         bestModel$df.residual <- obsInsample - bestModel$df;
-        names(bestModel$coefficients) <- colnames(bestModel$qr);
+        names(bestModel$coefficients) <- c("(Intercept)",varsNames);
         # Remove redundant bits
         bestModel$effects <- NULL;
         bestModel$qr <- NULL;
@@ -356,6 +357,9 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
                              envir = parent.frame());
         bestModel$call$occurrence <- substitute(occurrence);
         class(bestModel) <- c("alm","greybox");
+        if(any(distribution==c("plogis","pnorm"))){
+            class(bestModel) <- c(class(bestModel),"occurrence");
+        }
     }
 
     bestModel$ICs <- unlist(allICs);

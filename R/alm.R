@@ -8,13 +8,15 @@
 #' \item \link[stats]{dnorm} - Normal distribution,
 #' \item \link[stats]{dlogis} - Logistic Distribution,
 #' \item \link[greybox]{dlaplace} - Laplace distribution,
+#' \item dllaplace - Log Laplace distribution,
 #' \item \link[greybox]{dalaplace} - Asymmetric Laplace distribution,
 #' \item \link[stats]{dt} - T-distribution,
 #' \item \link[greybox]{ds} - S-distribution,
+#' \item dls - Log S-distribution,
 #' \item \link[greybox]{dfnorm} - Folded normal distribution,
 #' \item \link[stats]{dlnorm} - Log normal distribution,
 #' \item \link[greybox]{dbcnorm} - Box-Cox normal distribution,
-#' \item \link[stats]{dchisq} - Chi-Squared Distribution,
+# \item \link[stats]{dchisq} - Chi-Squared Distribution,
 #' \item \link[statmod]{dinvgauss} - Inverse Gaussian distribution,
 #' \item \link[stats]{dbeta} - Beta distribution,
 #' \item \link[stats]{dpois} - Poisson Distribution,
@@ -187,7 +189,7 @@
 #' summary(ourModel)
 #' plot(predict(ourModel,outSample,interval="p"))
 #'
-#' @importFrom numDeriv hessian
+#' @importFrom pracma hessian
 #' @importFrom nloptr nloptr
 #' @importFrom stats model.frame sd terms model.matrix
 #' @importFrom stats dchisq dlnorm dnorm dlogis dpois dnbinom dt dbeta
@@ -197,7 +199,7 @@
 #' @export alm
 alm <- function(formula, data, subset, na.action,
                 distribution=c("dnorm","dlogis","dlaplace","dalaplace","ds","dt",
-                               "dfnorm","dlnorm","dbcnorm","dinvgauss",
+                               "dfnorm","dlnorm","dllaplace","dls","dbcnorm","dinvgauss",
                                "dpois","dnbinom",
                                "dbeta",
                                "plogis","pnorm"),
@@ -206,27 +208,9 @@ alm <- function(formula, data, subset, na.action,
                 parameters=NULL, vcovProduce=FALSE, fast=FALSE, ...){
 # Useful stuff for dnbinom: https://scialert.net/fulltext/?doi=ajms.2010.1.15
 
+    B <- parameters;
     cl <- match.call();
-
-    #### This is temporary and needs to be removed at some point! ####
-    B <- depricator(parameters, list(...));
-    fast <- depricator(fast, list(...));
-
-    distribution <- distribution[1];
-    if(all(distribution!=c("dnorm","dlogis","dlaplace","dalaplace","ds","dt","dfnorm","dlnorm",
-                           "dchisq","dbcnorm","dinvgauss",
-                           "dpois","dnbinom","dbeta","plogis","pnorm"))){
-        if(any(distribution==c("norm","fnorm","lnorm","laplace","s","chisq","logis"))){
-            warning(paste0("You are using the old value of the distribution parameter.\n",
-                           "Use distribution='d",distribution,"' instead."),
-                    call.=FALSE);
-            distribution <- paste0("d",distribution);
-        }
-        else{
-            stop(paste0("Sorry, but the distribution '",distribution,
-                        "' is not yet supported"), call.=FALSE);
-        }
-    }
+    distribution <- match.arg(distribution);
 
     #### Functions used in the estimation ####
     ifelseFast <- function(condition, yes, no){
@@ -344,6 +328,7 @@ alm <- function(formula, data, subset, na.action,
         }
 
         mu[] <- switch(distribution,
+                       "dinvgauss"=,
                        "dpois" =,
                        "dnbinom" = exp(matrixXreg %*% B),
                        "dchisq" = ifelseFast(any(matrixXreg %*% B <0),1E+100,(matrixXreg %*% B)^2),
@@ -352,12 +337,13 @@ alm <- function(formula, data, subset, na.action,
                        "dfnorm" =,
                        "dlnorm" =,
                        "dbcnorm"=,
-                       "dinvgauss" =,
                        "dlaplace" =,
+                       "dllaplace" =,
                        "dalaplace" =,
                        "dlogis" =,
                        "dt" =,
                        "ds" =,
+                       "dls" =,
                        "pnorm" =,
                        "plogis" = matrixXreg %*% B
         );
@@ -370,9 +356,11 @@ alm <- function(formula, data, subset, na.action,
                         "dbcnorm" = sqrt(sum((bcTransform(y[otU],other)-mu[otU])^2)/obsInsample),
                         "dinvgauss" = sum((y[otU]/mu[otU]-1)^2 / (y[otU]/mu[otU]))/obsInsample,
                         "dlaplace" = sum(abs(y[otU]-mu[otU]))/obsInsample,
+                        "dllaplace" = sum(abs(log(y[otU])-mu[otU]))/obsInsample,
                         "dalaplace" = sum((y[otU]-mu[otU]) * (other - (y[otU]<=mu[otU])*1))/obsInsample,
                         "dlogis" = sqrt(sum((y[otU]-mu[otU])^2)/obsInsample * 3 / pi^2),
                         "ds" = sum(sqrt(abs(y[otU]-mu[otU]))) / (obsInsample*2),
+                        "dls" = sum(sqrt(abs(log(y[otU])-mu[otU]))) / (obsInsample*2),
                         "dt" = ,
                         "dchisq" =,
                         "dnbinom" = abs(other),
@@ -414,7 +402,7 @@ alm <- function(formula, data, subset, na.action,
         }
 
         # The original log-likelilhood
-        CFReturn <- -sum(switch(distribution,
+        CFValue <- -sum(switch(distribution,
                                 "dnorm" = dnorm(y[otU], mean=fitterReturn$mu[otU], sd=fitterReturn$scale, log=TRUE),
                                 "dfnorm" = dfnorm(y[otU], mu=fitterReturn$mu[otU], sigma=fitterReturn$scale, log=TRUE),
                                 "dlnorm" = dlnorm(y[otU], meanlog=fitterReturn$mu[otU], sdlog=fitterReturn$scale, log=TRUE),
@@ -423,11 +411,13 @@ alm <- function(formula, data, subset, na.action,
                                 "dinvgauss" = dinvgauss(y[otU], mean=fitterReturn$mu[otU],
                                                         dispersion=fitterReturn$scale/fitterReturn$mu[otU], log=TRUE),
                                 "dlaplace" = dlaplace(y[otU], mu=fitterReturn$mu[otU], scale=fitterReturn$scale, log=TRUE),
+                                "dllaplace" = dlaplace(log(y[otU]), mu=fitterReturn$mu[otU], scale=fitterReturn$scale, log=TRUE)-log(y[otU]),
                                 "dalaplace" = dalaplace(y[otU], mu=fitterReturn$mu[otU], scale=fitterReturn$scale,
                                                         alpha=fitterReturn$other, log=TRUE),
                                 "dlogis" = dlogis(y[otU], location=fitterReturn$mu[otU], scale=fitterReturn$scale, log=TRUE),
                                 "dt" = dt(y[otU]-fitterReturn$mu[otU], df=fitterReturn$scale, log=TRUE),
                                 "ds" = ds(y[otU], mu=fitterReturn$mu[otU], scale=fitterReturn$scale, log=TRUE),
+                                "dls" = ds(log(y[otU]), mu=fitterReturn$mu[otU], scale=fitterReturn$scale, log=TRUE)-log(y[otU]),
                                 "dchisq" = dchisq(y[otU], df=fitterReturn$scale, ncp=fitterReturn$mu[otU], log=TRUE),
                                 "dpois" = dpois(y[otU], lambda=fitterReturn$mu[otU], log=TRUE),
                                 "dnbinom" = dnbinom(y[otU], mu=fitterReturn$mu[otU], size=fitterReturn$scale, log=TRUE),
@@ -440,46 +430,50 @@ alm <- function(formula, data, subset, na.action,
 
         # The differential entropy for the models with the missing data
         if(occurrenceModel){
-            CFReturn[] <- CFReturn + switch(distribution,
-                                            "dnorm" =,
-                                            "dfnorm" =,
-                                            "dbcnorm" =,
-                                            "dlnorm" = obsZero*(log(sqrt(2*pi)*fitterReturn$scale)+0.5),
-                                            "dinvgauss" = obsZero*(0.5*(log(pi/2)+1+suppressWarnings(log(fitterReturn$scale)))),
-                                            "dlaplace" =,
-                                            "dalaplace" = obsZero*(1 + log(2*fitterReturn$scale)),
-                                            "dlogis" = obsZero*2,
-                                            "dt" = obsZero*((fitterReturn$scale+1)/2 *
-                                                                (digamma((fitterReturn$scale+1)/2)-digamma(fitterReturn$scale/2)) +
-                                                                log(sqrt(fitterReturn$scale) * beta(fitterReturn$scale/2,0.5))),
-                                            "ds" = obsZero*(2 + 2*log(2*fitterReturn$scale)),
-                                            "dchisq" = obsZero*(log(2)*gamma(fitterReturn$scale/2)-
-                                                                    (1-fitterReturn$scale/2)*digamma(fitterReturn$scale/2)+
-                                                                    fitterReturn$scale/2),
-                                            "dbeta" = sum(log(beta(fitterReturn$mu[otU],fitterReturn$scale[otU]))-
-                                                              (fitterReturn$mu[otU]-1)*
-                                                              (digamma(fitterReturn$mu[otU])-
-                                                                   digamma(fitterReturn$mu[otU]+fitterReturn$scale[otU]))-
-                                                              (fitterReturn$scale[otU]-1)*
-                                                              (digamma(fitterReturn$scale[otU])-
-                                                                   digamma(fitterReturn$mu[otU]+fitterReturn$scale[otU]))),
-                                            # This is a normal approximation of the real entropy
-                                            # "dpois" = sum(0.5*log(2*pi*fitterReturn$scale)+0.5),
-                                            # "dnbinom" = obsZero*(log(sqrt(2*pi)*fitterReturn$scale)+0.5),
-                                            0
+            CFValue[] <- CFValue + switch(distribution,
+                                          "dnorm" =,
+                                          "dfnorm" =,
+                                          "dbcnorm" =,
+                                          "dlnorm" = obsZero*(log(sqrt(2*pi)*fitterReturn$scale)+0.5),
+                                          # "dinvgauss" = 0.5*(obsZero*(log(pi/2)+1+suppressWarnings(log(fitterReturn$scale)))-
+                                          #                                 sum(log(fitterReturn$mu[!otU]))),
+                                          "dinvgauss" = obsZero*(0.5*(log(pi/2)+1+suppressWarnings(log(fitterReturn$scale)))),
+                                          "dlaplace" =,
+                                          "dllaplace" =,
+                                          "dalaplace" = obsZero*(1 + log(2*fitterReturn$scale)),
+                                          "dlogis" = obsZero*2,
+                                          "dt" = obsZero*((fitterReturn$scale+1)/2 *
+                                                              (digamma((fitterReturn$scale+1)/2)-digamma(fitterReturn$scale/2)) +
+                                                              log(sqrt(fitterReturn$scale) * beta(fitterReturn$scale/2,0.5))),
+                                          "ds" =,
+                                          "dls" = obsZero*(2 + 2*log(2*fitterReturn$scale)),
+                                          "dchisq" = obsZero*(log(2)*gamma(fitterReturn$scale/2)-
+                                                                  (1-fitterReturn$scale/2)*digamma(fitterReturn$scale/2)+
+                                                                  fitterReturn$scale/2),
+                                          "dbeta" = sum(log(beta(fitterReturn$mu[otU],fitterReturn$scale[otU]))-
+                                                            (fitterReturn$mu[otU]-1)*
+                                                            (digamma(fitterReturn$mu[otU])-
+                                                                 digamma(fitterReturn$mu[otU]+fitterReturn$scale[otU]))-
+                                                            (fitterReturn$scale[otU]-1)*
+                                                            (digamma(fitterReturn$scale[otU])-
+                                                                 digamma(fitterReturn$mu[otU]+fitterReturn$scale[otU]))),
+                                          # This is a normal approximation of the real entropy
+                                          # "dpois" = sum(0.5*log(2*pi*fitterReturn$scale)+0.5),
+                                          # "dnbinom" = obsZero*(log(sqrt(2*pi)*fitterReturn$scale)+0.5),
+                                          0
             );
         }
 
-        if(is.nan(CFReturn) | is.na(CFReturn) | is.infinite(CFReturn)){
-            CFReturn[] <- 1E+300;
+        if(is.nan(CFValue) | is.na(CFValue) | is.infinite(CFValue)){
+            CFValue[] <- 1E+300;
         }
 
         # Check the roots of polynomials
         if(arOrder>0 && any(abs(polyroot(fitterReturn$poly1))<1)){
-            CFReturn[] <- CFReturn / min(abs(polyroot(fitterReturn$poly1)));
+            CFValue[] <- CFValue / min(abs(polyroot(fitterReturn$poly1)));
         }
 
-        return(CFReturn);
+        return(CFValue);
     }
 
     #### Define the rest of parameters ####
@@ -542,8 +536,12 @@ alm <- function(formula, data, subset, na.action,
         }
     }
 
+    # If occurrence is not provideded, then set it to "none"
+    if(is.null(occurrence)){
+        occurrence <- "none";
+    }
     # See if the occurrence model is provided, and whether we need to treat the data as intermittent
-    if(is.alm(occurrence)){
+    if(is.occurrence(occurrence)){
         occurrenceModel <- TRUE;
         occurrenceProvided <- TRUE;
     }
@@ -633,6 +631,9 @@ alm <- function(formula, data, subset, na.action,
             dataContainsNaNs <- FALSE;
         }
     }
+    else{
+        dataContainsNaNs <- FALSE;
+    }
 
     responseName <- all.vars(formula)[1];
 
@@ -689,7 +690,7 @@ alm <- function(formula, data, subset, na.action,
     errors <- vector("numeric", obsInsample);
     ot <- vector("logical", obsInsample);
 
-    if(any(y<0) & any(distribution==c("dfnorm","dlnorm","dbcnorm","dinvgauss","dchisq","dpois","dnbinom"))){
+    if(any(y<0) & any(distribution==c("dfnorm","dlnorm","dllaplace","dls","dbcnorm","dinvgauss","dchisq","dpois","dnbinom"))){
         stop(paste0("Negative values are not allowed in the response variable for the distribution '",distribution,"'"),
              call.=FALSE);
     }
@@ -889,7 +890,7 @@ alm <- function(formula, data, subset, na.action,
             }
             nVariables <- nVariables + arOrder;
             # Write down the values for the matrixXreg in the necessary transformations
-            if(any(distribution==c("dlnorm","dpois","dnbinom"))){
+            if(any(distribution==c("dlnorm","dllaplace","dls","dpois","dnbinom"))){
                 if(any(y[otU]==0)){
                     # Use Box-Cox if there are zeroes
                     ariElements[] <- bcTransform(ariElements,0.01);
@@ -925,7 +926,7 @@ alm <- function(formula, data, subset, na.action,
 
         #### I(0) initialisation ####
         if(iOrder==0){
-            if(any(distribution==c("dlnorm","dpois","dnbinom"))){
+            if(any(distribution==c("dlnorm","dllaplace","dls","dpois","dnbinom","dinvgauss"))){
                 if(any(y[otU]==0)){
                     # Use Box-Cox if there are zeroes
                     B <- .lm.fit(matrixXreg[otU,,drop=FALSE],bcTransform(y[otU],0.01))$coefficients;
@@ -1000,7 +1001,7 @@ alm <- function(formula, data, subset, na.action,
                 matrixXregForDiffs <- matrixXregForDiffs[-c(1:iOrder),,drop=FALSE];
             }
 
-            if(any(distribution==c("dlnorm","dpois","dnbinom"))){
+            if(any(distribution==c("dlnorm","dllaplace","dls","dpois","dnbinom","dinvgauss"))){
                 B <- .lm.fit(matrixXregForDiffs,diff(log(y[otU]),differences=iOrder))$coefficients;
             }
             else if(any(distribution==c("plogis","pnorm"))){
@@ -1272,7 +1273,9 @@ alm <- function(formula, data, subset, na.action,
                        "dpois" =,
                        "dnbinom" = mu,
                        "dchisq" = mu + df,
-                       "dlnorm" = exp(mu),
+                       "dlnorm" =,
+                       "dllaplace" =,
+                       "dls" = exp(mu),
                        "dbcnorm" = bcTransformInv(mu,lambda),
                        "dbeta" = mu / (mu + scale),
                        "pnorm" = pnorm(mu, mean=0, sd=1),
@@ -1293,8 +1296,10 @@ alm <- function(formula, data, subset, na.action,
                        "dpois" = y - mu,
                        "dinvgauss" = y / mu,
                        "dchisq" = sqrt(y) - sqrt(mu),
-                       "dlnorm"= log(y) - mu,
-                       "dbcnorm"= bcTransform(y,lambda) - mu,
+                       "dlnorm" =,
+                       "dllaplace" =,
+                       "dls" = log(y) - mu,
+                       "dbcnorm" = bcTransform(y,lambda) - mu,
                        "pnorm" = qnorm((y - pnorm(mu, 0, 1) + 1) / 2, 0, 1),
                        "plogis" = log((1 + y * (1 + exp(mu))) / (1 + exp(mu) * (2 - y) - y))
                        # Here we use the proxy from Svetunkov & Boylan (2019)
@@ -1351,15 +1356,15 @@ alm <- function(formula, data, subset, na.action,
     if(vcovProduce){
         # Only vcov is needed, no point in redoing the occurrenceModel
         occurrenceModel <- FALSE;
-        method.args <- list(eps=1e-4, d=0.1, r=4);
+        # method.args <- list(eps=1e-4, d=0.1, r=4);
         # if(CDF){
         #     method.args <- list(d=1e-6, r=6);
         # }
         # else{
         #     if(any(distribution==c("dnbinom","dlaplace","dalaplace","dbcnorm"))){
-        if(distribution==c("dinvgauss")){
-            method.args <- list(d=1e-6, r=6);
-        }
+        # if(distribution==c("dinvgauss")){
+        #     method.args <- list(d=1e-6, r=4);
+        # }
         #     else{
         #         method.args <- list(d=1e-4, r=4);
         #     }
@@ -1376,7 +1381,7 @@ alm <- function(formula, data, subset, na.action,
             }
         }
         else{
-            vcovMatrix <- hessian(CF, B, method.args=method.args,
+            vcovMatrix <- hessian(CF, B, #method.args=method.args,
                                   distribution=distribution, y=y, matrixXreg=matrixXreg,
                                   recursiveModel=recursiveModel);
         }
@@ -1447,48 +1452,17 @@ alm <- function(formula, data, subset, na.action,
 
         # New data and new response variable
         dataNew <- mf$data[mf$subset,,drop=FALSE];
-        # if(ncol(dataNew)>1){
-        #     y <- as.matrix(dataNew[,all.vars(formula)[1],drop=FALSE]);
-        # }
-        # else{
-        #     y <- dataNew[,1,drop=FALSE]
-        # }
-        # If there are NaN values, substitute them by zeroes
-        # if(any(is.nan(y))){
-        #     y[is.nan(y)] <- 0;
-        # }
-        # ot <- y!=0;
         dataNew[,all.vars(formula)[1]] <- (ot)*1;
 
         if(!occurrenceProvided){
             occurrence <- do.call("alm", list(formula=formula, data=dataNew, distribution=occurrence, ar=arOrder, i=iOrder));
         }
 
-        # Corrected fitted (with zeroes, when y=0)
-        # yFittedNew <- yFitted;
-        # yFitted <- vector("numeric",length(y));
-        # yFitted[] <- 0;
+        # Corrected fitted (with probabilities)
         yFitted[] <- yFitted * fitted(occurrence);
-
-        # Corrected errors (with zeroes, when y=0)
-        # errorsNew <- errors;
-        # errors <- vector("numeric",length(y));
-        # errors[] <- 0;
-        # errors[ot] <- errorsNew;
 
         # Correction of the likelihood
         CFValue <- CFValue - occurrence$logLik;
-
-        # Form the final dataWork in order to return it in the data.
-        # dataWork <- eval(mf, parent.frame());
-        # dataWork <- model.matrix(dataWork,data=dataWork);
-
-        # Add AR elements if needed
-        # if(ariModel){
-        #     ariMatrix <- matrix(0, nrow(dataWork), ariOrder, dimnames=list(NULL, ariTransformedNames));
-        #     ariMatrix[] <- ariElements;
-        #     dataWork <- cbind(dataWork,ariMatrix);
-        # }
 
         if(interceptIsNeeded){
             # This shit is needed, because R has habit of converting everything into vectors...
@@ -1533,11 +1507,17 @@ alm <- function(formula, data, subset, na.action,
         mu <- yFitted;
     }
 
-    finalModel <- list(coefficients=B, vcov=vcovMatrix, fitted=yFitted, residuals=as.vector(errors),
-                       mu=mu, scale=scale, distribution=distribution, logLik=-CFValue,
-                       df.residual=obsInsample-nParam, df=nParam, call=cl, rank=nParam,
-                       data=dataWork,
-                       occurrence=occurrence, subset=subset, other=ellipsis);
+    finalModel <- structure(list(coefficients=B, vcov=vcovMatrix, fitted=yFitted, residuals=as.vector(errors),
+                                 mu=mu, scale=scale, distribution=distribution, logLik=-CFValue,
+                                 df.residual=obsInsample-nParam, df=nParam, call=cl, rank=nParam,
+                                 data=dataWork,
+                                 occurrence=occurrence, subset=subset, other=ellipsis),
+                            class=c("alm","greybox"));
 
-    return(structure(finalModel,class=c("alm","greybox")));
+    # If this is an occurrence model, flag it as one
+    if(any(distribution==c("plogis","pnorm"))){
+        class(finalModel) <- c(class(finalModel),"occurrence");
+    }
+
+    return(finalModel);
 }
