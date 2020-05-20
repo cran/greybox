@@ -1,8 +1,8 @@
 Package: greybox
 Type: Package
 Title: Toolbox for Model Building and Forecasting
-Version: 0.5.9
-Date: 2020-03-29
+Version: 0.6.0
+Date: 2020-05-19
 Authors@R: c(person("Ivan", "Svetunkov", email = "ivan@svetunkov.ru", role = c("aut", "cre"),
                   comment="Lecturer at Centre for Marketing Analytics and Forecasting, Lancaster University, UK"),
              person("Yves R.", "Sagaert", role = c("ctb"),
@@ -21,20 +21,20 @@ Description: Implements functions and instruments for regression model building 
 License: GPL (>= 2)
 Depends: R (>= 3.0.2)
 Imports: forecast, stats, graphics, utils, lamW, pracma, nloptr,
-        statmod
+        statmod, zoo, Matrix
 LinkingTo: Rcpp
 Suggests: smooth (>= 2.5.1), doMC, doParallel, foreach, testthat,
         rmarkdown, knitr
 Enhances: vars
-RoxygenNote: 7.0.2
+RoxygenNote: 7.1.0
 VignetteBuilder: knitr
 Encoding: UTF-8
 NeedsCompilation: yes
-Packaged: 2020-03-29 00:20:23 UTC; config
+Packaged: 2020-05-19 22:48:35 UTC; config
 Author: Ivan Svetunkov [aut, cre] (Lecturer at Centre for Marketing Analytics
     and Forecasting, Lancaster University, UK),
   Yves R. Sagaert [ctb] (Visiting Research at Centre for Marketing
     Analytics and Forecasting, Lancaster University, UK)
 Maintainer: Ivan Svetunkov <ivan@svetunkov.ru>
 Repository: CRAN
-Date/Publication: 2020-03-29 08:20:02 UTC
+Date/Publication: 2020-05-20 10:20:02 UTC

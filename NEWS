@@ -1,3 +1,25 @@
+greybox v0.6.0 (Release data: 2020-05-19)
+==============
+
+Changes:
+* The first default plot from plot.greybox() now is the "Actuals vs Fitted" instead of "Fitted over time", which is arguably more useful.
+* Residuals diagnostics instruments, including hatvalues() and cooks.distance(). These don't work perfectly for non-normal distributions, but at least they give an idea. Nota that the values differ from lm() due to the different number of degrees of freedom.
+* Residuals over time and cook's distance are now produced in plot.greybox() under numbers 8, 9 and 12.
+* actuals() now has an explicit parameter all.
+* sigma() now returns the value based on the non-zero data only.
+* Make error measures a bit more robust towards what they process.
+* Make ACF / PACF plots in plot.greybox() easier to read.
+* graphmaker() now accepts matrices in lower and upper.
+* parReset in graphmaker() now does not set its own par(), unless a legend is used.
+* New method: temporaldummy() that creates matrix of dummy variables for the selected type of frequency of a period. e.g. this can produce dummies for weeks of year.
+
+Bugfixes:
+* stepwise() would fail if one of the variables contain a name with "`".
+* lmCombine() and lmDynamic() would not work in cases with fat regression and stepwise giving more than 14 variables.
+* Fix in alm() with "`" symbol.
+* A fix in alm() for formula provided as alm(formula(ourModel), ...).
+
+
 greybox v0.5.9 (Release data: 2020-03-29)
 ==============
 

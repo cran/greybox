@@ -54,6 +54,7 @@
 #'
 #' @export graphmaker
 #' @importFrom graphics rect
+#' @importFrom zoo zoo
 graphmaker <- function(actuals, forecast, fitted=NULL, lower=NULL, upper=NULL,
                        level=NULL, legend=TRUE, cumulative=FALSE, vline=TRUE,
                        parReset=TRUE, ...){
@@ -105,13 +106,19 @@ graphmaker <- function(actuals, forecast, fitted=NULL, lower=NULL, upper=NULL,
             parMar <- c(3,3,2,1);
         }
         else{
-            parMar <- c(3,3,3,1);
+            parMar <- c(3,3,4,1);
         }
     }
 
     legendCall <- list(x="bottom");
-    legendCall$legend <- c("Series","Fitted values",pointForecastLabel,
-                           paste0(level*100,"% prediction interval"),"Forecast origin");
+    if(length(level>1)){
+        legendCall$legend <- c("Series","Fitted values",pointForecastLabel,
+                               paste0(paste0(level*100,collapse=", "),"% prediction intervals"),"Forecast origin");
+    }
+    else{
+        legendCall$legend <- c("Series","Fitted values",pointForecastLabel,
+                               paste0(level*100,"% prediction interval"),"Forecast origin");
+    }
     legendCall$col <- c("black","purple","blue","darkgrey","red");
     legendCall$lwd <- c(1,2,2,3,2);
     legendCall$lty <- c(1,2,1,2,1);
@@ -135,23 +142,40 @@ graphmaker <- function(actuals, forecast, fitted=NULL, lower=NULL, upper=NULL,
 
     # Estimate plot range
     if(is.null(ellipsis$ylim)){
-        ellipsis$ylim <- range(min(actuals[!is.na(actuals)],fitted[!is.na(fitted)],
-                                   forecast[!is.na(forecast)],lower[!is.na(lower)],upper[!is.na(upper)]),
-                               max(actuals[!is.na(actuals)],fitted[!is.na(fitted)],
-                                   forecast[!is.na(forecast)],lower[!is.na(lower)],upper[!is.na(upper)]));
+        ellipsis$ylim <- range(c(as.vector(actuals[is.finite(actuals)]),as.vector(fitted[is.finite(fitted)]),
+                                 as.vector(forecast[is.finite(forecast)]),
+                                 as.vector(lower[is.finite(lower)]),as.vector(upper[is.finite(upper)])),
+                               na.rm=TRUE);
     }
 
     # If the start time of forecast is the same as the start time of the actuals, change ts of forecast
     if(time(forecast)[1]==time(actuals)[1]){
-        forecast <- ts(forecast, start=time(actuals)[length(actuals)]+deltat(actuals), frequency=frequency(actuals));
+        if(is.ts(actuals)){
+            forecast <- ts(forecast, start=time(actuals)[length(actuals)]+deltat(actuals), frequency=frequency(actuals));
+        }
+        else{
+            forecast <- zoo(forecast, order.by=time(actuals)[length(actuals)]+round(mean(diff(time(actuals))),0)*c(1:h));
+        }
         if(intervals){
-            if(length(upper)!=length(fitted) && length(lower)!=length(fitted)){
-                upper <- ts(upper, start=start(forecast), frequency=frequency(actuals));
-                lower <- ts(lower, start=start(forecast), frequency=frequency(actuals));
+            if(is.ts(actuals)){
+                if(length(upper)!=length(fitted) && length(lower)!=length(fitted)){
+                    upper <- ts(upper, start=start(forecast), frequency=frequency(actuals));
+                    lower <- ts(lower, start=start(forecast), frequency=frequency(actuals));
+                }
+                else{
+                    upper <- ts(upper, start=start(actuals), frequency=frequency(actuals));
+                    lower <- ts(lower, start=start(actuals), frequency=frequency(actuals));
+                }
             }
             else{
-                upper <- ts(upper, start=start(actuals), frequency=frequency(actuals));
-                lower <- ts(lower, start=start(actuals), frequency=frequency(actuals));
+                if(length(upper)!=length(fitted) && length(lower)!=length(fitted)){
+                    upper <- zoo(upper, order.by=time(forecast));
+                    lower <- zoo(lower, order.by=time(forecast));
+                }
+                else{
+                    upper <- zoo(upper, order.by=time(forecast));
+                    lower <- zoo(lower, order.by=time(forecast));
+                }
             }
         }
     }
@@ -197,7 +221,12 @@ graphmaker <- function(actuals, forecast, fitted=NULL, lower=NULL, upper=NULL,
         legendCall$pch <- legendCall$pch[legendElements];
         legendCall$bty <- "n";
 
-        par(cex=0.75,mar=rep(0.1,4),bty="n",xaxt="n",yaxt="n")
+        if(parReset){
+            par(cex=0.75, mar=rep(0.1,4), bty="n", xaxt="n", yaxt="n")
+        }
+        else{
+            par(mar=rep(0.1,4), bty="n", xaxt="n", yaxt="n")
+        }
         plot(0,0,col="white")
         legendDone <- do.call("legend", legendCall);
         rect(legendDone$rect$left-0.02, legendDone$rect$top-legendDone$rect$h,
@@ -205,11 +234,16 @@ graphmaker <- function(actuals, forecast, fitted=NULL, lower=NULL, upper=NULL,
 
     }
 
-    par(mar=parMar, cex=1, bty="o", xaxt="s", yaxt="s");
+    if(parReset){
+        par(mar=parMar, cex=1, bty="o", xaxt="s", yaxt="s");
+    }
+    # else{
+    #     par(mar=parMar, bty="o", xaxt="s", yaxt="s");
+    # }
     do.call(plot, ellipsis);
 
     if(any(!is.na(fitted))){
-        lines(fitted,col="purple",lwd=2,lty=2);
+        lines(fitted, col="purple", lwd=2, lty=2);
     }
     else{
         legendElements[2] <- FALSE;
@@ -221,18 +255,90 @@ graphmaker <- function(actuals, forecast, fitted=NULL, lower=NULL, upper=NULL,
 
     if(intervals){
         if(h!=1){
-            lines(lower,col="darkgrey",lwd=3,lty=2);
-            lines(upper,col="darkgrey",lwd=3,lty=2);
             # Draw the nice areas between the borders
-            polygon(c(time(upper),rev(time(lower))),
-                    c(as.vector(upper), rev(as.vector(lower))),
-                    col="lightgrey", border=NA, density=10);
+            if(is.matrix(lower) && is.matrix(upper) && ncol(lower)==ncol(upper)){
+                for(i in 1:ncol(lower)){
+                    if(all(is.finite(upper[,i])) && all(is.finite(lower[,i]))){
+                        polygon(c(time(upper[,i]),rev(time(lower[,i]))),
+                                c(as.vector(upper[,i]), rev(as.vector(lower[,i]))),
+                                col="lightgrey", border=NA, density=(ncol(lower)-i+1)*10);
+                    }
+                }
+            }
+            # If the number of columns is different, then do polygon for the last ones only
+            else if(is.matrix(lower) && is.matrix(upper) && ncol(lower)!=ncol(upper)){
+                polygon(c(time(upper[,ncol(upper)]),rev(time(lower[,ncol(lower)]))),
+                        c(as.vector(upper[,ncol(upper)]), rev(as.vector(lower[,ncol(lower)]))),
+                        col="lightgrey", border=NA, density=10);
+            }
+            # If upper is not a matrix, use it as a vector
+            else if(is.matrix(lower) && !is.matrix(upper)){
+                polygon(c(time(upper),rev(time(lower[,ncol(lower)]))),
+                        c(as.vector(upper), rev(as.vector(lower[,ncol(lower)]))),
+                        col="lightgrey", border=NA, density=10);
+            }
+            # If lower is not a matrix, use it as a vector
+            else if(!is.matrix(lower) && is.matrix(upper)){
+                polygon(c(time(upper[,ncol(upper)]),rev(time(lower))),
+                        c(as.vector(upper[,ncol(upper)]), rev(as.vector(lower))),
+                        col="lightgrey", border=NA, density=10);
+            }
+            # Otherwise use both as vectors
+            else{
+                if(all(is.finite(upper)) && all(is.finite(lower))){
+                    polygon(c(time(upper),rev(time(lower))),
+                            c(as.vector(upper), rev(as.vector(lower))),
+                            col="lightgrey", border=NA, density=10);
+                }
+            }
+
+            # Draw the lines
+            if(is.matrix(lower)){
+                col <- grey(1-c(1:ncol(lower))/(ncol(lower)+1));
+                for(i in 1:ncol(lower)){
+                    lines(lower[,i],col=col[i],lwd=2,lty=2);
+                }
+            }
+            else{
+                lines(lower,col="darkgrey",lwd=3,lty=2);
+            }
+
+            if(is.matrix(upper)){
+                col <- grey(1-c(1:ncol(upper))/(ncol(upper)+1));
+                for(i in 1:ncol(upper)){
+                    lines(upper[,i],col=col[i],lwd=2,lty=2);
+                }
+            }
+            else{
+                lines(upper,col="darkgrey",lwd=3,lty=2);
+            }
 
             lines(forecast,col="blue",lwd=2);
         }
+        # Code for the h=1
         else{
-            points(lower,col="darkgrey",lwd=3,pch=4);
-            points(upper,col="darkgrey",lwd=3,pch=4);
+            if(length(lower)>1){
+                col <- grey(1-c(1:ncol(lower))/(ncol(lower)+1));
+                for(i in 1:length(lower)){
+                    if(is.finite(lower[i])){
+                        points(lower[i],col=col[i],lwd=1+i,pch=4);
+                    }
+                }
+            }
+            else{
+                points(lower,col="darkgrey",lwd=3,pch=4);
+            }
+            if(length(upper)>1){
+                col <- grey(1-c(1:ncol(upper))/(ncol(upper)+1));
+                for(i in 1:length(upper)){
+                    if(is.finite(upper[i])){
+                        points(upper[i],col=col[i],lwd=1+i,pch=4);
+                    }
+                }
+            }
+            else{
+                points(upper,col="darkgrey",lwd=3,pch=4);
+            }
             points(forecast,col="blue",lwd=2,pch=4);
         }
     }

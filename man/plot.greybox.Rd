@@ -14,20 +14,24 @@
 
 \item{which}{Which of the plots to produce. The possible options (see details for explanations):
 \enumerate{
-\item Fitted over time;
+\item Actuals vs Fitted values;
 \item Standardised residuals vs Fitted;
 \item Studentised residuals vs Fitted;
 \item Absolute residuals vs Fitted;
 \item Squared residuals vs Fitted;
 \item Q-Q plot with the specified distribution;
+\item Fitted over time;
+\item Standardised residuals vs Time;
+\item Studentised residuals vs Time;
 \item ACF of the residuals;
-\item PACF of the residuals.
+\item PACF of the residuals;
+\item Cook's distance over time.
 }}
 
-\item{level}{Confidence level. Defines width of confidence interval. Used in plots (1), (2),
-(6) and (7).}
+\item{level}{Confidence level. Defines width of confidence interval. Used in plots (2), (3), (7),
+(8), (9), (10) and (11).}
 
-\item{legend}{If \code{TRUE}, then the legend is produced on plots (1), (2) and (3).}
+\item{legend}{If \code{TRUE}, then the legend is produced on plots (2), (3) and (7).}
 
 \item{ask}{Logical; if \code{TRUE}, the user is asked to press Enter before each plot.}
 
@@ -44,10 +48,9 @@ The function produces fitted values and plots for the residuals of the greybox f
 \details{
 The list of produced plots includes:
 \enumerate{
-\item Fitted over time. Plots actuals (black line), fitted values (purple line) and
-prediction interval (red lines) of width \code{level}, but only in the case, when there
-are some values lying outside of it. Can be used in order to make sure that the model
-did not miss any important events over time;
+\item Actuals vs Fitted values. Allows analysing, whether there are any issues in the fit.
+Does the variability of actuals increase with the increase of fitted values? Is the relation
+well captured? They grey line on the plot corresponds to the perfect fit of the model.
 \item Standardised residuals vs Fitted. Plots the points and the confidence bounds
 (red lines) for the specified confidence \code{level}. Useful for the analysis of outliers;
 \item Studentised residuals vs Fitted. This is similar to the previous plot, but with the
@@ -58,13 +61,23 @@ to outliers;
 \item Q-Q plot with the specified distribution. Can be used in order to see if the
 residuals follow the assumed distribution. The type of distribution depends on the one used
 in the estimation (see \code{distribution} parameter in \link[greybox]{alm});
+\item Fitted over time. Plots actuals (black line), fitted values (purple line) and
+prediction interval (red lines) of width \code{level}, but only in the case, when there
+are some values lying outside of it. Can be used in order to make sure that the model
+did not miss any important events over time;
+\item Standardised residuals vs Time. Useful if you want to see, if there is autocorrelation or
+if there is heteroscedasticity in time. This also shows, when the outliers happen;
+\item Studentised residuals vs Time. Similar to previous, but with studentised residuals;
 \item ACF of the residuals. Are the residuals autocorrelated? See \link[stats]{acf} for
 details;
 \item PACF of the residuals. No, really, are they autocorrelated? See \link[stats]{pacf}
 for details;
+\item Cook's distance over time. Shows influential observations. If a value is above 0.5, then
+this means that the observation influences the parameters of the model. This does not work well
+for non-normal distributions.
 }
-Which of the plots to produce, is specified via the \code{which} parameter. The plots 1, 2, 3,
-7 and 8 also use the parameters \code{level}, which specifies the confidence level for
+Which of the plots to produce, is specified via the \code{which} parameter. The plots 2, 3, 7,
+8 and 9 also use the parameters \code{level}, which specifies the confidence level for
 the intervals.
 }
 \examples{
@@ -73,10 +86,10 @@ xreg <- cbind(rlaplace(100,10,3),rnorm(100,50,5))
 xreg <- cbind(100+0.5*xreg[,1]-0.75*xreg[,2]+rlaplace(100,0,3),xreg,rnorm(100,300,10))
 colnames(xreg) <- c("y","x1","x2","Noise")
 
-ourModel <- alm(y~x1+x2, xreg, distribution="dlaplace")
+ourModel <- alm(y~x1+x2, xreg, distribution="dnorm")
 
-par(mfcol=c(2,3))
-plot(ourModel, c(1,2,4,5,7,8))
+par(mfcol=c(3,4))
+plot(ourModel, c(1:12))
 
 }
 \seealso{
