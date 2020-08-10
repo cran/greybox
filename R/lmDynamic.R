@@ -74,7 +74,7 @@
 #'
 #' @export lmDynamic
 lmDynamic <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, silent=TRUE,
-                      distribution=c("dnorm","dlogis","dlaplace","dalaplace","ds","dt",
+                      distribution=c("dnorm","dlaplace","ds","dgnorm","dlogis","dt","dalaplace",
                                      "dfnorm","dlnorm","dllaplace","dls","dbcnorm","dinvgauss",
                                      "dpois","dnbinom",
                                      "plogis","pnorm"),
@@ -83,10 +83,12 @@ lmDynamic <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, s
     cl <- match.call();
     cl$formula <- as.formula(paste0("`",colnames(data)[1],"`~ ."));
 
-    #### This is temporary and needs to be removed at some point! ####
-    bruteforce[] <- depricator(bruteforce, list(...));
-
     ellipsis <- list(...);
+    # Only likelihood is supported by the function
+    loss <- "likelihood";
+    if(is.null(ellipsis$loss)){
+       ellipsis$loss <- loss;
+    }
 
     # If they asked for parallel, make checks and try to do that
     if(parallel){
@@ -180,19 +182,9 @@ lmDynamic <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, s
     #     }
     # }
 
-    ic <- ic[1];
-    if(ic=="AIC"){
-        IC <- pAIC;
-    }
-    else if(ic=="AICc"){
-        IC <- pAICc;
-    }
-    else if(ic=="BIC"){
-        IC <- pBIC;
-    }
-    else if(ic=="BICc"){
-        IC <- pBICc;
-    }
+    # Define the function of IC
+    ic <- match.arg(ic);
+    IC <- switch(ic,"AIC"=AIC,"BIC"=BIC,"BICc"=BICc,AICc);
 
     # Define what function to use in the estimation
     if(useALM){

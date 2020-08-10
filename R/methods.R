@@ -224,9 +224,11 @@ pointLik.alm <- function(object, ...){
     likValues <- vector("numeric",nobs(object));
     likValues[otU] <- switch(distribution,
                             "dnorm" = dnorm(y, mean=mu, sd=scale, log=TRUE),
-                            "dfnorm" = dfnorm(y, mu=mu, sigma=scale, log=TRUE),
                             "dlnorm" = dlnorm(y, meanlog=mu, sdlog=scale, log=TRUE),
-                            "dbcnorm" = dbcnorm(y, mu=mu, sigma=scale, lambda=object$other$lambda, log=TRUE),
+                            "dgnorm" = dgnorm(y, mu=mu, alpha=scale, beta=object$other$beta, log=TRUE),
+                            "dlgnorm" = dgnorm(log(y), mu=mu, alpha=scale, beta=object$other$beta, log=TRUE),
+                            "dfnorm" = dfnorm(y, mu=mu, sigma=scale, log=TRUE),
+                            "dbcnorm" = dbcnorm(y, mu=mu, sigma=scale, lambda=object$other$lambdaBC, log=TRUE),
                             "dinvgauss" = dinvgauss(y, mean=mu, dispersion=scale/mu, log=TRUE),
                             "dlaplace" = dlaplace(y, mu=mu, scale=scale, log=TRUE),
                             "dllaplace" = dlaplace(log(y), mu=mu, scale=scale, log=TRUE),
@@ -244,6 +246,9 @@ pointLik.alm <- function(object, ...){
                             "pnorm" = c(pnorm(mu[ot], mean=0, sd=1, log.p=TRUE),
                                         pnorm(mu[!ot], mean=0, sd=1, lower.tail=FALSE, log.p=TRUE))
     );
+    if(any(distribution==c("dllaplace","dls","dlgnorm"))){
+        likValues[otU] <- likValues[otU] - log(y);
+    }
 
     # If this is a mixture model, take the respective probabilities into account (differential entropy)
     if(is.occurrence(object$occurrence)){
@@ -252,6 +257,9 @@ pointLik.alm <- function(object, ...){
                                    "dfnorm" =,
                                    "dbcnorm" =,
                                    "dlnorm" = log(sqrt(2*pi)*scale)+0.5,
+                                   "dgnorm" =,
+                                   "dlgnorm" = 1/object$other$beta -
+                                       log(object$other$beta / (2*scale*gamma(1/object$other$beta))),
                                    "dinvgauss" = 0.5*(log(pi/2)+1+log(scale)),
                                    "dlaplace" =,
                                    "dllaplace" =,
@@ -651,19 +659,24 @@ sigma.varest <- function(object, ...){
 #' @importFrom stats vcov
 #' @export
 vcov.alm <- function(object, ...){
-    # Are i orders provided? If not, use simpler methods for calculation, when possible
-    iOrderNone <- is.null(object$call$i) || (object$call$i==0);
+    nVariables <- length(coef(object));
+    variablesNames <- names(coef(object));
+    interceptIsNeeded <- any(variablesNames=="(Intercept)");
 
-    interceptIsNeeded <- any(names(coef(object))=="(Intercept)");
+    # If the likelihood is not available, then this is a non-conventional loss
+    if(is.na(logLik(object))){
+        warning(paste0("You used loss='",object$loss,
+                       "'. The covariance matrix of parameters might be incorrect."),
+                call.=FALSE);
+    }
 
-    if(iOrderNone & any(object$distribution==c("dnorm","dlnorm","dbcnorm"))){
+    if(any(object$distribution==c("dnorm","dlnorm","dbcnorm"))){
         matrixXreg <- object$data[eval(object$subset),-1,drop=FALSE];
         if(interceptIsNeeded){
             matrixXreg <- cbind(1,matrixXreg);
             colnames(matrixXreg)[1] <- "(Intercept)";
         }
         # colnames(matrixXreg) <- names(coef(object));
-        nVariables <- ncol(matrixXreg);
         matrixXreg <- crossprod(matrixXreg);
         vcovMatrixTry <- try(chol2inv(chol(matrixXreg)), silent=TRUE);
         if(any(class(vcovMatrixTry)=="try-error")){
@@ -683,7 +696,7 @@ vcov.alm <- function(object, ...){
         }
         # vcov <- object$scale^2 * vcovMatrix;
         vcov <- sigma(object, all=FALSE)^2 * vcovMatrix;
-        rownames(vcov) <- colnames(vcov) <- names(coef(object));
+        rownames(vcov) <- colnames(vcov) <- variablesNames;
     }
     # else if(iOrderNone & (object$distribution=="dnorm")){
     #     # matrixXreg <- model.matrix(formula(object),data=object$data);
@@ -715,6 +728,39 @@ vcov.alm <- function(object, ...){
     #     vcov <- sigma(object, all=FALSE)^2 * vcovMatrix;
     #     rownames(vcov) <- colnames(vcov) <- names(coef(object));
     # }
+    else if(object$distribution=="dpois"){
+        matrixXreg <- object$data[eval(object$subset),-1,drop=FALSE];
+        obsInsample <- nobs(object);
+        if(interceptIsNeeded){
+            matrixXreg <- cbind(1,matrixXreg);
+            colnames(matrixXreg)[1] <- "(Intercept)";
+        }
+        # colnames(matrixXreg) <- names(coef(object));
+        FIMatrix <- matrixXreg[1,] %*% t(matrixXreg[1,]) * object$mu[1];
+        for(j in 2:obsInsample){
+            FIMatrix[] <- FIMatrix + matrixXreg[j,] %*% t(matrixXreg[j,]) * object$mu[j];
+        }
+
+        # See if Choleski works... It sometimes fails, when we don't get to the max of likelihood.
+        vcovMatrixTry <- try(chol2inv(chol(FIMatrix)), silent=TRUE);
+        if(any(class(vcovMatrixTry)=="try-error")){
+            warning(paste0("Choleski decomposition of hessian failed, so we had to revert to the simple inversion.\n",
+                           "The estimate of the covariance matrix of parameters might be inaccurate."),
+                    call.=FALSE);
+            vcov <- try(solve(FIMatrix, diag(nVariables), tol=1e-20), silent=TRUE);
+            if(any(class(FIMatrix)=="try-error")){
+                warning(paste0("Sorry, but the hessian is singular, so we could not invert it.\n",
+                               "We failed to produce the covariance matrix of parameters."),
+                        call.=FALSE);
+                vcov <- diag(1e+100,nVariables);
+            }
+        }
+        else{
+            vcov <- vcovMatrixTry;
+        }
+
+        rownames(vcov) <- colnames(vcov) <- variablesNames;
+    }
     else{
         # Form the call for alm
         newCall <- object$call;
@@ -727,6 +773,12 @@ vcov.alm <- function(object, ...){
         newCall$data <- object$data;
         newCall$subset <- object$subset;
         newCall$distribution <- object$distribution;
+        if(object$loss=="custom"){
+            newCall$loss <- object$lossFunction;
+        }
+        else{
+            newCall$loss <- object$loss;
+        }
         newCall$ar <- object$call$ar;
         newCall$i <- object$call$i;
         newCall$parameters <- coef(object);
@@ -744,17 +796,54 @@ vcov.alm <- function(object, ...){
             newCall$sigma <- object$other$sigma;
         }
         else if(object$distribution=="dbcnorm"){
-            newCall$lambda <- object$other$lambda;
+            newCall$lambdaBC <- object$other$lambdaBC;
         }
-        newCall$vcovProduce <- TRUE;
+        else if(any(object$distribution==c("dgnorm","dlgnorm"))){
+            newCall$beta <- object$other$beta;
+        }
+        newCall$FI <- TRUE;
         # newCall$occurrence <- NULL;
         newCall$occurrence <- object$occurrence;
         # Recall alm to get hessian
-        vcov <- eval(newCall)$vcov;
+        FIMatrix <- eval(newCall)$FI;
 
-        if(!is.matrix(vcov)){
-            vcov <- as.matrix(vcov);
-            colnames(vcov) <- rownames(vcov);
+        # See if Choleski works... It sometimes fails, when we don't get to the max of likelihood.
+        vcovMatrixTry <- try(chol2inv(chol(FIMatrix)), silent=TRUE);
+        if(any(class(vcovMatrixTry)=="try-error")){
+            warning(paste0("Choleski decomposition of hessian failed, so we had to revert to the simple inversion.\n",
+                           "The estimate of the covariance matrix of parameters might be inaccurate."),
+                    call.=FALSE);
+            FIMatrix <- try(solve(FIMatrix, diag(nVariables), tol=1e-20), silent=TRUE);
+            if(any(class(FIMatrix)=="try-error")){
+                warning(paste0("Sorry, but the hessian is singular, so we could not invert it.\n",
+                               "We failed to produce the covariance matrix of parameters."),
+                        call.=FALSE);
+                vcov <- diag(1e+100,nVariables);
+            }
+            else{
+                vcov <- FIMatrix;
+            }
+        }
+        else{
+            vcov <- vcovMatrixTry;
+        }
+
+        if(nVariables>1){
+            if(object$distribution=="dbeta"){
+                dimnames(vcov) <- list(c(paste0("shape1_",variablesNames),paste0("shape2_",variablesNames)),
+                                             c(paste0("shape1_",variablesNames),paste0("shape2_",variablesNames)));
+            }
+            else{
+                dimnames(vcov) <- list(variablesNames,variablesNames);
+            }
+        }
+        else{
+            names(vcov) <- variablesNames;
+        }
+
+        # Sometimes the diagonal elements in the covariance matrix are negative because likelihood is not fully maximised...
+        if(any(diag(vcov)<0)){
+            diag(vcov) <- abs(diag(vcov));
         }
     }
     return(vcov);
@@ -956,11 +1045,6 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             yName <- "Studentised";
         }
 
-        if(is.occurrence(x$occurrence)){
-            ellipsis$x <- ellipsis$x[actuals(x$occurrence)!=0];
-            ellipsis$y <- ellipsis$y[actuals(x$occurrence)!=0];
-        }
-
         if(!any(names(ellipsis)=="main")){
             ellipsis$main <- paste0(yName," Residuals vs Fitted");
         }
@@ -981,28 +1065,22 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             }
         }
 
-        zValues <- switch(x$distribution,
-                          "dlaplace"=,
-                          "dllaplace"=qlaplace(c((1-level)/2, (1+level)/2), 0, 1),
-                          "dalaplace"=qalaplace(c((1-level)/2, (1+level)/2), 0, 1, x$other$alpha),
-                          "dlogis"=qlogis(c((1-level)/2, (1+level)/2), 0, 1),
-                          "dt"=qt(c((1-level)/2, (1+level)/2), nobs(x)-nparam(x)),
-                          "ds"=,
-                          "dls"=qs(c((1-level)/2, (1+level)/2), 0, 1),
-                          # In the next one, the scale is debiased, taking n-k into account
-                          "dinvgauss"=qinvgauss(c((1-level)/2, (1+level)/2), mean=1,
-                                                dispersion=x$scale * nobs(x) / (nobs(x)-nparam(x))),
-                          qnorm(c((1-level)/2, (1+level)/2), 0, 1));
-        # Analyse stuff in logarithms if the error is multiplicative
+        # Get the IDs of outliers and statistic
+        outliers <- outlierdummy(x, level=level, type=type);
+        outliersID <- outliers$id;
+        statistic <- outliers$statistic;
+        # Analyse stuff in logarithms if the distribution is dinvgauss
         if(x$distribution=="dinvgauss"){
             ellipsis$y[] <- log(ellipsis$y);
-            zValues[] <- log(zValues);
+            statistic[] <- log(statistic);
         }
-        outliers <- which(ellipsis$y >zValues[2] | ellipsis$y <zValues[1]);
-        # cat(paste0(round(length(outliers)/length(ellipsis$y),3)*100,"% of values are outside the bounds\n"));
+        # Substitute zeroes with NAs if there was an occurrence
+        if(is.occurrence(x$occurrence)){
+            ellipsis$x[actuals(x$occurrence)==0] <- NA;
+        }
 
         if(!any(names(ellipsis)=="ylim")){
-            ellipsis$ylim <- range(c(ellipsis$y,zValues), na.rm=TRUE)*1.2;
+            ellipsis$ylim <- range(c(ellipsis$y,statistic), na.rm=TRUE)*1.2;
             if(legend){
                 if(legendPosition=="bottomright"){
                     ellipsis$ylim[1] <- ellipsis$ylim[1] - 0.2*diff(ellipsis$ylim);
@@ -1013,20 +1091,25 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             }
         }
 
-        xRange <- range(ellipsis$x);
-        xRange[1] <- xRange[1] - sd(ellipsis$x);
-        xRange[2] <- xRange[2] + sd(ellipsis$x);
+        xRange <- range(ellipsis$x, na.rm=TRUE);
+        xRange[1] <- xRange[1] - sd(ellipsis$x, na.rm=TRUE);
+        xRange[2] <- xRange[2] + sd(ellipsis$x, na.rm=TRUE);
 
         do.call(plot,ellipsis);
         abline(h=0, col="grey", lty=2);
-        polygon(c(xRange,rev(xRange)),c(zValues[1],zValues[1],zValues[2],zValues[2]),
+        polygon(c(xRange,rev(xRange)),c(statistic[1],statistic[1],statistic[2],statistic[2]),
                 col="lightgrey", border=NA, density=10);
-        abline(h=zValues, col="red", lty=2);
-        if(length(outliers)>0){
-            points(ellipsis$x[outliers], ellipsis$y[outliers], pch=16);
-            text(ellipsis$x[outliers], ellipsis$y[outliers], labels=outliers, pos=(ellipsis$x[outliers]>0)*2+1);
+        abline(h=statistic, col="red", lty=2);
+        if(length(outliersID)>0){
+            points(ellipsis$x[outliersID], ellipsis$y[outliersID], pch=16);
+            text(ellipsis$x[outliersID], ellipsis$y[outliersID], labels=outliersID, pos=(ellipsis$x[outliersID]>0)*2+1);
         }
         if(lowess){
+            # Remove NAs
+            if(any(is.na(ellipsis$x))){
+                ellipsis$y <- ellipsis$y[!is.na(ellipsis$x)];
+                ellipsis$x <- ellipsis$x[!is.na(ellipsis$x)];
+            }
             lines(lowess(ellipsis$x, ellipsis$y), col="red");
         }
 
@@ -1115,6 +1198,17 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
 
             do.call(qqnorm, ellipsis);
             qqline(ellipsis$y);
+        }
+        else if(any(x$distribution==c("dgnorm","dlgnorm"))){
+            # Standardise residuals
+            ellipsis$y[] <- ellipsis$y / sd(ellipsis$y);
+            if(!any(names(ellipsis)=="main")){
+                ellipsis$main <- "QQ-plot of Generalised Normal distribution";
+            }
+            ellipsis$x <- qgnorm(ppoints(500), mu=0, alpha=x$scale, beta=x$other$beta);
+
+            do.call(qqplot, ellipsis);
+            qqline(ellipsis$y, distribution=function(p) qgnorm(p, mu=0, alpha=x$scale, beta=x$other$beta));
         }
         else if(any(x$distribution==c("dlaplace","dllaplace"))){
             if(!any(names(ellipsis)=="main")){
@@ -1233,40 +1327,12 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             }
         }
 
-        # If the mixture distribution, then do the upper bound
-        if(is.occurrence(x$occurrence)){
-            zValues <- suppressWarnings(predict(x, interval="p", side="u", level=level));
-            if(any(is.infinite(zValues$lower))){
-                zValues$lower[is.infinite(zValues$lower)] <- 0;
-            }
-            if(any(is.infinite(zValues$upper))){
-                zValues$upper[is.infinite(zValues$upper)] <- 0;
-            }
-        }
-        else{
-            zValues <- suppressWarnings(predict(x, interval="p", level=level));
-        }
-
         # Start plotting
         do.call(plot,ellipsis);
         lines(yFitted, col="purple");
-        if(!all(ellipsis$x<zValues$upper & ellipsis$x>zValues$lower)){
-            lines(zValues$lower, col="red", lty=2);
-            lines(zValues$upper, col="red", lty=2);
-            polygon(c(1:length(yFitted), c(length(yFitted):1)),
-                    c(zValues$lower, rev(zValues$upper)),
-                    col="lightgrey", border=NA, density=10);
-
-            if(legend){
-                legend(legendPosition,legend=c("Actuals","Fitted",paste0(level*100,"% prediction interval")),
-                       col=c("black","purple","red"), lwd=rep(1,3), lty=c(1,1,2));
-            }
-        }
-        else{
-            if(legend){
-                legend(legendPosition,legend=c("Actuals","Fitted"),
-                       col=c("black","purple"), lwd=rep(1,2), lty=c(1,1));
-            }
+        if(legend){
+            legend(legendPosition,legend=c("Actuals","Fitted"),
+                   col=c("black","purple"), lwd=rep(1,2), lty=c(1,1));
         }
     }
 
@@ -1281,10 +1347,6 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         else{
             ellipsis$x <- rstudent(x);
             yName <- "Studentised";
-        }
-
-        if(is.occurrence(x$occurrence)){
-            ellipsis$x <- ellipsis$x[actuals(x$occurrence)!=0];
         }
 
         if(!any(names(ellipsis)=="main")){
@@ -1303,28 +1365,18 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             ellipsis$type <- "l";
         }
 
-        zValues <- switch(x$distribution,
-                          "dlaplace"=,
-                          "dllaplace"=qlaplace(c((1-level)/2, (1+level)/2), 0, 1),
-                          "dalaplace"=qalaplace(c((1-level)/2, (1+level)/2), 0, 1, x$other$alpha),
-                          "dlogis"=qlogis(c((1-level)/2, (1+level)/2), 0, 1),
-                          "dt"=qt(c((1-level)/2, (1+level)/2), nobs(x)-nparam(x)),
-                          "ds"=,
-                          "dls"=qs(c((1-level)/2, (1+level)/2), 0, 1),
-                          # In the next one, the scale is debiased, taking n-k into account
-                          "dinvgauss"=qinvgauss(c((1-level)/2, (1+level)/2), mean=1,
-                                                dispersion=x$scale * nobs(x) / (nobs(x)-nparam(x))),
-                          qnorm(c((1-level)/2, (1+level)/2), 0, 1));
-        # Analyse stuff in logarithms if the error is multiplicative
+        # Get the IDs of outliers and statistic
+        outliers <- outlierdummy(x, level=level, type=type);
+        outliersID <- outliers$id;
+        statistic <- outliers$statistic;
+        # Analyse stuff in logarithms if the distribution is dinvgauss
         if(x$distribution=="dinvgauss"){
             ellipsis$x[] <- log(ellipsis$x);
-            zValues[] <- log(zValues);
+            statistic[] <- log(statistic);
         }
-        outliers <- which(ellipsis$x >zValues[2] | ellipsis$x <zValues[1]);
-
 
         if(!any(names(ellipsis)=="ylim")){
-            ellipsis$ylim <- c(-max(abs(ellipsis$x),na.rm=TRUE),max(abs(ellipsis$x),na.rm=TRUE))*1.2;
+            ellipsis$ylim <- range(c(ellipsis$x,statistic),na.rm=TRUE)*1.2;
         }
 
         if(legend){
@@ -1335,18 +1387,25 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
 
         # Start plotting
         do.call(plot,ellipsis);
-        if(length(outliers)>0){
-            points(outliers, ellipsis$x[outliers], pch=16);
-            text(outliers, ellipsis$x[outliers], labels=outliers, pos=(ellipsis$x[outliers]>0)*2+1);
+        if(is.occurrence(x$occurrence)){
+            points(ellipsis$x);
+        }
+        if(length(outliersID)>0){
+            points(outliersID, ellipsis$x[outliersID], pch=16);
+            text(outliersID, ellipsis$x[outliersID], labels=outliersID, pos=(ellipsis$x[outliersID]>0)*2+1);
         }
         if(lowess){
+            # Substitute NAs with the mean
+            if(any(is.na(ellipsis$x))){
+                ellipsis$x[is.na(ellipsis$x)] <- mean(ellipsis$x, na.rm=TRUE);
+            }
             lines(lowess(c(1:length(ellipsis$x)),ellipsis$x), col="red");
         }
         abline(h=0, col="grey", lty=2);
-        abline(h=zValues[1], col="red", lty=2);
-        abline(h=zValues[2], col="red", lty=2);
+        abline(h=statistic[1], col="red", lty=2);
+        abline(h=statistic[2], col="red", lty=2);
         polygon(c(1:nobs(x), c(nobs(x):1)),
-                c(rep(zValues[1],nobs(x)), rep(zValues[2],nobs(x))),
+                c(rep(statistic[1],nobs(x)), rep(statistic[2],nobs(x))),
                 col="lightgrey", border=NA, density=10);
         if(legend){
             legend(legendPosition,legend=c("Residuals",paste0(level*100,"% prediction interval")),
@@ -1390,15 +1449,15 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             theValues <- pacf(as.vector(residuals(x)), plot=FALSE);
         }
         ellipsis$x <- theValues$acf[-1];
-        zValues <- qnorm(c((1-level)/2, (1+level)/2),0,sqrt(1/nobs(x)));
+        statistic <- qnorm(c((1-level)/2, (1+level)/2),0,sqrt(1/nobs(x)));
 
         ellipsis$type <- "h"
 
         do.call(plot,ellipsis);
         abline(h=0, col="black", lty=1);
-        abline(h=zValues, col="red", lty=2);
-        if(any(ellipsis$x>zValues[2] | ellipsis$x<zValues[1])){
-            outliers <- which(ellipsis$x >zValues[2] | ellipsis$x <zValues[1]);
+        abline(h=statistic, col="red", lty=2);
+        if(any(ellipsis$x>statistic[2] | ellipsis$x<statistic[1])){
+            outliers <- which(ellipsis$x >statistic[2] | ellipsis$x <statistic[1]);
             points(outliers, ellipsis$x[outliers], pch=16);
             text(outliers, ellipsis$x[outliers], labels=outliers, pos=(ellipsis$x[outliers]>0)*2+1);
         }
@@ -1756,20 +1815,22 @@ print.summary.alm <- function(x, ...){
 
     distrib <- switch(x$distribution,
                       "dnorm" = "Normal",
+                      "dgnorm" = paste0("Generalised Normal Distribution with shape=",round(x$other$beta,digits)),
+                      "dlgnorm" = paste0("Log Generalised Normal Distribution with shape=",round(x$other$beta,digits)),
                       "dlogis" = "Logistic",
                       "dlaplace" = "Laplace",
                       "dllaplace" = "Log Laplace",
-                      "dalaplace" = paste0("Asymmetric Laplace with alpha=",round(x$other$alpha,2)),
+                      "dalaplace" = paste0("Asymmetric Laplace with alpha=",round(x$other$alpha,digits)),
                       "dt" = paste0("Student t with df=",round(x$other$df, digits)),
                       "ds" = "S",
                       "dls" = "Log S",
                       "dfnorm" = "Folded Normal",
                       "dlnorm" = "Log Normal",
-                      "dbcnorm" = paste0("Box-Cox Normal with lambda=",round(x$other$lambda,2)),
+                      "dbcnorm" = paste0("Box-Cox Normal with lambda=",round(x$other$lambdaBC,digits)),
                       "dinvgauss" = "Inverse Gaussian",
-                      "dchisq" = paste0("Chi-Squared with df=",round(x$other$df,2)),
+                      "dchisq" = paste0("Chi-Squared with df=",round(x$other$df,digits)),
                       "dpois" = "Poisson",
-                      "dnbinom" = paste0("Negative Binomial with size=",round(x$other$size,2)),
+                      "dnbinom" = paste0("Negative Binomial with size=",round(x$other$size,digits)),
                       "dbeta" = "Beta",
                       "plogis" = "Cumulative logistic",
                       "pnorm" = "Cumulative normal"
@@ -1782,8 +1843,12 @@ print.summary.alm <- function(x, ...){
         distrib <- paste0("Mixture of ", distrib," and ", distribOccurrence);
     }
 
-    cat(paste0("Response variable: ", paste0(x$responseName,collapse=""),"\n"));
-    cat(paste0("Distribution used in the estimation: ", distrib));
+    cat(paste0("Response variable: ", paste0(x$responseName,collapse="")));
+    cat(paste0("\nDistribution used in the estimation: ", distrib));
+    cat(paste0("\nLoss function used in estimation: ",x$loss));
+    if(any(x$loss==c("LASSO","RIDGE"))){
+        cat(paste0(" with lambda=",round(x$other$lambda,digits)));
+    }
     if(!is.null(x$arima)){
         cat(paste0("\n",x$arima," components were included in the model"));
     }
@@ -1793,8 +1858,11 @@ print.summary.alm <- function(x, ...){
     cat("\nSample size: "); cat(x$dfTable[1]);
     cat("\nNumber of estimated parameters: "); cat(x$dfTable[2]);
     cat("\nNumber of degrees of freedom: "); cat(x$dfTable[3]);
-    cat("\nInformation criteria:\n");
-    print(round(x$ICs,digits));
+    if(!is.null(x$ICs)){
+        cat("\nInformation criteria:\n");
+        print(round(x$ICs,digits));
+    }
+    cat("\n");
 }
 
 #' @export
@@ -1809,6 +1877,8 @@ print.summary.greybox <- function(x, ...){
 
     distrib <- switch(x$distribution,
                       "dnorm" = "Normal",
+                      "dgnorm" = "Generalised Normal Distribution",
+                      "dlgnorm" = "Log Generalised Normal Distribution",
                       "dlogis" = "Logistic",
                       "dlaplace" = "Laplace",
                       "dllaplace" = "Log Laplace",
@@ -1855,6 +1925,8 @@ print.summary.greyboxC <- function(x, ...){
 
     distrib <- switch(x$distribution,
                       "dnorm" = "Normal",
+                      "dgnorm" = "Generalised Normal Distribution",
+                      "dlgnorm" = "Log Generalised Normal Distribution",
                       "dlogis" = "Logistic",
                       "dlaplace" = "Laplace",
                       "dllaplace" = "Log Laplace",
@@ -1954,6 +2026,13 @@ hatvalues.greybox <- function(model, ...){
 residuals.greybox <- function(object, ...){
     errors <- object$residuals;
     names(errors) <- names(actuals(object));
+    ellipsis <- list(...);
+    # Remove zeroes if they are not needed
+    if(!is.null(ellipsis$all) && (!ellipsis$all)){
+        if(is.occurrence(object$occurrence)){
+            errors <- errors[actuals(object)!=0];
+        }
+    }
     return(errors)
 }
 
@@ -1962,27 +2041,38 @@ residuals.greybox <- function(object, ...){
 rstandard.greybox <- function(model, ...){
     obs <- nobs(model);
     df <- obs - nparam(model);
-    errors <- residuals(model);
+    errors <- residuals(model, ...);
     # If this is an occurrence model, then only modify the non-zero obs
     if(is.occurrence(model$occurrence)){
-        residsToGo <- which(actuals(model$occurrence)!=0);
+        residsToGo <- (actuals(model$occurrence)!=0);
     }
     else{
-        residsToGo <- c(1:obs);
+        residsToGo <- rep(TRUE,obs);
     }
     # The proper residuals with leverage are currently done only for normal-based distributions
     if(any(model$distribution==c("dt","dnorm","dlnorm","dbcnorm","dnbinom","dpois"))){
-        return(errors / (sigma(model)*sqrt(1-hatvalues(model))));
+        errors[] <- errors / (sigma(model)*sqrt(1-hatvalues(model)));
     }
     else if(any(model$distribution==c("ds","dls"))){
-        return((errors - mean(errors[residsToGo])) / (model$scale * obs / df)^2);
+        errors[residsToGo] <- (errors[residsToGo] - mean(errors[residsToGo])) / (model$scale * obs / df)^2;
+    }
+    else if(any(model$distribution==c("dgnorm","dlgnorm"))){
+        errors[residsToGo] <- ((errors[residsToGo] - mean(errors[residsToGo])) /
+                         (model$scale^model$other$beta * obs / df)^{1/model$other$beta});
     }
     else if(model$distribution=="dinvgauss"){
-        return(errors / mean(errors[residsToGo]));
+        errors[residsToGo] <- errors[residsToGo] / mean(errors[residsToGo]);
     }
     else{
-        return((errors-mean(errors[residsToGo])) / (model$scale * obs / df));
+        errors[residsToGo] <- (errors[residsToGo] - mean(errors[residsToGo])) / (model$scale * obs / df);
     }
+
+    # Fill in values with NAs if there is occurrence model
+    if(is.occurrence(model$occurrence)){
+        errors[!residsToGo] <- NA;
+    }
+
+    return(errors);
 }
 
 #' @importFrom stats rstudent
@@ -1990,13 +2080,13 @@ rstandard.greybox <- function(model, ...){
 rstudent.greybox <- function(model, ...){
     obs <- nobs(model);
     df <- obs - nparam(model) - 1;
-    rstudentised <- errors <- residuals(model);
+    rstudentised <- errors <- residuals(model, ...);
     # If this is an occurrence model, then only modify the non-zero obs
     if(is.occurrence(model$occurrence)){
-        residsToGo <- which(actuals(model$occurrence)!=0);
+        residsToGo <- (actuals(model$occurrence)!=0);
     }
     else{
-        residsToGo <- c(1:obs);
+        residsToGo <- rep(TRUE,obs);
     }
 
     # The proper residuals with leverage are currently done only for normal-based distributions
@@ -2007,11 +2097,11 @@ rstudent.greybox <- function(model, ...){
             xreg[,1] <- 1;
         }
         else{
-            xreg <- model$data[,-1];
+            xreg <- model$data[,-1,drop=FALSE];
         }
         hatValues <- hat(xreg);
         errors[] <- errors - mean(errors);
-        for(i in residsToGo){
+        for(i in which(residsToGo)){
             rstudentised[i] <- errors[i] / sqrt(sum(errors[-i]^2) / df * (1-hatValues[i]));
         }
     }
@@ -2019,36 +2109,46 @@ rstudent.greybox <- function(model, ...){
         # This is an approximation from the vcov matrix
         # hatValues <- diag(xreg %*% vcov(model) %*% t(xreg))/sigma(model)^2;
         errors[] <- errors - mean(errors);
-        for(i in residsToGo){
+        for(i in which(residsToGo)){
             rstudentised[i] <- errors[i] /  (sum(sqrt(abs(errors[-i]))) / (2*df))^2;
         }
     }
     else if(any(model$distribution==c("dlaplace","dllaplace"))){
         errors[] <- errors - mean(errors);
-        for(i in residsToGo){
+        for(i in which(residsToGo)){
             rstudentised[i] <- errors[i] / (sum(abs(errors[-i])) / df);
         }
     }
     else if(model$distribution=="dalaplace"){
-        for(i in residsToGo){
+        for(i in which(residsToGo)){
             rstudentised[i] <- errors[i] / (sum(errors[-i] * (model$other$alpha - (errors[-i]<=0)*1)) / df);
+        }
+    }
+    else if(any(model$distribution==c("dgnorm","dlgnorm"))){
+        for(i in which(residsToGo)){
+            rstudentised[i] <- errors[i] /  (sum(abs(errors[-i])^model$other$beta) * (model$other$beta/df))^{1/model$other$beta};
         }
     }
     else if(model$distribution=="dlogis"){
         errors[] <- errors - mean(errors);
-        for(i in residsToGo){
+        for(i in which(residsToGo)){
             rstudentised[i] <- errors[i] / (sqrt(sum(errors[-i]^2) / df) * sqrt(3) / pi);
         }
     }
     else if(model$distribution=="dinvgauss"){
-        for(i in residsToGo){
-            rstudentised[i] <- errors[i] / mean(errors[residsToGo][-i]);
+        for(i in which(residsToGo)){
+            rstudentised[i] <- errors[i] / mean(errors[-i]);
         }
     }
     else{
-        for(i in residsToGo){
+        for(i in which(residsToGo)){
             rstudentised[i] <- errors[i] / sqrt(sum(errors[-i]^2) / df);
         }
+    }
+
+    # Fill in values with NAs if there is occurrence model
+    if(is.occurrence(model$occurrence)){
+        rstudentised[!residsToGo] <- NA;
     }
 
     return(rstudentised);
@@ -2067,8 +2167,116 @@ cooks.distance.greybox <- function(model, ...){
     return(errors^2 / nParam * hatValues/(1-hatValues));
 }
 
-#### Summary ####
+#' Outlier detection and matrix creation
+#'
+#' Function detects outliers and creates a matrix with dummy variables. Only point
+#' outliers are considered (no level shifts).
+#'
+#' The detection is done based on the type of distribution used and confidence level
+#' specified by user.
+#'
+#' @template author
+#'
+#' @param object Model estimated using one of the functions of smooth package.
+#' @param level Confidence level to use. Everything that is outside the constructed
+#' bounds based on that is flagged as outliers.
+#' @param type Type of residuals to use: either standardised or studentised.
+#' @param ... Other parameters. Not used yet.
+#' @return The class "outlierdummy", which contains the list:
+#' \itemize{
+#' \item outliers - the matrix with the dummy variables, flagging outliers;
+#' \item statistic - the value of the statistic for the normalised variable;
+#' \item id - the ids of the outliers (which observatins have them);
+#' \item level - the confidence level used in the process;
+#' \item type - the type of the residuals used.
+#' }
+#'
+#' @seealso \link[stats]{influence.measures}
+#' @examples
+#'
+#' # Generate the data with S distribution
+#' xreg <- cbind(rnorm(100,10,3),rnorm(100,50,5))
+#' xreg <- cbind(100+0.5*xreg[,1]-0.75*xreg[,2]+rs(100,0,3),xreg)
+#' colnames(xreg) <- c("y","x1","x2")
+#'
+#' # Fit the normal distribution model
+#' ourModel <- alm(y~x1+x2, xreg, distribution="dnorm")
+#'
+#' # Detect outliers
+#' xregOutlierDummy <- outlierdummy(ourModel)
+#'
+#' @export outlierdummy
+outlierdummy <-  function(object, level=0.999, type=c("rstandard","rstudent"),
+                          ...) UseMethod("outlierdummy")
 
+#' @export
+outlierdummy.default <- function(object, level=0.999, type=c("rstandard","rstudent"), ...){
+    # Function returns the matrix of dummies with outliers
+    type <- match.arg(type);
+    errors <- switch(type,"rstandard"=rstandard(object),"rstudent"=rstudent(object));
+    statistic <- qnorm(c((1-level)/2, (1+level)/2), 0, 1);
+    outliersID <- which(errors>statistic[2] | errors <statistic[1]);
+    outliersNumber <- length(outliersID);
+    if(outliersNumber>0){
+        outliers <- matrix(0, nobs(object), outliersNumber,
+                           dimnames=list(rownames(object$data),
+                                         paste0("outlier",c(1:outliersNumber))));
+        outliers[cbind(outliersID,c(1:outliersNumber))] <- 1;
+    }
+    else{
+        outliers <- NULL;
+    }
+
+    return(structure(list(outliers=outliers, statistic=statistic, id=outliersID,
+                          level=level, type=type),
+                     class="outlierdummy"));
+}
+
+#' @export
+outlierdummy.alm <- function(object, level=0.999, type=c("rstandard","rstudent"), ...){
+    # Function returns the matrix of dummies with outliers
+    type <- match.arg(type);
+    errors <- switch(type,"rstandard"=rstandard(object),"rstudent"=rstudent(object));
+    statistic <- switch(object$distribution,
+                      "dlaplace"=,
+                      "dllaplace"=qlaplace(c((1-level)/2, (1+level)/2), 0, 1),
+                      "dalaplace"=qalaplace(c((1-level)/2, (1+level)/2), 0, 1, object$other$alpha),
+                      "dlogis"=qlogis(c((1-level)/2, (1+level)/2), 0, 1),
+                      "dt"=qt(c((1-level)/2, (1+level)/2), nobs(object)-nparam(object)),
+                      "dgnorm"=,
+                      "dlgnorm"=qgnorm(c((1-level)/2, (1+level)/2), 0, 1, object$other$beta),
+                      "ds"=,
+                      "dls"=qs(c((1-level)/2, (1+level)/2), 0, 1),
+                      # In the next one, the scale is debiased, taking n-k into account
+                      "dinvgauss"=qinvgauss(c((1-level)/2, (1+level)/2), mean=1,
+                                            dispersion=object$scale * nobs(object) /
+                                                (nobs(object)-nparam(object))),
+                      qnorm(c((1-level)/2, (1+level)/2), 0, 1));
+    outliersID <- which(errors>statistic[2] | errors<statistic[1]);
+    outliersNumber <- length(outliersID);
+    if(outliersNumber>0){
+        outliers <- matrix(0, nobs(object), outliersNumber,
+                           dimnames=list(rownames(object$data),
+                                         paste0("outlier",c(1:outliersNumber))));
+        outliers[cbind(outliersID,c(1:outliersNumber))] <- 1;
+    }
+    else{
+        outliers <- NULL;
+    }
+
+    return(structure(list(outliers=outliers, statistic=statistic, id=outliersID,
+                          level=level, type=type),
+                     class="outlierdummy"));
+}
+
+#' @export
+print.outlierdummy <- function(x, ...){
+    cat(paste0("Number of identified outliers: ", length(x$id),
+               "\nConfidence level: ",x$level,
+               "\nType of residuals: ",x$type, "\n"));
+}
+
+#### Summary ####
 #' @export
 summary.alm <- function(object, level=0.95, ...){
     errors <- residuals(object);
@@ -2083,10 +2291,14 @@ summary.alm <- function(object, level=0.95, ...){
                                    paste0("Upper ",(1+level)/2*100,"%"));
     ourReturn <- list(coefficients=parametersTable);
 
-    ICs <- c(AIC(object),AICc(object),BIC(object),BICc(object));
-    names(ICs) <- c("AIC","AICc","BIC","BICc");
-    ourReturn$ICs <- ICs;
+    # If there is a likelihood, then produce ICs
+    if(!is.na(logLik(object))){
+        ICs <- c(AIC(object),AICc(object),BIC(object),BICc(object));
+        names(ICs) <- c("AIC","AICc","BIC","BICc");
+        ourReturn$ICs <- ICs;
+    }
     ourReturn$distribution <- object$distribution;
+    ourReturn$loss <- object$loss;
     ourReturn$occurrence <- object$occurrence;
     ourReturn$other <- object$other;
     ourReturn$responseName <- formula(object)[[2]];
@@ -2325,14 +2537,6 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
         }
         greyboxForecast$scale <- scaleValues;
     }
-    else if(object$distribution=="dt"){
-        # Use df estimated by the model and then construct conventional intervals. df=2 is the minimum in this model.
-        df <- nobs(object) - nparam(object);
-        if(interval!="n"){
-            greyboxForecast$lower[] <- greyboxForecast$mean + sqrt(greyboxForecast$variances) * qt(levelLow,df);
-            greyboxForecast$upper[] <- greyboxForecast$mean + sqrt(greyboxForecast$variances) * qt(levelUp,df);
-        }
-    }
     else if(object$distribution=="ds"){
         # Use the connection between the variance and scale in S distribution
         scaleValues <- (greyboxForecast$variances/120)^0.25;
@@ -2351,6 +2555,33 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
         }
         greyboxForecast$mean <- exp(greyboxForecast$mean);
         greyboxForecast$scale <- scaleValues;
+    }
+    else if(object$distribution=="dgnorm"){
+        # Use the connection between the variance and scale in Generalised Normal distribution
+        scaleValues <- sqrt(greyboxForecast$variances*(gamma(1/object$other$beta)/gamma(3/object$other$beta)));
+        if(interval!="n"){
+            greyboxForecast$lower[] <- qgnorm(levelLow,greyboxForecast$mean,scaleValues,object$other$beta);
+            greyboxForecast$upper[] <- qgnorm(levelUp,greyboxForecast$mean,scaleValues,object$other$beta);
+        }
+        greyboxForecast$scale <- scaleValues;
+    }
+    else if(object$distribution=="dlgnorm"){
+        # Use the connection between the variance and scale in Generalised Normal distribution
+        scaleValues <- sqrt(greyboxForecast$variances*(gamma(1/object$other$beta)/gamma(3/object$other$beta)));
+        if(interval!="n"){
+            greyboxForecast$lower[] <- exp(qgnorm(levelLow,greyboxForecast$mean,scaleValues,object$other$beta));
+            greyboxForecast$upper[] <- exp(qgnorm(levelUp,greyboxForecast$mean,scaleValues,object$other$beta));
+        }
+        greyboxForecast$mean <- exp(greyboxForecast$mean);
+        greyboxForecast$scale <- scaleValues;
+    }
+    else if(object$distribution=="dt"){
+        # Use df estimated by the model and then construct conventional intervals. df=2 is the minimum in this model.
+        df <- nobs(object) - nparam(object);
+        if(interval!="n"){
+            greyboxForecast$lower[] <- greyboxForecast$mean + sqrt(greyboxForecast$variances) * qt(levelLow,df);
+            greyboxForecast$upper[] <- greyboxForecast$mean + sqrt(greyboxForecast$variances) * qt(levelUp,df);
+        }
     }
     else if(object$distribution=="dfnorm"){
         if(interval!="n"){
@@ -2396,14 +2627,14 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
             greyboxForecast$mean[greyboxForecast$mean<0] <- 0;
         }
         if(interval!="n"){
-            greyboxForecast$lower[] <- qbcnorm(levelLow,greyboxForecast$mean,sigma,object$other$lambda);
-            greyboxForecast$upper[] <- qbcnorm(levelUp,greyboxForecast$mean,sigma,object$other$lambda);
+            greyboxForecast$lower[] <- qbcnorm(levelLow,greyboxForecast$mean,sigma,object$other$lambdaBC);
+            greyboxForecast$upper[] <- qbcnorm(levelUp,greyboxForecast$mean,sigma,object$other$lambdaBC);
         }
-        if(object$other$lambda==0){
+        if(object$other$lambdaBC==0){
             greyboxForecast$mean[] <- exp(greyboxForecast$mean)
         }
         else{
-            greyboxForecast$mean[] <- (greyboxForecast$mean*object$other$lambda+1)^{1/object$other$lambda};
+            greyboxForecast$mean[] <- (greyboxForecast$mean*object$other$lambdaBC+1)^{1/object$other$lambdaBC};
         }
         greyboxForecast$scale <- sigma;
     }
@@ -2550,7 +2781,7 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
 #'
 #' @aliases forecast forecast.greybox
 #' @param object Time series model for which forecasts are required.
-#' @param newdata Forecast horizon
+#' @param newdata The new data needed in order to produce forecasts.
 #' @param interval Type of intervals to construct: either "confidence" or
 #' "prediction". Can be abbreviated
 #' @param level Confidence level. Defines width of prediction interval.
@@ -2877,7 +3108,7 @@ predict.almari <- function(object, newdata=NULL, interval=c("none", "confidence"
         else if(object$distribution=="dbcnorm"){
             # Use Box-Cox if there are zeroes
             matrixOfxregFull[,nonariParametersNumber+c(1:ariOrder)] <- (matrixOfxregFull[,nonariParametersNumber+c(1:ariOrder)]^
-                                                                            object$other$lambda-1)/object$other$lambda;
+                                                                            object$other$lambdaBC-1)/object$other$lambdaBC;
             colnames(matrixOfxregFull)[nonariParametersNumber+c(1:ariOrder)] <- paste0(ariNames,"Box-Cox");
         }
         else if(object$distribution=="dchisq"){

@@ -65,7 +65,7 @@
 #' @export stepwise
 stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL,
                      method=c("pearson","kendall","spearman"),
-                     distribution=c("dnorm","dlogis","dlaplace","dalaplace","ds","dt",
+                     distribution=c("dnorm","dlaplace","ds","dgnorm","dlogis","dt","dalaplace",
                                     "dfnorm","dlnorm","dllaplace","dls","dbcnorm","dinvgauss",
                                     "dpois","dnbinom",
                                     "plogis","pnorm"),
@@ -74,6 +74,8 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
     if(is.null(df)){
         df <- 0;
     }
+    # Create substitute and remove the original data
+    dataSubstitute <- substitute(data);
 
     # Check, whether the response is numeric
     if(is.data.frame(data)){
@@ -95,6 +97,8 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
             data[,1] <- (data[,1]!=0)*1;
         }
     }
+    # Only likelihood is supported by the function
+    loss <- "likelihood";
 
     # Check the data for NAs
     if(any(is.na(data))){
@@ -110,21 +114,29 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
     }
     # Check occurrence. If it is not "none" then use alm().
     if(is.occurrence(occurrence)){
-        useALM <- TRUE;
-        rowsSelected <- rowsSelected & (data[,1]!=0);
+        useALM[] <- TRUE;
+        rowsSelected[] <- rowsSelected & (data[,1]!=0);
     }
     else{
         occurrence <- match.arg(occurrence);
         if(any(occurrence==c("plogis","pnorm"))){
-            useALM <- TRUE;
-            rowsSelected <- rowsSelected & (data[,1]!=0);
+            useALM[] <- TRUE;
+            rowsSelected[] <- rowsSelected & (data[,1]!=0);
         }
     }
 
+    # If something is passed in the ellipsis, use alm()
+    if(length(list(...))>0){
+        useALM[] <- TRUE;
+    }
+
+    listToCall <- list(...);
     # Define what function to use in the estimation
     if(useALM){
         lmCall <- alm;
-        listToCall <- list(distribution=distribution, fast=TRUE);
+        listToCall$distribution <- distribution;
+        listToCall$loss <- loss;
+        listToCall$fast <- TRUE;
     }
     else{
         if(!is.data.frame(data)){
@@ -188,8 +200,6 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
     listToCall$data <- as.data.frame(data[rowsSelected,variablesNames]);
     errors <- matrix(0,obsInsample,1);
 
-    # Create substitute and remove the original data
-    dataSubstitute <- substitute(data);
     # Remove the data and clean after yourself
     rm(data);
     gc(verbose=FALSE);
@@ -227,19 +237,8 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
     }
 
     # Select IC
-    ic <- ic[1];
-    if(ic=="AIC"){
-        IC <- AIC;
-    }
-    else if(ic=="AICc"){
-        IC <- AICc;
-    }
-    else if(ic=="BIC"){
-        IC <- BIC;
-    }
-    else if(ic=="BICc"){
-        IC <- BICc;
-    }
+    ic <- match.arg(ic);
+    IC <- switch(ic,"AIC"=AIC,"BIC"=BIC,"BICc"=BICc,AICc);
 
     method <- method[1];
 
@@ -319,7 +318,7 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
     bestFormula <- as.formula(bestFormula);
 
     # If this is a big data just wrap up the stuff using lmCall
-    if(distribution=="dnorm"){
+    if(distribution=="dnorm" && !useALM){
         varsNames <- all.vars(bestFormula)[-1];
 
         listToCall$formula <- bestFormula;
@@ -331,7 +330,7 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         rm(listToCall);
 
         bestModel$distribution <- distribution;
-        bestModel$logLik <- logLik(bestModel);
+        bestModel$logLik <- bestModel$lossValue <- logLik(bestModel);
         bestModel$mu <- bestModel$fitted <- bestModel$data[,1] - c(bestModel$residuals);
         # This is number of variables + constant + variance
         bestModel$df <- length(bestModel$coefficients) + 1;
@@ -348,14 +347,17 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         bestModel$call$formula <- bestFormula;
         bestModel$subset <- rep(TRUE, obsInsample);
         bestModel$scale <- sqrt(sum(bestModel$residuals^2) / obsInsample);
+        bestModel$loss <- loss;
         class(bestModel) <- c("alm","greybox");
     }
     else{
-        bestModel <- do.call("alm", list(formula=bestFormula,
-                                         data=dataSubstitute,
-                                         distribution=distribution,
-                                         occurrence=occurrence,
-                                         fast=TRUE),
+        listToCall$formula <- bestFormula;
+        listToCall$data <- dataSubstitute;
+        listToCall$distribution <- distribution;
+        listToCall$loss <- loss;
+        listToCall$occurrence <- occurrence;
+        listToCall$fast <- TRUE;
+        bestModel <- do.call("alm", listToCall,
                              envir = parent.frame());
         bestModel$call$occurrence <- substitute(occurrence);
         class(bestModel) <- c("alm","greybox");

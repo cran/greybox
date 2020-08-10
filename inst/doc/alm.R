@@ -27,13 +27,8 @@ ourModel <- alm(y~x1+x2, data=inSample, distribution="dalaplace",alpha=0.95)
 summary(ourModel)
 plot(predict(ourModel,outSample))
 
-## ----DataSquared--------------------------------------------------------------
-xreg[,1] <- xreg[,1]^2
-inSample <- xreg[1:80,]
-outSample <- xreg[-c(1:80),]
-
 ## ----dataRound----------------------------------------------------------------
-xreg[,1] <- round(sqrt(xreg[,1]))
+xreg[,1] <- round(abs(xreg[,1]))
 inSample <- xreg[1:80,]
 outSample <- xreg[-c(1:80),]
 
@@ -62,6 +57,10 @@ modelMixture <- alm(y~x1+x2+Noise, inSample, distribution="dlnorm", occurrence=m
 summary(modelMixture)
 summary(modelMixture$occurrence)
 
+## ----mixtureDiagnostics-------------------------------------------------------
+par(mfcol=c(3,3))
+plot(modelMixture, c(1:9))
+
 ## ----mixturePredict-----------------------------------------------------------
 predict(modelMixture,outSample,interval="p")
 
@@ -72,4 +71,11 @@ plot(predict(modelMixtureAR,outSample,interval="p",side="u"))
 
 ## ----mixtureExampleFinalARForecast--------------------------------------------
 plot(forecast(modelMixtureAR, h=10, interval="p",side="u"))
+
+## -----------------------------------------------------------------------------
+lossFunction <- function(actual, fitted, B, xreg){
+  return(mean((actual-fitted)^3));
+}
+modelLossCustom <- alm(y~x1+x2+Noise, inSample, distribution="dnorm", loss=lossFunction)
+summary(modelLossCustom)
 
