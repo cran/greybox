@@ -158,7 +158,8 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
     }
 
     # The gsub is needed in order to remove accidental special characters
-    colnames(data) <- gsub("\`","",colnames(data),ignore.case=TRUE);
+    # colnames(data) <- gsub("\`","",colnames(data),ignore.case=TRUE);
+    colnames(data) <- make.names(colnames(data), unique=TRUE);
     # Names of the variables
     variablesNames <- colnames(data);
 
@@ -211,6 +212,7 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
     # Define, which of the variables are factors, excluding the response variable
     numericData <- sapply(listToCall$data, is.numeric)[-1]
     # If the value is binary, treat it as a factor # & apply(listToCall$data!=0 & listToCall$data!=1,2,any)[-1];
+    numericData <- numericData & apply(listToCall$data!=0 & listToCall$data!=1,2,any)[-1];
 
     #### The function-analogue of mcor, but without checks ####
     mcorFast <- function(x){
@@ -272,7 +274,7 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
 
         newElement <- variablesNames[which(abs(ourCorrelation)==max(abs(ourCorrelation),na.rm=TRUE))[1]];
         # If the newElement is the same as before, stop
-        if(any(newElement==all.vars(as.formula(bestFormula)))){
+        if(is.na(newElement) || any(newElement==all.vars(as.formula(bestFormula)))){
             bestICNotFound <- FALSE;
             break;
         }
@@ -326,7 +328,12 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         bestModel <- do.call(lmCall,listToCall);
         # Expand the data from the final model
         bestModel$data <- cbind(listToCall$data[[1]],model.matrix(bestFormula,listToCall$data)[,-1]);
-        colnames(bestModel$data) <- c(responseName,varsNames);
+        if(is.null(colnames(bestModel$data))){
+            colnames(bestModel$data) <- c(responseName,varsNames);
+        }
+        else{
+            colnames(bestModel$data)[1] <- responseName;
+        }
         rm(listToCall);
 
         bestModel$distribution <- distribution;
@@ -335,7 +342,7 @@ stepwise <- function(data, ic=c("AICc","AIC","BIC","BICc"), silent=TRUE, df=NULL
         # This is number of variables + constant + variance
         bestModel$df <- length(bestModel$coefficients) + 1;
         bestModel$df.residual <- obsInsample - bestModel$df;
-        names(bestModel$coefficients) <- c("(Intercept)",varsNames);
+        names(bestModel$coefficients) <- c("(Intercept)",colnames(bestModel$data)[-1]);
         # Remove redundant bits
         bestModel$effects <- NULL;
         bestModel$qr <- NULL;

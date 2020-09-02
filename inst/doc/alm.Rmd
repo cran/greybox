@@ -26,7 +26,13 @@ ALM stands for "Advanced Linear Model". It's not so much advanced as it sounds, 
 
 Although `alm()` supports various loss functions, the core of the function is the likelihood approach. By default the estimation of parameters in the model is done via the maximisation of likelihood function of a selected distribution. The calculation of the standard errors is done based on the calculation of hessian of the distribution. And in the centre of all of that are information criteria that can be used for the models comparison.
 
-# Distributions
+This vignette contains the following sections:
+
+- [Supported distributions](#distributions);
+- [Using different loss functions](#losses);
+- [Estimation process](#estimator).
+
+# Supported distributions {#distributions}
 
 All the supported distributions have specific functions which form the following four groups for the `distribution` parameter in `alm()`:
 
@@ -102,7 +108,7 @@ where $T$ is the sample size. Its square root (standard deviation) is used in th
 
 $\mu_t$ is returned as is in `mu` variable, and the fitted values are set equivalent to `mu`.
 
-In order to produce confidence intervals for the mean (`predict(model, newdata, interval="c")`) the conditional variance of the model is calculated using:
+In order to produce confidence intervals for the mean (`predict(model, newdata, interval="confidence")`) the conditional variance of the model is calculated using:
 \begin{equation} \label{eq:varianceNormalForCI}
     V({\mu_t}) = x_t V(B) x_t',
 \end{equation}
@@ -112,7 +118,7 @@ where $V(B)$ is the covariance matrix of the parameters returned by the function
 \end{equation}
 where $\tau_{df,\frac{1+\alpha}{2}}$ is the upper ${\frac{1+\alpha}{2}}$-th quantile of the Student's distribution with $df$ degrees of freedom (e.g. with $\alpha=0.95$ it will be 0.975-th quantile, which, for example, for 100 degrees of freedom will be $\approx 1.984$).
 
-Similarly for the prediction intervals (`predict(model, newdata, interval="p")`) the conditional variance of the $y_t$ is calculated:
+Similarly for the prediction intervals (`predict(model, newdata, interval="prediction")`) the conditional variance of the $y_t$ is calculated:
 \begin{equation} \label{eq:varianceNormalForPI}
     V(y_t) = V(\mu_t) + s^2 ,
 \end{equation}
@@ -196,7 +202,7 @@ In the special cases, this becomes either $\sqrt{2}\times$RMSE ($\beta=2$), or M
 
 The kurtosis of Generalised Normal distribution is determined by $\beta$ and is equal to $\frac{\Gamma(5/\beta)\Gamma(1/\beta)}{\Gamma(3/\beta)^2}$.
 
-`alm()` function with `distribution="dgnorm"` returns $\mu_t$ in the same variables `mu` and `fitted.values`, $\alpha$ in the `scale` variable and $\beta$ in `other$beta`. Note that if `beta` is not provided in the function, then it will estimate it. However, the estimates of $\beta$ are known not to be consistent and asymptotically normal if it is less than 2. **So, use with care!** As for the intervals, they are based on the `qgnorm()` function from `gnorm` package and use the connection between the scale and the variance:
+`alm()` function with `distribution="dgnorm"` returns $\mu_t$ in the same variables `mu` and `fitted.values`, $\alpha$ in the `scale` variable and $\beta$ in `other$beta`. Note that if `beta` is not provided in the function, then it will estimate it. However, the estimates of $\beta$ are known not to be consistent and asymptotically normal if it is less than 2. **So, use with care!** As for the intervals, they are based on the internal `qgnorm()` function based on `gnorm` v1.0.2 package (not available on CRAN) and use the connection between the scale and the variance:
 \begin{equation} \label{eq:gnormalAlphaAndSigma}
     \alpha = \left( \frac{\sigma^2 \Gamma(1/\beta)}{\Gamma(3/\beta)} \right) ^{\frac{1}{2}},
 \end{equation}
@@ -221,16 +227,16 @@ Logistic is considered a fat tailed distribution, but its tails are not as fat a
 ### Student t distribution {#student}
 The Student t distribution has a difficult density function:
 \begin{equation} \label{eq:T}
-    f(y_t) = \frac{\Gamma\left(\frac{d+1}{2}\right)}{\sqrt{d \pi} \Gamma\left(\frac{d}{2}\right)} \left( 1 + \frac{x^2}{d} \right)^{-\frac{d+1}{2}} ,
+    f(y_t) = \frac{\Gamma\left(\frac{\nu+1}{2}\right)}{\sqrt{\nu \pi} \Gamma\left(\frac{\nu}{2}\right)} \left( 1 + \frac{x^2}{\nu} \right)^{-\frac{\nu+1}{2}} ,
 \end{equation}
-where $d$ is the number of degrees of freedom, which can also be considered as the scale parameter of the distribution. It has the following connection with the in-sample variance of the error (but only for the case, when $d>2$):
+where $\nu$ is the number of degrees of freedom, which can also be considered as the scale parameter of the distribution. It has the following connection with the in-sample variance of the error (but only for the case, when $\nu>2$):
 \begin{equation} \label{eq:scaleOfT}
-    d = \frac{2}{1-\sigma^{-2}}.
+    \nu = \frac{2}{1-\sigma^{-2}}.
 \end{equation}
 
-Kurtosis of Student t distribution depends on the value of $d$, and for the cases of $d>4$ is equal to $\frac{6}{d-4}$.
+Kurtosis of Student t distribution depends on the value of $\nu$, and for the cases of $\nu>4$ is equal to $\frac{6}{\nu-4}$.
 
-`alm()` function with `distribution="dt"` estimates the parameters of the model along with the $d$ (if it is not provided by the user as a `df` parameter) and returns $\mu_t$ in the variables `mu` and `fitted.values`, and $d$ in the `scale` variable. Both prediction and confidence intervals use `qt()` function from `stats` package and rely on the conventional number of degrees of freedom $T-k$. The intervals are constructed similarly to how it is done in Normal distribution \eqref{eq:intervalsNormal} (based on `qt()` function).
+`alm()` function with `distribution="dt"` estimates the parameters of the model along with the $\nu$ (if it is not provided by the user as a `nu` parameter) and returns $\mu_t$ in the variables `mu` and `fitted.values`, and $\nu$ in the `scale` variable. Both prediction and confidence intervals use `qt()` function from `stats` package and rely on the conventional number of degrees of freedom $T-k$. The intervals are constructed similarly to how it is done in Normal distribution \eqref{eq:intervalsNormal} (based on `qt()` function).
 
 ### An example of application
 
@@ -244,11 +250,11 @@ inSample <- xreg[1:80,]
 outSample <- xreg[-c(1:80),]
 ```
 
-ALM can be run either with data frame or with matrix. Here's an example with normal distribution:
+ALM can be run either with data frame or with matrix. Here's an example with normal distribution and several levels for the construction of prediction interval:
 ```{r normalRegression}
 ourModel <- alm(y~x1+x2, data=inSample, distribution="dnorm")
 summary(ourModel)
-plot(predict(ourModel,outSample,interval="p"))
+plot(predict(ourModel,outSample,interval="p",level=c(0.9,0.95)))
 ```
 
 And here's an example with Asymmetric Laplace and predefined $\alpha=0.95$:
@@ -383,7 +389,7 @@ Estimating the model with Log Generalised Normal distribution is equivalent to e
 \end{equation*}
 where $\epsilon_t \sim \mathcal{GN}(0, \alpha, \beta)$.
 
-`alm()` with `distribution="dlgnorm"` uses `dgnorm()` function from `gnorm` package with the logarithm of actual values, estimated mean $\mu_t$, the scale \eqref{eq:sigmaLogLaplace} and either provided or estimated shape parameter $\beta$. The $\mu_t$ is returned in the variable `mu`, the $\alpha$ is in the variable `scale` and $\beta$ is in `other$beta`, while the `fitted.values` contains the exponent of $\mu_t$, which corresponds to median of distribution rather than mean. Finally, `resid()` method returns $e_t = \log y_t - \mu_t$.
+`alm()` with `distribution="dlgnorm"` uses the internal implementation of `dgnorm()` function from `gnorm` package v1.0.2 (not available on CRAN) with the logarithm of actual values, estimated mean $\mu_t$, the scale \eqref{eq:sigmaLogLaplace} and either provided or estimated shape parameter $\beta$. The $\mu_t$ is returned in the variable `mu`, the $\alpha$ is in the variable `scale` and $\beta$ is in `other$beta`, while the `fitted.values` contains the exponent of $\mu_t$, which corresponds to median of distribution rather than mean. Finally, `resid()` method returns $e_t = \log y_t - \mu_t$.
 
 
 ### Folded Normal distribution {#fnormal}
@@ -578,9 +584,9 @@ par(mfcol=c(3,3))
 plot(modelMixture, c(1:9))
 ```
 
-After that we can produce forecasts using the data from the holdout sample:
+After that we can produce forecasts using the data from the holdout sample (in this example we also ask for several confidence levels):
 ```{r mixturePredict}
-predict(modelMixture,outSample,interval="p")
+predict(modelMixture,outSample,interval="p",level=c(0.8,0.9,0.95))
 ```
 
 If you expect autoregressive elements in the data, then you can specify the order of AR via the respective parameter
@@ -597,11 +603,11 @@ plot(forecast(modelMixtureAR, h=10, interval="p",side="u"))
 It will produce forecasts for each of the explanatory variables based on the available data using `es()` function from `smooth` package (if it is available; otherwise, it will use Naive) and use those values as the new data.
 
 
-# Different loss functions
+# Using different loss functions {#losses}
 There are several loss functions implemented in the function and there is an option for a user to provide their own. If the `loss` is not `"likelihood"`, then the distribution is only needed for inference. Keep in mind that this typically means that the likelihood is not maximised, so the inference might be wrong and the results can be misleading. However, there are several cases, when this is not the case:
 
 1. `loss="MSE"`, `distribution=c("dnorm","dlnorm","dbcnorm")`;
-2. `loss="MAE"`, `distribution=c("dlaplace","dalaplace")`;
+2. `loss="MAE"`, `distribution=c("dlaplace","dllaplace")`;
 3. `loss="HAM"`, `distribution=c("ds","dls")`;
 
 The likelihoods of the distributions above are maximised, when the respective losses are minimised, so all the inference discussed above hold in these three situations. In all the other cases, the `alm()` function will not return `logLik` and might complain that the derivations can be misleading.
@@ -611,7 +617,7 @@ Also, when `loss="likelihood"` the number of estimated parameters includes the s
 Finally, we can provide custom loss functions. Here is an example:
 ```{r}
 lossFunction <- function(actual, fitted, B, xreg){
-  return(mean((actual-fitted)^3));
+  return(mean(abs(actual-fitted)^3));
 }
 modelLossCustom <- alm(y~x1+x2+Noise, inSample, distribution="dnorm", loss=lossFunction)
 summary(modelLossCustom)
@@ -619,14 +625,24 @@ summary(modelLossCustom)
 
 Keep in mind that it is important to have parameters `actual`, `fitted`, `B` and `xreg` in the custom loss function, even if they are not used. `xreg` is the matrix of the expanded explanatory variables (including the intercept in the first column if it is needed).
 
-You might also notice that there are LASSO and RIDGE available as options for `loss` parameter. These are experimental. When they are used, the explanatory variabls are not normalised, but the parameters are divided by the mean values of explanatory variables, which has a similar (but not the same) effect. Also, in order for this to work appropriately, you need to provide the parameter `lambda`, which should lie between 0 and 1, where `lambda=0` means that there is no shrinkage and `lambda=1` implies that there is only shrinkage, and the MSE is not used at all.
+You might also notice that there are LASSO and RIDGE available as options for `loss` parameter. These are experimental. When they are used, the explanatory variables are not normalised, but the parameters (all but intercept) are divided by the standard deviations of explanatory variables, which has a similar (but not the same) effect. Also, in order for this to work appropriately, *you need to provide* the parameter `lambda`, which should lie between 0 and 1, where `lambda=0` means that there is no shrinkage and `lambda=1` implies that there is only shrinkage, and the MSE is not used at all.
 
-# Estimation process
+Note that due to the formulation of `alm()`, you can use LASSO for [Logistic](#logit) (`distribution="plogis"`), [Poisson](#poisson) (`distribution="dpois"`) and [Negative Binomial](#nbinom) (`distribution="dnbinom"`) regressions as well. Keep in mind that in order to get better results, you might need to tune [the parameters of the optimiser](#estimator) (e.g. set `maxeval` to a higher value or increase `ftol_rel`).
+
+When working with non-conventional loss functions do not rely on the default standard errors of parameters, because they are not what they seem: they only work in case of `loss="likelihood"`. A correct method for calculating the standard errors is the bootstrap, which is now available via the `bootstrap=TRUE` parameter. Here is an example:
+
+```{r}
+summary(modelLossCustom, bootstrap=TRUE, nsim=100)
+```
+Where `nsim` is the parameter passed to the method `coefbootstrap()`, which is used in order to generate coefficients of models and then extract the necessary statistics. See `?coefbootstrap` to see what parameters are accepted by the function. There are several methods that can use `coefbootstrap()` and will use bootstrapped covariance matrix: `vcov()`, `coefint()`, `summary()`, `predict()` and `forecast()`.
+
+
+# Estimation process {#estimator}
 There are several parameters in the optimiser that can be regulated by the user. Here is the list:
 
 1. `B` - the vector of starting values of parameters for the optimiser, which should correspond to the ordering of the explanatory variables. In order to see the order of parameters, you can fit a model to the data and extract `B` from it via `ourModel$B`;
 2. `algorithm` the algorithm to use in optimisation (`"NLOPT_LN_SBPLX"` by default).
-3. `maxeval` - maximum number of iterations to carry out (default is 100);
+3. `maxeval` - maximum number of iterations to carry out (default is 200 for simpler models, 500 for [Logistic](#logit), [Probit](#probit), [Poisson](#poisson) and [Negative Binomial](#nbinom) and 1000 in case of `loss=c("LASSO","RIDGE)`);
 4. `maxtime` - stop, when the optimisation time (in seconds) exceeds this;
 5. `xtol_rel` -  the relative precision of the optimiser (the default is 1E-6);
 6. `xtol_abs` - the absolute precision of the optimiser (the default is 1E-8);

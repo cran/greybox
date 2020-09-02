@@ -239,7 +239,7 @@ pointLik.alm <- function(object, ...){
                             "dls" = ds(log(y), mu=mu, scale=scale, log=TRUE),
                             "dpois" = dpois(y, lambda=mu, log=TRUE),
                             "dnbinom" = dnbinom(y, mu=mu, size=object$other$size, log=TRUE),
-                            "dchisq" = dchisq(y, df=object$other$df, ncp=mu, log=TRUE),
+                            "dchisq" = dchisq(y, df=object$other$nu, ncp=mu, log=TRUE),
                             "dbeta" = dbeta(y, shape1=mu, shape2=scale, log=TRUE),
                             "plogis" = c(plogis(mu[ot], location=0, scale=1, log.p=TRUE),
                                          plogis(mu[!ot], location=0, scale=1, lower.tail=FALSE, log.p=TRUE)),
@@ -389,7 +389,7 @@ pBICc.default <- function(object, ...){
 #' @param object Model estimated using one of the functions of smooth package.
 #' @param all If \code{FALSE}, then in the case of the occurrence model, only demand
 #' sizes will be returned.
-#' @param ... Other parameters to pass to the method. Currenly nothin is supported here.
+#' @param ... Other parameters to pass to the method. Currently nothing is supported here.
 #' @return The vector of the response variable.
 #' @examples
 #'
@@ -422,10 +422,60 @@ actuals.alm <- function(object, all=TRUE, ...){
     }
 }
 
+#' Coefficients of the model and their statistics
+#'
+#' These are the basic methods for the alm and greybox models that extract coefficients,
+#' their covariance matrix, confidence intervals or generating the summary of the model.
+#' If the non-likelihood related loss was used in the process, then it is recommended to
+#' use bootstrap (which is slow, but more reliable).
+#'
+#' The \code{coef()} method returns the vector of parameters of the model. If
+#' \code{bootstrap=TRUE}, then the coefficients are calculated as the mean values of the
+#' bootstrapped ones.
+#'
+#' The \code{vcov()} method returns the covariance matrix of parameters. If
+#' \code{bootstrap=TRUE}, then the bootstrap is done using \link[greybox]{coefbootstrap}
+#' function
+#'
+#' The \code{confint()} constructs the confidence intervals for parameters. Once again,
+#' this can be done using \code{bootstrap=TRUE}.
+#'
+#' Finally, the \code{summary()} returns the table with parameters, their standard errors,
+#' confidence intervals and general information about the model.
+#'
+#' @param object The model estimated using alm or other greybox function.
+#' @param bootstrap The logical, which determines, whether to use bootstrap in the
+#' process or not.
+#' @param level The confidence level for the construction of the interval.
+#' @param parm The parameters that need to be extracted.
+#' @param ... Parameters passed to \link[greybox]{coefbootstrap} function.
+#'
+#' @return Depending on the used method, different values are returned.
+#'
+#' @template author
+#' @template keywords
+#'
+#' @seealso \code{\link[greybox]{alm}, \link[greybox]{coefbootstrap}}
+#'
+#' @examples
+#' # An example with ALM
+#' ourModel <- alm(mpg~., mtcars, distribution="dlnorm")
+#' coef(ourModel)
+#' vcov(ourModel)
+#' confint(ourModel)
+#' summary(ourModel)
+#'
+#' @rdname coef.alm
+#' @aliases coef.greybox coef.alm
 #' @importFrom stats coef
 #' @export
-coef.greybox <- function(object, ...){
-    return(object$coefficients);
+coef.greybox <- function(object, bootstrap=FALSE, ...){
+    if(bootstrap){
+        return(colMeans(coefbootstrap(object, ...)$coefficients));
+    }
+    else{
+        return(object$coefficients);
+    }
 }
 
 #' @export
@@ -435,37 +485,46 @@ coef.greyboxD <- function(object, ...){
     return(structure(coefReturned,class="coef.greyboxD"));
 }
 
-#' @importFrom stats confint qt
+#' @aliases confint.alm
+#' @rdname coef.alm
+#' @importFrom stats confint qt quantile
 #' @export
-confint.alm <- function(object, parm, level=0.95, ...){
+confint.alm <- function(object, parm, level=0.95, bootstrap=FALSE, ...){
+
+    confintNames <- c(paste0((1-level)/2*100,"%"),
+                      paste0((1+level)/2*100,"%"));
     # Extract parameters
     parameters <- coef(object);
-    parametersSE <- sqrt(diag(vcov(object)));
-    # Define quantiles using Student distribution
-    paramQuantiles <- qt((1+level)/2,df=object$df.residual);
+    if(!bootstrap){
+        parametersSE <- sqrt(diag(vcov(object)));
+        # Define quantiles using Student distribution
+        paramQuantiles <- qt((1+level)/2,df=object$df.residual);
 
-    # We can use normal distribution, because of the asymptotics of MLE
-    confintValues <- cbind(parameters-paramQuantiles*parametersSE,
-                           parameters+paramQuantiles*parametersSE);
-    confintNames <- c(paste0((1-level)/2*100,"%"),
-                                 paste0((1+level)/2*100,"%"));
-    colnames(confintValues) <- confintNames;
-    rownames(confintValues) <- names(parameters);
+        # We can use normal distribution, because of the asymptotics of MLE
+        confintValues <- cbind(parameters-paramQuantiles*parametersSE,
+                               parameters+paramQuantiles*parametersSE);
+        colnames(confintValues) <- confintNames;
+        rownames(confintValues) <- names(parameters);
+
+        # Return S.E. as well, so not to repeat the thing twice...
+        confintValues <- cbind(parametersSE, confintValues);
+        # Give the name to the first column
+        colnames(confintValues)[1] <- "S.E.";
+    }
+    else{
+        coefValues <- coefbootstrap(object, ...);
+        confintValues <- cbind(sqrt(diag(coefValues$vcov)),
+                               apply(coefValues$coefficients,2,quantile,probs=(1-level)/2),
+                               apply(coefValues$coefficients,2,quantile,probs=(1+level)/2));
+        colnames(confintValues) <- c("S.E.",confintNames);
+    }
+
     # If parm was not provided, return everything.
     if(!exists("parm",inherits=FALSE)){
         parm <- names(parameters);
     }
-    confintValues <- confintValues[parm,];
-    if(!is.matrix(confintValues)){
-        confintValues <- matrix(confintValues,1,2);
-        colnames(confintValues) <- confintNames;
-        rownames(confintValues) <- names(parameters);
-    }
 
-    # Return S.E. as well, so not to repeat the thing twice...
-    confintValues <- cbind(parametersSE, confintValues);
-    colnames(confintValues)[1] <- "S.E.";
-    return(confintValues);
+    return(confintValues[parm,,drop=FALSE]);
 }
 
 #' @export
@@ -656,195 +715,178 @@ sigma.varest <- function(object, ...){
     return(t(residuals(object)) %*% residuals(object) / (nobs(object)-nparam(object)+object$K));
 }
 
+#' @aliases vcov.alm
+#' @rdname coef.alm
 #' @importFrom stats vcov
 #' @export
-vcov.alm <- function(object, ...){
+vcov.alm <- function(object, bootstrap=FALSE, ...){
     nVariables <- length(coef(object));
     variablesNames <- names(coef(object));
     interceptIsNeeded <- any(variablesNames=="(Intercept)");
 
-    # If the likelihood is not available, then this is a non-conventional loss
-    if(is.na(logLik(object))){
-        warning(paste0("You used loss='",object$loss,
-                       "'. The covariance matrix of parameters might be incorrect."),
-                call.=FALSE);
-    }
-
-    if(any(object$distribution==c("dnorm","dlnorm","dbcnorm"))){
-        matrixXreg <- object$data[eval(object$subset),-1,drop=FALSE];
-        if(interceptIsNeeded){
-            matrixXreg <- cbind(1,matrixXreg);
-            colnames(matrixXreg)[1] <- "(Intercept)";
-        }
-        # colnames(matrixXreg) <- names(coef(object));
-        matrixXreg <- crossprod(matrixXreg);
-        vcovMatrixTry <- try(chol2inv(chol(matrixXreg)), silent=TRUE);
-        if(any(class(vcovMatrixTry)=="try-error")){
-            warning(paste0("Choleski decomposition of covariance matrix failed, so we had to revert to the simple inversion.\n",
-                           "The estimate of the covariance matrix of parameters might be inaccurate."),
+    # Try the basic method, if not a bootstrap
+    if(!bootstrap){
+        # If the likelihood is not available, then this is a non-conventional loss
+        if(is.na(logLik(object))){
+            warning(paste0("You used the non-likelihood compatible loss, so the covariance matrix might be incorrect. ",
+                           "It is advised to use bootstrap='TRUE' option in this case."),
                     call.=FALSE);
-            vcovMatrix <- try(solve(matrixXreg, diag(nVariables), tol=1e-20), silent=TRUE);
-            if(any(class(vcovMatrix)=="try-error")){
-                warning(paste0("Sorry, but the covariance matrix is singular, so we could not invert it.\n",
-                               "We failed to produce the covariance matrix of parameters."),
-                        call.=FALSE);
-                vcovMatrix <- diag(1e+100,nVariables);
+        }
+
+        if(any(object$distribution==c("dnorm","dlnorm","dbcnorm"))){
+            matrixXreg <- object$data[eval(object$subset),-1,drop=FALSE];
+            if(interceptIsNeeded){
+                matrixXreg <- cbind(1,matrixXreg);
+                colnames(matrixXreg)[1] <- "(Intercept)";
             }
+            # colnames(matrixXreg) <- names(coef(object));
+            matrixXreg <- crossprod(matrixXreg);
+            vcovMatrixTry <- try(chol2inv(chol(matrixXreg)), silent=TRUE);
+            if(any(class(vcovMatrixTry)=="try-error")){
+                warning(paste0("Choleski decomposition of covariance matrix failed, so we had to revert to the simple inversion.\n",
+                               "The estimate of the covariance matrix of parameters might be inaccurate."),
+                        call.=FALSE);
+                vcovMatrix <- try(solve(matrixXreg, diag(nVariables), tol=1e-20), silent=TRUE);
+                if(any(class(vcovMatrix)=="try-error")){
+                    warning(paste0("Sorry, but the covariance matrix is singular, so we could not invert it.\n",
+                                   "We failed to produce the covariance matrix of parameters."),
+                            call.=FALSE);
+                    vcovMatrix <- diag(1e+100,nVariables);
+                }
+            }
+            else{
+                vcovMatrix <- vcovMatrixTry;
+            }
+            # vcov <- object$scale^2 * vcovMatrix;
+            vcov <- sigma(object, all=FALSE)^2 * vcovMatrix;
+            rownames(vcov) <- colnames(vcov) <- variablesNames;
+        }
+        else if(object$distribution=="dpois"){
+            matrixXreg <- object$data[eval(object$subset),-1,drop=FALSE];
+            obsInsample <- nobs(object);
+            if(interceptIsNeeded){
+                matrixXreg <- cbind(1,matrixXreg);
+                colnames(matrixXreg)[1] <- "(Intercept)";
+            }
+            # colnames(matrixXreg) <- names(coef(object));
+            FIMatrix <- matrixXreg[1,] %*% t(matrixXreg[1,]) * object$mu[1];
+            for(j in 2:obsInsample){
+                FIMatrix[] <- FIMatrix + matrixXreg[j,] %*% t(matrixXreg[j,]) * object$mu[j];
+            }
+
+            # See if Choleski works... It sometimes fails, when we don't get to the max of likelihood.
+            vcovMatrixTry <- try(chol2inv(chol(FIMatrix)), silent=TRUE);
+            if(any(class(vcovMatrixTry)=="try-error")){
+                warning(paste0("Choleski decomposition of hessian failed, so we had to revert to the simple inversion.\n",
+                               "The estimate of the covariance matrix of parameters might be inaccurate."),
+                        call.=FALSE);
+                vcov <- try(solve(FIMatrix, diag(nVariables), tol=1e-20), silent=TRUE);
+                if(any(class(FIMatrix)=="try-error")){
+                    warning(paste0("Sorry, but the hessian is singular, so we could not invert it.\n",
+                                   "We failed to produce the covariance matrix of parameters."),
+                            call.=FALSE);
+                    vcov <- diag(1e+100,nVariables);
+                }
+            }
+            else{
+                vcov <- vcovMatrixTry;
+            }
+
+            rownames(vcov) <- colnames(vcov) <- variablesNames;
         }
         else{
-            vcovMatrix <- vcovMatrixTry;
-        }
-        # vcov <- object$scale^2 * vcovMatrix;
-        vcov <- sigma(object, all=FALSE)^2 * vcovMatrix;
-        rownames(vcov) <- colnames(vcov) <- variablesNames;
-    }
-    # else if(iOrderNone & (object$distribution=="dnorm")){
-    #     # matrixXreg <- model.matrix(formula(object),data=object$data);
-    #     # rownames(vcov) <- colnames(vcov) <- names(coef(object));
-    #     matrixXreg <- object$data[object$subset,-1,drop=FALSE];
-    #     if(interceptIsNeeded){
-    #         matrixXreg <- cbind(1,matrixXreg);
-    #         colnames(matrixXreg)[1] <- "(Intercept)";
-    #     }
-    #     # colnames(matrixXreg) <- names(coef(object));
-    #     nVariables <- ncol(matrixXreg);
-    #     matrixXreg <- crossprod(matrixXreg);
-    #     vcovMatrixTry <- try(chol2inv(chol(matrixXreg)), silent=TRUE);
-    #     if(any(class(vcovMatrixTry)=="try-error")){
-    #         warning(paste0("Choleski decomposition of covariance matrix failed, so we had to revert to the simple inversion.\n",
-    #                        "The estimate of the covariance matrix of parameters might be inaccurate."),
-    #                 call.=FALSE);
-    #         vcovMatrix <- try(solve(matrixXreg, diag(nVariables), tol=1e-20), silent=TRUE);
-    #         if(any(class(vcovMatrix)=="try-error")){
-    #             warning(paste0("Sorry, but the covariance matrix is singular, so we could not invert it.\n",
-    #                            "We failed to produce the covariance matrix of parameters."),
-    #                     call.=FALSE);
-    #             vcovMatrix <- diag(1e+100,nVariables);
-    #         }
-    #     }
-    #     else{
-    #         vcovMatrix <- vcovMatrixTry;
-    #     }
-    #     vcov <- sigma(object, all=FALSE)^2 * vcovMatrix;
-    #     rownames(vcov) <- colnames(vcov) <- names(coef(object));
-    # }
-    else if(object$distribution=="dpois"){
-        matrixXreg <- object$data[eval(object$subset),-1,drop=FALSE];
-        obsInsample <- nobs(object);
-        if(interceptIsNeeded){
-            matrixXreg <- cbind(1,matrixXreg);
-            colnames(matrixXreg)[1] <- "(Intercept)";
-        }
-        # colnames(matrixXreg) <- names(coef(object));
-        FIMatrix <- matrixXreg[1,] %*% t(matrixXreg[1,]) * object$mu[1];
-        for(j in 2:obsInsample){
-            FIMatrix[] <- FIMatrix + matrixXreg[j,] %*% t(matrixXreg[j,]) * object$mu[j];
-        }
+            # Form the call for alm
+            newCall <- object$call;
+            if(interceptIsNeeded){
+                newCall$formula <- as.formula(paste0("`",all.vars(newCall$formula)[1],"`~."));
+            }
+            else{
+                newCall$formula <- as.formula(paste0("`",all.vars(newCall$formula)[1],"`~.-1"));
+            }
+            newCall$data <- object$data;
+            newCall$subset <- object$subset;
+            newCall$distribution <- object$distribution;
+            if(object$loss=="custom"){
+                newCall$loss <- object$lossFunction;
+            }
+            else{
+                newCall$loss <- object$loss;
+            }
+            newCall$ar <- object$call$ar;
+            newCall$i <- object$call$i;
+            newCall$parameters <- coef(object);
+            newCall$fast <- TRUE;
+            if(any(object$distribution==c("dchisq","dt"))){
+                newCall$nu <- object$other$nu;
+            }
+            else if(object$distribution=="dnbinom"){
+                newCall$size <- object$other$size;
+            }
+            else if(object$distribution=="dalaplace"){
+                newCall$alpha <- object$other$alpha;
+            }
+            else if(object$distribution=="dfnorm"){
+                newCall$sigma <- object$other$sigma;
+            }
+            else if(object$distribution=="dbcnorm"){
+                newCall$lambdaBC <- object$other$lambdaBC;
+            }
+            else if(any(object$distribution==c("dgnorm","dlgnorm"))){
+                newCall$beta <- object$other$beta;
+            }
+            newCall$FI <- TRUE;
+            # newCall$occurrence <- NULL;
+            newCall$occurrence <- object$occurrence;
+            # Recall alm to get hessian
+            FIMatrix <- eval(newCall)$FI;
 
-        # See if Choleski works... It sometimes fails, when we don't get to the max of likelihood.
-        vcovMatrixTry <- try(chol2inv(chol(FIMatrix)), silent=TRUE);
-        if(any(class(vcovMatrixTry)=="try-error")){
-            warning(paste0("Choleski decomposition of hessian failed, so we had to revert to the simple inversion.\n",
-                           "The estimate of the covariance matrix of parameters might be inaccurate."),
-                    call.=FALSE);
-            vcov <- try(solve(FIMatrix, diag(nVariables), tol=1e-20), silent=TRUE);
+            # See if Choleski works... It sometimes fails, when we don't get to the max of likelihood.
+            vcovMatrixTry <- try(chol2inv(chol(FIMatrix)), silent=TRUE);
+            if(any(class(vcovMatrixTry)=="try-error")){
+                warning(paste0("Choleski decomposition of hessian failed, so we had to revert to the simple inversion.\n",
+                               "The estimate of the covariance matrix of parameters might be inaccurate."),
+                        call.=FALSE);
+                FIMatrix <- try(solve(FIMatrix, diag(nVariables), tol=1e-20), silent=TRUE);
+                if(any(class(FIMatrix)=="try-error")){
+                    vcov <- diag(1e+100,nVariables);
+                }
+                else{
+                    vcov <- FIMatrix;
+                }
+            }
+            else{
+                vcov <- vcovMatrixTry;
+            }
+
+            # If the conventional approach failed, do bootstrap
             if(any(class(FIMatrix)=="try-error")){
                 warning(paste0("Sorry, but the hessian is singular, so we could not invert it.\n",
-                               "We failed to produce the covariance matrix of parameters."),
+                               "Switching to bootstrap of covariance matrix of parameters."),
                         call.=FALSE);
-                vcov <- diag(1e+100,nVariables);
+                vcov <- coefbootstrap(object, ...)$vcov;
             }
         }
-        else{
-            vcov <- vcovMatrixTry;
-        }
-
-        rownames(vcov) <- colnames(vcov) <- variablesNames;
     }
     else{
-        # Form the call for alm
-        newCall <- object$call;
-        if(interceptIsNeeded){
-            newCall$formula <- as.formula(paste0("`",all.vars(newCall$formula)[1],"`~."));
-        }
-        else{
-            newCall$formula <- as.formula(paste0("`",all.vars(newCall$formula)[1],"`~.-1"));
-        }
-        newCall$data <- object$data;
-        newCall$subset <- object$subset;
-        newCall$distribution <- object$distribution;
-        if(object$loss=="custom"){
-            newCall$loss <- object$lossFunction;
-        }
-        else{
-            newCall$loss <- object$loss;
-        }
-        newCall$ar <- object$call$ar;
-        newCall$i <- object$call$i;
-        newCall$parameters <- coef(object);
-        newCall$fast <- TRUE;
-        if(any(object$distribution==c("dchisq","dt"))){
-            newCall$df <- object$other$df;
-        }
-        else if(object$distribution=="dnbinom"){
-            newCall$size <- object$other$size;
-        }
-        else if(object$distribution=="dalaplace"){
-            newCall$alpha <- object$other$alpha;
-        }
-        else if(object$distribution=="dfnorm"){
-            newCall$sigma <- object$other$sigma;
-        }
-        else if(object$distribution=="dbcnorm"){
-            newCall$lambdaBC <- object$other$lambdaBC;
-        }
-        else if(any(object$distribution==c("dgnorm","dlgnorm"))){
-            newCall$beta <- object$other$beta;
-        }
-        newCall$FI <- TRUE;
-        # newCall$occurrence <- NULL;
-        newCall$occurrence <- object$occurrence;
-        # Recall alm to get hessian
-        FIMatrix <- eval(newCall)$FI;
+        vcov <- coefbootstrap(object, ...)$vcov;
+    }
 
-        # See if Choleski works... It sometimes fails, when we don't get to the max of likelihood.
-        vcovMatrixTry <- try(chol2inv(chol(FIMatrix)), silent=TRUE);
-        if(any(class(vcovMatrixTry)=="try-error")){
-            warning(paste0("Choleski decomposition of hessian failed, so we had to revert to the simple inversion.\n",
-                           "The estimate of the covariance matrix of parameters might be inaccurate."),
-                    call.=FALSE);
-            FIMatrix <- try(solve(FIMatrix, diag(nVariables), tol=1e-20), silent=TRUE);
-            if(any(class(FIMatrix)=="try-error")){
-                warning(paste0("Sorry, but the hessian is singular, so we could not invert it.\n",
-                               "We failed to produce the covariance matrix of parameters."),
-                        call.=FALSE);
-                vcov <- diag(1e+100,nVariables);
-            }
-            else{
-                vcov <- FIMatrix;
-            }
+    if(nVariables>1){
+        if(object$distribution=="dbeta"){
+            dimnames(vcov) <- list(c(paste0("shape1_",variablesNames),paste0("shape2_",variablesNames)),
+                                   c(paste0("shape1_",variablesNames),paste0("shape2_",variablesNames)));
         }
         else{
-            vcov <- vcovMatrixTry;
+            dimnames(vcov) <- list(variablesNames,variablesNames);
         }
+    }
+    else{
+        names(vcov) <- variablesNames;
+    }
 
-        if(nVariables>1){
-            if(object$distribution=="dbeta"){
-                dimnames(vcov) <- list(c(paste0("shape1_",variablesNames),paste0("shape2_",variablesNames)),
-                                             c(paste0("shape1_",variablesNames),paste0("shape2_",variablesNames)));
-            }
-            else{
-                dimnames(vcov) <- list(variablesNames,variablesNames);
-            }
-        }
-        else{
-            names(vcov) <- variablesNames;
-        }
-
-        # Sometimes the diagonal elements in the covariance matrix are negative because likelihood is not fully maximised...
-        if(any(diag(vcov)<0)){
-            diag(vcov) <- abs(diag(vcov));
-        }
+    # Sometimes the diagonal elements in the covariance matrix are negative because likelihood is not fully maximised...
+    if(any(diag(vcov)<0)){
+        diag(vcov) <- abs(diag(vcov));
     }
     return(vcov);
 }
@@ -1821,14 +1863,14 @@ print.summary.alm <- function(x, ...){
                       "dlaplace" = "Laplace",
                       "dllaplace" = "Log Laplace",
                       "dalaplace" = paste0("Asymmetric Laplace with alpha=",round(x$other$alpha,digits)),
-                      "dt" = paste0("Student t with df=",round(x$other$df, digits)),
+                      "dt" = paste0("Student t with nu=",round(x$other$nu, digits)),
                       "ds" = "S",
                       "dls" = "Log S",
                       "dfnorm" = "Folded Normal",
                       "dlnorm" = "Log Normal",
                       "dbcnorm" = paste0("Box-Cox Normal with lambda=",round(x$other$lambdaBC,digits)),
                       "dinvgauss" = "Inverse Gaussian",
-                      "dchisq" = paste0("Chi-Squared with df=",round(x$other$df,digits)),
+                      "dchisq" = paste0("Chi-Squared with nu=",round(x$other$nu,digits)),
                       "dpois" = "Poisson",
                       "dnbinom" = paste0("Negative Binomial with size=",round(x$other$size,digits)),
                       "dbeta" = "Beta",
@@ -1852,8 +1894,12 @@ print.summary.alm <- function(x, ...){
     if(!is.null(x$arima)){
         cat(paste0("\n",x$arima," components were included in the model"));
     }
+    if(x$bootstrap){
+        cat("\nBootstrap was used for the estimation of uncertainty of parameters");
+    }
     cat("\nCoefficients:\n");
     print(round(x$coefficients,digits));
+
     cat("\nError standard deviation: "); cat(round(sqrt(x$s2),digits));
     cat("\nSample size: "); cat(x$dfTable[1]);
     cat("\nNumber of estimated parameters: "); cat(x$dfTable[2]);
@@ -1977,7 +2023,6 @@ print.predict.greybox <- function(x, ...){
         else{
             level <- x$level;
         }
-        colnames(ourMatrix)[2:3] <- c(paste0("Lower ",round(level[1],3)*100,"%"),paste0("Upper ",round(level[2],3)*100,"%"));
     }
     print(ourMatrix);
 }
@@ -2186,7 +2231,7 @@ cooks.distance.greybox <- function(model, ...){
 #' \itemize{
 #' \item outliers - the matrix with the dummy variables, flagging outliers;
 #' \item statistic - the value of the statistic for the normalised variable;
-#' \item id - the ids of the outliers (which observatins have them);
+#' \item id - the ids of the outliers (which observations have them);
 #' \item level - the confidence level used in the process;
 #' \item type - the type of the residuals used.
 #' }
@@ -2277,13 +2322,15 @@ print.outlierdummy <- function(x, ...){
 }
 
 #### Summary ####
+#' @aliases summary.alm
+#' @rdname coef.alm
 #' @export
-summary.alm <- function(object, level=0.95, ...){
+summary.alm <- function(object, level=0.95, bootstrap=FALSE, ...){
     errors <- residuals(object);
     obs <- nobs(object, all=TRUE);
 
     # Collect parameters and their standard errors
-    parametersConfint <- confint(object, level=level);
+    parametersConfint <- confint(object, level=level, bootstrap=bootstrap, ...);
     parametersTable <- cbind(coef(object),parametersConfint);
     rownames(parametersTable) <- names(coef(object));
     colnames(parametersTable) <- c("Estimate","Std. Error",
@@ -2313,6 +2360,8 @@ summary.alm <- function(object, level=0.95, ...){
     ourReturn$dfTable <- dfTable;
     ourReturn$arima <- object$other$arima;
     ourReturn$s2 <- sigma(object)^2;
+
+    ourReturn$bootstrap <- bootstrap;
 
     ourReturn <- structure(ourReturn,class="summary.alm");
     return(ourReturn);
@@ -2349,6 +2398,8 @@ summary.greybox <- function(object, level=0.95, ...){
 
     ourReturn$dfTable <- dfTable;
     ourReturn$arima <- object$other$arima;
+
+    ourReturn$bootstrap <- FALSE;
 
     ourReturn <- structure(ourReturn,class="summary.greybox");
     return(ourReturn);
@@ -2387,7 +2438,7 @@ summary.greyboxC <- function(object, level=0.95, ...){
     ourReturn <- structure(list(coefficients=parametersTable, sigma=residSE,
                                 ICs=ICs, ICType=object$ICType, df=df, r.squared=R2, adj.r.squared=R2Adj,
                                 distribution=object$distribution, responseName=formula(object)[[2]],
-                                dfTable=dfTable),
+                                dfTable=dfTable, bootstrap=FALSE),
                            class="summary.greyboxC");
     return(ourReturn);
 }
@@ -2428,7 +2479,7 @@ summary.greyboxD <- function(object, level=0.95, ...){
                                 dynamic=coef(object)$dynamic,
                                 ICs=ICs, ICType=object$ICType, df=df, r.squared=R2, adj.r.squared=R2Adj,
                                 distribution=object$distribution, responseName=formula(object)[[2]],
-                                nobs=nobs(object), nparam=nparam(object), dfTable=dfTable),
+                                nobs=nobs(object), nparam=nparam(object), dfTable=dfTable, bootstrap=FALSE),
                            class="summary.greyboxC");
     return(ourReturn);
 }
@@ -2458,10 +2509,11 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     else{
         newdataProvided <- TRUE;
     }
-    interval <- substr(interval[1],1,1);
-    side <- substr(side[1],1,1);
+    interval <- match.arg(interval);
+    side <- match.arg(side);
     h <- nrow(newdata);
     levelOriginal <- level;
+    nLevels <- length(level);
 
     ariOrderNone <- is.null(object$other$polynomial);
     if(ariOrderNone){
@@ -2477,32 +2529,42 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     # If there is an occurrence part of the model, use it
     if(is.occurrence(object$occurrence)){
         occurrence <- predict(object$occurrence, newdata, interval=interval, level=level, side=side, ...);
+        # Reset horizon, just in case
+        h <- length(occurrence$mean);
+        # Create a matrix of levels for each horizon and level
+        level <- matrix(level, h, nLevels, byrow=TRUE);
         # The probability of having zero should be subtracted from that thing...
-        if(interval=="p"){
-            level <- (level - (1 - occurrence$mean)) / occurrence$mean;
+        if(interval=="prediction"){
+            level[] <- (level - (1 - occurrence$mean)) / occurrence$mean;
         }
         level[level<0] <- 0;
         greyboxForecast$occurrence <- occurrence;
     }
-
-    if(side=="u"){
-        levelLow <- rep(0,length(level));
-        levelUp <- level;
+    else{
+        # Create a matrix of levels for each horizon and level
+        level <- matrix(level, h, nLevels, byrow=TRUE);
     }
-    else if(side=="l"){
-        levelLow <- 1-level;
-        levelUp <- rep(1,length(level));
+
+    # levelLow and levelUp are matrices here...
+    levelLow <- levelUp <- matrix(level, h, nLevels, byrow=TRUE);
+    if(side=="upper"){
+        levelLow[] <- 0;
+        levelUp[] <- level;
+    }
+    else if(side=="lower"){
+        levelLow[] <- 1-level;
+        levelUp[] <- 1;
     }
     else{
-        levelLow <- (1 - level) / 2;
-        levelUp <- (1 + level) / 2;
+        levelLow[] <- (1-level)/2;
+        levelUp[] <- (1+level)/2;
     }
 
     levelLow[levelLow<0] <- 0;
     levelUp[levelUp<0] <- 0;
 
     if(object$distribution=="dnorm"){
-        if(is.occurrence(object$occurrence) & interval!="n"){
+        if(is.occurrence(object$occurrence) & interval!="none"){
             greyboxForecast$lower[] <- qnorm(levelLow,greyboxForecast$mean,greyboxForecast$scale);
             greyboxForecast$upper[] <- qnorm(levelUp,greyboxForecast$mean,greyboxForecast$scale);
         }
@@ -2510,18 +2572,22 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     else if(object$distribution=="dlaplace"){
         # Use the connection between the variance and MAE in Laplace distribution
         scaleValues <- sqrt(greyboxForecast$variances/2);
-        if(interval!="n"){
-            greyboxForecast$lower[] <- qlaplace(levelLow,greyboxForecast$mean,scaleValues);
-            greyboxForecast$upper[] <- qlaplace(levelUp,greyboxForecast$mean,scaleValues);
+        if(interval!="none"){
+            for(i in 1:nLevels){
+                greyboxForecast$lower[,i] <- qlaplace(levelLow[,i],greyboxForecast$mean,scaleValues);
+                greyboxForecast$upper[,i] <- qlaplace(levelUp[,i],greyboxForecast$mean,scaleValues);
+            }
         }
         greyboxForecast$scale <- scaleValues;
     }
     else if(object$distribution=="dllaplace"){
         # Use the connection between the variance and MAE in Laplace distribution
         scaleValues <- sqrt(greyboxForecast$variances/2);
-        if(interval!="n"){
-            greyboxForecast$lower[] <- exp(qlaplace(levelLow,greyboxForecast$mean,scaleValues));
-            greyboxForecast$upper[] <- exp(qlaplace(levelUp,greyboxForecast$mean,scaleValues));
+        if(interval!="none"){
+            for(i in 1:nLevels){
+                greyboxForecast$lower[,i] <- exp(qlaplace(levelLow[,i],greyboxForecast$mean,scaleValues));
+                greyboxForecast$upper[,i] <- exp(qlaplace(levelUp[,i],greyboxForecast$mean,scaleValues));
+            }
         }
         greyboxForecast$mean[] <- exp(greyboxForecast$mean);
         greyboxForecast$scale <- scaleValues;
@@ -2530,28 +2596,33 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
         # Use the connection between the variance and MAE in Laplace distribution
         alpha <- object$other$alpha;
         scaleValues <- sqrt(greyboxForecast$variances * alpha^2 * (1-alpha)^2 / (alpha^2 + (1-alpha)^2));
-        if(interval!="n"){
-            # warning("We don't have the proper prediction intervals for ALD yet. The uncertainty is underestimated!", call.=FALSE);
-            greyboxForecast$lower[] <- qalaplace(levelLow,greyboxForecast$mean,scaleValues,alpha);
-            greyboxForecast$upper[] <- qalaplace(levelUp,greyboxForecast$mean,scaleValues,alpha);
+        if(interval!="none"){
+            for(i in 1:nLevels){
+                greyboxForecast$lower[,i] <- qalaplace(levelLow[,i],greyboxForecast$mean,scaleValues,alpha);
+                greyboxForecast$upper[,i] <- qalaplace(levelUp[,i],greyboxForecast$mean,scaleValues,alpha);
+            }
         }
         greyboxForecast$scale <- scaleValues;
     }
     else if(object$distribution=="ds"){
         # Use the connection between the variance and scale in S distribution
         scaleValues <- (greyboxForecast$variances/120)^0.25;
-        if(interval!="n"){
-            greyboxForecast$lower[] <- qs(levelLow,greyboxForecast$mean,scaleValues);
-            greyboxForecast$upper[] <- qs(levelUp,greyboxForecast$mean,scaleValues);
+        if(interval!="none"){
+            for(i in 1:nLevels){
+                greyboxForecast$lower[,i] <- qs(levelLow[,i],greyboxForecast$mean,scaleValues);
+                greyboxForecast$upper[,i] <- qs(levelUp[,i],greyboxForecast$mean,scaleValues);
+            }
         }
         greyboxForecast$scale <- scaleValues;
     }
     else if(object$distribution=="dls"){
         # Use the connection between the variance and scale in S distribution
         scaleValues <- (greyboxForecast$variances/120)^0.25;
-        if(interval!="n"){
-            greyboxForecast$lower[] <- exp(qs(levelLow,greyboxForecast$mean,scaleValues));
-            greyboxForecast$upper[] <- exp(qs(levelUp,greyboxForecast$mean,scaleValues));
+        if(interval!="none"){
+            for(i in 1:nLevels){
+                greyboxForecast$lower[,i] <- exp(qs(levelLow[,i],greyboxForecast$mean,scaleValues));
+                greyboxForecast$upper[,i] <- exp(qs(levelUp[,i],greyboxForecast$mean,scaleValues));
+            }
         }
         greyboxForecast$mean <- exp(greyboxForecast$mean);
         greyboxForecast$scale <- scaleValues;
@@ -2559,7 +2630,7 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     else if(object$distribution=="dgnorm"){
         # Use the connection between the variance and scale in Generalised Normal distribution
         scaleValues <- sqrt(greyboxForecast$variances*(gamma(1/object$other$beta)/gamma(3/object$other$beta)));
-        if(interval!="n"){
+        if(interval!="none"){
             greyboxForecast$lower[] <- qgnorm(levelLow,greyboxForecast$mean,scaleValues,object$other$beta);
             greyboxForecast$upper[] <- qgnorm(levelUp,greyboxForecast$mean,scaleValues,object$other$beta);
         }
@@ -2568,7 +2639,7 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     else if(object$distribution=="dlgnorm"){
         # Use the connection between the variance and scale in Generalised Normal distribution
         scaleValues <- sqrt(greyboxForecast$variances*(gamma(1/object$other$beta)/gamma(3/object$other$beta)));
-        if(interval!="n"){
+        if(interval!="none"){
             greyboxForecast$lower[] <- exp(qgnorm(levelLow,greyboxForecast$mean,scaleValues,object$other$beta));
             greyboxForecast$upper[] <- exp(qgnorm(levelUp,greyboxForecast$mean,scaleValues,object$other$beta));
         }
@@ -2578,15 +2649,17 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     else if(object$distribution=="dt"){
         # Use df estimated by the model and then construct conventional intervals. df=2 is the minimum in this model.
         df <- nobs(object) - nparam(object);
-        if(interval!="n"){
+        if(interval!="none"){
             greyboxForecast$lower[] <- greyboxForecast$mean + sqrt(greyboxForecast$variances) * qt(levelLow,df);
             greyboxForecast$upper[] <- greyboxForecast$mean + sqrt(greyboxForecast$variances) * qt(levelUp,df);
         }
     }
     else if(object$distribution=="dfnorm"){
-        if(interval!="n"){
-            greyboxForecast$lower[] <- qfnorm(levelLow,greyboxForecast$mean,sqrt(greyboxForecast$variance));
-            greyboxForecast$upper[] <- qfnorm(levelUp,greyboxForecast$mean,sqrt(greyboxForecast$variance));
+        if(interval!="none"){
+            for(i in 1:nLevels){
+                greyboxForecast$lower[,i] <- qfnorm(levelLow[,i],greyboxForecast$mean,sqrt(greyboxForecast$variance));
+                greyboxForecast$upper[,i] <- qfnorm(levelUp[,i],greyboxForecast$mean,sqrt(greyboxForecast$variance));
+            }
         }
         # Correct the mean value
         greyboxForecast$mean <- (sqrt(2/pi)*sqrt(greyboxForecast$variance)*exp(-greyboxForecast$mean^2 /
@@ -2595,11 +2668,11 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     }
     else if(object$distribution=="dchisq"){
         greyboxForecast$mean <- greyboxForecast$mean^2;
-        if(interval=="p"){
-            greyboxForecast$lower[] <- qchisq(levelLow,df=object$other$df,ncp=greyboxForecast$mean);
-            greyboxForecast$upper[] <- qchisq(levelUp,df=object$other$df,ncp=greyboxForecast$mean);
+        if(interval=="prediction"){
+            greyboxForecast$lower[] <- qchisq(levelLow,df=object$other$nu,ncp=greyboxForecast$mean);
+            greyboxForecast$upper[] <- qchisq(levelUp,df=object$other$nu,ncp=greyboxForecast$mean);
         }
-        else if(interval=="c"){
+        else if(interval=="confidence"){
             greyboxForecast$lower[] <- (greyboxForecast$lower)^2;
             greyboxForecast$upper[] <- (greyboxForecast$upper)^2;
         }
@@ -2607,13 +2680,13 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
         greyboxForecast$scale <- object$scale;
     }
     else if(object$distribution=="dlnorm"){
-        if(interval=="p"){
+        if(interval=="prediction"){
             sdlog <- sqrt(greyboxForecast$variance - sigma(object)^2 + object$scale^2);
         }
         else{
             sdlog <- sqrt(greyboxForecast$variance);
         }
-        if(interval!="n"){
+        if(interval!="none"){
             greyboxForecast$lower[] <- qlnorm(levelLow,greyboxForecast$mean,sdlog);
             greyboxForecast$upper[] <- qlnorm(levelUp,greyboxForecast$mean,sdlog);
         }
@@ -2626,7 +2699,7 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
         if(any(greyboxForecast$mean<0)){
             greyboxForecast$mean[greyboxForecast$mean<0] <- 0;
         }
-        if(interval!="n"){
+        if(interval!="none"){
             greyboxForecast$lower[] <- qbcnorm(levelLow,greyboxForecast$mean,sigma,object$other$lambdaBC);
             greyboxForecast$upper[] <- qbcnorm(levelUp,greyboxForecast$mean,sigma,object$other$lambdaBC);
         }
@@ -2640,13 +2713,13 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     }
     else if(object$distribution=="dinvgauss"){
         greyboxForecast$mean <- exp(greyboxForecast$mean);
-        if(interval=="p"){
+        if(interval=="prediction"){
             greyboxForecast$scale <- object$scale;
         }
-        else if(interval=="c"){
+        else if(interval=="confidence"){
             greyboxForecast$scale <- greyboxForecast$variance / greyboxForecast$mean^3;
         }
-        if(interval!="n"){
+        if(interval!="none"){
             greyboxForecast$lower[] <- greyboxForecast$mean*qinvgauss(levelLow,mean=1,
                                                                       dispersion=greyboxForecast$scale);
             greyboxForecast$upper[] <- greyboxForecast$mean*qinvgauss(levelUp,mean=1,
@@ -2656,7 +2729,7 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     else if(object$distribution=="dlogis"){
         # Use the connection between the variance and scale in logistic distribution
         scale <- sqrt(greyboxForecast$variances * 3 / pi^2);
-        if(interval!="n"){
+        if(interval!="none"){
             greyboxForecast$lower[] <- qlogis(levelLow,greyboxForecast$mean,scale);
             greyboxForecast$upper[] <- qlogis(levelUp,greyboxForecast$mean,scale);
         }
@@ -2664,11 +2737,11 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     }
     else if(object$distribution=="dpois"){
         greyboxForecast$mean <- exp(greyboxForecast$mean);
-        if(interval=="p"){
+        if(interval=="prediction"){
             greyboxForecast$lower[] <- qpois(levelLow,greyboxForecast$mean);
             greyboxForecast$upper[] <- qpois(levelUp,greyboxForecast$mean);
         }
-        else if(interval=="c"){
+        else if(interval=="confidence"){
             greyboxForecast$lower[] <- exp(greyboxForecast$lower);
             greyboxForecast$upper[] <- exp(greyboxForecast$upper);
         }
@@ -2683,11 +2756,11 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
         else{
             greyboxForecast$scale <- object$scale;
         }
-        if(interval=="p"){
+        if(interval=="prediction"){
             greyboxForecast$lower[] <- qnbinom(levelLow,mu=greyboxForecast$mean,size=greyboxForecast$scale);
             greyboxForecast$upper[] <- qnbinom(levelUp,mu=greyboxForecast$mean,size=greyboxForecast$scale);
         }
-        else if(interval=="c"){
+        else if(interval=="confidence"){
             greyboxForecast$lower[] <- exp(greyboxForecast$lower);
             greyboxForecast$upper[] <- exp(greyboxForecast$upper);
         }
@@ -2699,11 +2772,11 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
         greyboxForecast$variances <- (greyboxForecast$shape1 * greyboxForecast$shape2 /
                                           ((greyboxForecast$shape1+greyboxForecast$shape2)^2 *
                                                (greyboxForecast$shape1 + greyboxForecast$shape2 + 1)));
-        if(interval=="p"){
+        if(interval=="prediction"){
             greyboxForecast$lower <- qbeta(levelLow,greyboxForecast$shape1,greyboxForecast$shape2);
             greyboxForecast$upper <- qbeta(levelUp,greyboxForecast$shape1,greyboxForecast$shape2);
         }
-        else if(interval=="c"){
+        else if(interval=="confidence"){
             greyboxForecast$lower <- (greyboxForecast$mean + qt(levelLow,df=object$df.residual)*
                                           sqrt(greyboxForecast$variances/nobs(object)));
             greyboxForecast$upper <- (greyboxForecast$mean + qt(levelUp,df=object$df.residual)*
@@ -2716,7 +2789,7 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
 
         greyboxForecast$mean <- plogis(greyboxForecast$location, location=0, scale=1);
 
-        if(interval!="n"){
+        if(interval!="none"){
             greyboxForecast$lower[] <- plogis(qnorm(levelLow, greyboxForecast$location, sqrt(greyboxForecast$variances)),
                                             location=0, scale=1);
             greyboxForecast$upper[] <- plogis(qnorm(levelUp, greyboxForecast$location, sqrt(greyboxForecast$variances)),
@@ -2729,7 +2802,7 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
 
         greyboxForecast$mean <- pnorm(greyboxForecast$location, mean=0, sd=1);
 
-        if(interval!="n"){
+        if(interval!="none"){
             greyboxForecast$lower[] <- pnorm(qnorm(levelLow, greyboxForecast$location, sqrt(greyboxForecast$variances)),
                                             mean=0, sd=1);
             greyboxForecast$upper[] <- pnorm(qnorm(levelUp, greyboxForecast$location, sqrt(greyboxForecast$variances)),
@@ -2741,14 +2814,15 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     if(is.occurrence(object$occurrence)){
         greyboxForecast$mean <- greyboxForecast$mean * occurrence$mean;
         #### This is weird and probably wrong. But I don't know yet what the confidence intervals mean in case of occurrence model.
-        if(interval=="c"){
+        if(interval=="confidence"){
             greyboxForecast$lower[] <- greyboxForecast$lower * occurrence$mean;
             greyboxForecast$upper[] <- greyboxForecast$upper * occurrence$mean;
         }
     }
 
-    greyboxForecast$level <- cbind(levelOriginal,levelLow, levelUp);
-    colnames(greyboxForecast$level) <- c("Original","Lower","Upper");
+    greyboxForecast$level <- cbind(levelOriginal, levelLow, levelUp);
+    colnames(greyboxForecast$level) <- c("Original",paste0("Lower",c(1:nLevels)),paste0("Upper",c(1:nLevels)));
+    rownames(greyboxForecast$level) <- paste0("h",c(1:h));
     greyboxForecast$newdataProvided <- newdataProvided;
     return(structure(greyboxForecast,class="predict.greybox"));
 }
@@ -2792,7 +2866,8 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
 #' the intervals for (0, level) are constructed Finally, with \code{"lower"} the interval
 #' for (1-level, 1) is returned.
 #' @param h The forecast horizon.
-#' @param ...  Other arguments.
+#' @param ...  Other arguments passed to \code{vcov} function (see \link[greybox]{coef.alm}
+#' for details).
 #' @return \code{predict.greybox()} returns object of class "predict.greybox",
 #' which contains:
 #' \itemize{
@@ -2841,25 +2916,26 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
 #' @export
 predict.greybox <- function(object, newdata=NULL, interval=c("none", "confidence", "prediction"),
                             level=0.95, side=c("both","upper","lower"), ...){
-    interval <- substr(interval[1],1,1);
-
-    side <- substr(side[1],1,1);
+    interval <- match.arg(interval);
+    side <- match.arg(side);
 
     parameters <- coef.greybox(object);
     parametersNames <- names(parameters);
-    ourVcov <- vcov(object);
+    ourVcov <- vcov(object, ...);
 
-    if(side=="u"){
-        levelLow <- 0;
-        levelUp <- level;
+    nLevels <- length(level);
+    levelLow <- levelUp <- vector("numeric",nLevels);
+    if(side=="upper"){
+        levelLow[] <- 0;
+        levelUp[] <- level;
     }
-    else if(side=="l"){
-        levelLow <- 1-level;
-        levelUp <- 1;
+    else if(side=="lower"){
+        levelLow[] <- 1-level;
+        levelUp[] <- 1;
     }
     else{
-        levelLow <- (1 - level) / 2;
-        levelUp <- (1 + level) / 2;
+        levelLow[] <- (1-level) / 2;
+        levelUp[] <- (1+level) / 2;
     }
     paramQuantiles <- qt(c(levelLow, levelUp),df=object$df.residual);
 
@@ -2892,6 +2968,9 @@ predict.greybox <- function(object, newdata=NULL, interval=c("none", "confidence
             }
         }
 
+        # The gsub is needed in order to remove accidental special characters
+        colnames(newdata) <- make.names(colnames(newdata), unique=TRUE);
+
         # Extract the formula and get rid of the response variable
         testFormula <- formula(object);
         testFormula[[2]] <- NULL;
@@ -2902,7 +2981,7 @@ predict.greybox <- function(object, newdata=NULL, interval=c("none", "confidence
         matrixOfxreg <- matrixOfxreg[,parametersNames,drop=FALSE];
     }
 
-    nRows <- nrow(matrixOfxreg);
+    h <- nrow(matrixOfxreg);
 
     if(object$distribution=="dbeta"){
         parametersNames <- substr(parametersNames[1:(length(parametersNames)/2)],8,nchar(parametersNames));
@@ -2920,10 +2999,10 @@ predict.greybox <- function(object, newdata=NULL, interval=c("none", "confidence
 
     if(!is.matrix(matrixOfxreg)){
         matrixOfxreg <- as.matrix(matrixOfxreg);
-        nRows <- nrow(matrixOfxreg);
+        h <- nrow(matrixOfxreg);
     }
 
-    if(nRows==1){
+    if(h==1){
         matrixOfxreg <- matrix(matrixOfxreg, nrow=1);
     }
 
@@ -2933,30 +3012,47 @@ predict.greybox <- function(object, newdata=NULL, interval=c("none", "confidence
         vectorOfVariances <- as.vector(exp(matrixOfxreg %*% parameters[-c(1:(length(parameters)/2))]));
         # ourForecast <- ourForecast / (ourForecast + as.vector(exp(matrixOfxreg %*% parameters[-c(1:(length(parameters)/2))])));
 
-        lower <- NULL;
-        upper <- NULL;
+        yLower <- NULL;
+        yUpper <- NULL;
     }
     else{
         ourForecast <- as.vector(matrixOfxreg %*% parameters);
         # abs is needed for some cases, when the likelihood was not fully optimised
         vectorOfVariances <- abs(diag(matrixOfxreg %*% ourVcov %*% t(matrixOfxreg)));
 
-        if(interval=="c"){
-            lower <- ourForecast + paramQuantiles[1] * sqrt(vectorOfVariances);
-            upper <- ourForecast + paramQuantiles[2] * sqrt(vectorOfVariances);
-        }
-        else if(interval=="p"){
-            vectorOfVariances <- vectorOfVariances + sigma(object)^2;
-            lower <- ourForecast + paramQuantiles[1] * sqrt(vectorOfVariances);
-            upper <- ourForecast + paramQuantiles[2] * sqrt(vectorOfVariances);
+        if(interval!="none"){
+            yUpper <- yLower <- matrix(NA, h, nLevels);
+            if(interval=="confidence"){
+                for(i in 1:nLevels){
+                    yLower[,i] <- ourForecast + paramQuantiles[i] * sqrt(vectorOfVariances);
+                    yUpper[,i] <- ourForecast + paramQuantiles[i+nLevels] * sqrt(vectorOfVariances);
+                }
+            }
+            else if(interval=="prediction"){
+                vectorOfVariances[] <- vectorOfVariances + sigma(object)^2;
+                for(i in 1:nLevels){
+                    yLower[,i] <- ourForecast + paramQuantiles[i] * sqrt(vectorOfVariances);
+                    yUpper[,i] <- ourForecast + paramQuantiles[i+nLevels] * sqrt(vectorOfVariances);
+                }
+            }
+
+            colnames(yLower) <- switch(side,
+                                       "both"=,
+                                       "lower"=paste0("Lower bound (",levelLow*100,"%)"),
+                                       "upper"=rep("Lower 0%",nLevels));
+
+            colnames(yUpper) <- switch(side,
+                                       "both"=,
+                                       "upper"=paste0("Upper bound (",levelUp*100,"%)"),
+                                       "lower"=rep("Upper 100%",nLevels));
         }
         else{
-            lower <- NULL;
-            upper <- NULL;
+            yLower <- NULL;
+            yUpper <- NULL;
         }
     }
 
-    ourModel <- list(model=object, mean=ourForecast, lower=lower, upper=upper, level=c(levelLow, levelUp), newdata=newdata,
+    ourModel <- list(model=object, mean=ourForecast, lower=yLower, upper=yUpper, level=c(levelLow, levelUp), newdata=newdata,
                      variances=vectorOfVariances, newdataProvided=newdataProvided);
     return(structure(ourModel,class="predict.greybox"));
 }
@@ -2964,9 +3060,8 @@ predict.greybox <- function(object, newdata=NULL, interval=c("none", "confidence
 # The internal function for the predictions from the model with ARI
 predict.almari <- function(object, newdata=NULL, interval=c("none", "confidence", "prediction"),
                             level=0.95, side=c("both","upper","lower"), ...){
-    interval <- substr(interval[1],1,1);
-
-    side <- substr(side[1],1,1);
+    interval <- match.arg(interval);
+    side <- match.arg(side);
 
     y <- actuals(object, all=FALSE);
 
@@ -2991,17 +3086,19 @@ predict.almari <- function(object, newdata=NULL, interval=c("none", "confidence"
     parametersNames <- names(parameters);
     ourVcov <- vcov(object);
 
-    if(side=="u"){
-        levelLow <- 0;
-        levelUp <- level;
+    nLevels <- length(level);
+    levelLow <- levelUp <- vector("numeric",nLevels);
+    if(side=="upper"){
+        levelLow[] <- 0;
+        levelUp[] <- level;
     }
-    else if(side=="l"){
-        levelLow <- 1-level;
-        levelUp <- 1;
+    else if(side=="lower"){
+        levelLow[] <- 1-level;
+        levelUp[] <- 1;
     }
     else{
-        levelLow <- (1 - level) / 2;
-        levelUp <- (1 + level) / 2;
+        levelLow[] <- (1-level) / 2;
+        levelUp[] <- (1+level) / 2;
     }
     paramQuantiles <- qt(c(levelLow, levelUp),df=object$df.residual);
 
@@ -3042,7 +3139,7 @@ predict.almari <- function(object, newdata=NULL, interval=c("none", "confidence"
         matrixOfxreg <- matrixOfxreg[,parametersNames,drop=FALSE];
     }
 
-    nRows <- nrow(matrixOfxreg);
+    h <- nrow(matrixOfxreg);
 
     if(object$distribution=="dbeta"){
         parametersNames <- substr(parametersNames[1:(length(parametersNames)/2)],8,nchar(parametersNames));
@@ -3061,10 +3158,10 @@ predict.almari <- function(object, newdata=NULL, interval=c("none", "confidence"
 
     if(!is.matrix(matrixOfxreg)){
         matrixOfxreg <- matrix(matrixOfxreg,ncol=1);
-        nRows <- nrow(matrixOfxreg);
+        h <- nrow(matrixOfxreg);
     }
 
-    if(nRows==1){
+    if(h==1){
         matrixOfxreg <- matrix(matrixOfxreg, nrow=1);
     }
 
@@ -3075,7 +3172,7 @@ predict.almari <- function(object, newdata=NULL, interval=c("none", "confidence"
     if(newdataProvided){
     # Fill in the tails with the available data
         if(any(object$distribution==c("plogis","pnorm"))){
-            matrixOfxregFull <- cbind(matrixOfxreg, matrix(NA,nRows,ariOrder,dimnames=list(NULL,ariNames)));
+            matrixOfxregFull <- cbind(matrixOfxreg, matrix(NA,h,ariOrder,dimnames=list(NULL,ariNames)));
             matrixOfxregFull <- rbind(matrix(NA,ariOrder,ncol(matrixOfxregFull)),matrixOfxregFull);
             if(interceptIsNeeded){
                 matrixOfxregFull[1:ariOrder,-1] <- tail(object$data[,-1,drop=FALSE],ariOrder);
@@ -3084,12 +3181,12 @@ predict.almari <- function(object, newdata=NULL, interval=c("none", "confidence"
             else{
                 matrixOfxregFull[1:ariOrder,] <- tail(object$data[,-1,drop=FALSE],ariOrder);
             }
-            nRows <- nRows+ariOrder;
+            h <- h+ariOrder;
         }
         else{
-            matrixOfxregFull <- cbind(matrixOfxreg, matrix(NA,nRows,ariOrder,dimnames=list(NULL,ariNames)));
+            matrixOfxregFull <- cbind(matrixOfxreg, matrix(NA,h,ariOrder,dimnames=list(NULL,ariNames)));
             for(i in 1:ariOrder){
-                matrixOfxregFull[1:i,nonariParametersNumber+i] <- tail(y,i);
+                matrixOfxregFull[1:min(h,i),nonariParametersNumber+i] <- tail(y,i)[1:min(h,i)];
             }
         }
 
@@ -3128,11 +3225,11 @@ predict.almari <- function(object, newdata=NULL, interval=c("none", "confidence"
         # else{
 
         # Produce forecasts iteratively
-        ourForecast <- vector("numeric", nRows);
-        for(i in 1:nRows){
+        ourForecast <- vector("numeric", h);
+        for(i in 1:h){
             ourForecast[i] <- matrixOfxregFull[i,] %*% parameters;
             for(j in 1:ariOrder){
-                if(i+j-1==nRows){
+                if(i+j-1==h){
                     break;
                 }
                 matrixOfxregFull[i+j,nonariParametersNumber+j] <- ourForecast[i];
@@ -3154,22 +3251,39 @@ predict.almari <- function(object, newdata=NULL, interval=c("none", "confidence"
     # abs is needed for some cases, when the likelihoond was not fully optimised
     vectorOfVariances <- abs(diag(matrixOfxreg %*% ourVcov %*% t(matrixOfxreg)));
 
-    if(interval=="c"){
-        lower <- ourForecast + paramQuantiles[1] * sqrt(vectorOfVariances);
-        upper <- ourForecast + paramQuantiles[2] * sqrt(vectorOfVariances);
-    }
-    else if(interval=="p"){
-        vectorOfVariances <- vectorOfVariances + sigma(object)^2;
-        lower <- ourForecast + paramQuantiles[1] * sqrt(vectorOfVariances);
-        upper <- ourForecast + paramQuantiles[2] * sqrt(vectorOfVariances);
+    if(interval!="none"){
+        yUpper <- yLower <- matrix(NA, h, nLevels);
+        if(interval=="confidence"){
+            for(i in 1:nLevels){
+                yLower[,i] <- ourForecast + paramQuantiles[i] * sqrt(vectorOfVariances);
+                yUpper[,i] <- ourForecast + paramQuantiles[i+nLevels] * sqrt(vectorOfVariances);
+            }
+        }
+        else if(interval=="prediction"){
+            vectorOfVariances[] <- vectorOfVariances + sigma(object)^2;
+            for(i in 1:nLevels){
+                yLower[,i] <- ourForecast + paramQuantiles[i] * sqrt(vectorOfVariances);
+                yUpper[,i] <- ourForecast + paramQuantiles[i+nLevels] * sqrt(vectorOfVariances);
+            }
+        }
+
+        colnames(yLower) <- switch(side,
+                                   "both"=,
+                                   "lower"=paste0("Lower bound (",levelLow*100,"%)"),
+                                   "upper"=rep("Lower 0%",nLevels));
+
+        colnames(yUpper) <- switch(side,
+                                   "both"=,
+                                   "upper"=paste0("Upper bound (",levelUp*100,"%)"),
+                                   "lower"=rep("Upper 100%",nLevels));
     }
     else{
-        lower <- NULL;
-        upper <- NULL;
+        yLower <- NULL;
+        yUpper <- NULL;
     }
     # }
 
-    ourModel <- list(model=object, mean=ourForecast, lower=lower, upper=upper, level=c(levelLow, levelUp), newdata=newdata,
+    ourModel <- list(model=object, mean=ourForecast, lower=yLower, upper=yUpper, level=c(levelLow, levelUp), newdata=newdata,
                      variances=vectorOfVariances, newdataProvided=newdataProvided);
     return(structure(ourModel,class="predict.greybox"));
 }

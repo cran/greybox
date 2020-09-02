@@ -105,7 +105,7 @@
 #' \itemize{
 #' \item \code{alpha} - value for Asymmetric Laplace distribution;
 #' \item \code{size} - the size for the Negative Binomial distribution;
-#' \item \code{df} - the number of degrees of freedom for Chi-Squared and Student's t;
+#' \item \code{nu} - the number of degrees of freedom for Chi-Squared and Student's t;
 #' \item \code{lambda} - the meta parameter for LASSO / RIDGE. Should be between 0 and 1,
 #' regulating the strength of shrinkage, where 0 means don't shrink parameters (use MSE)
 #' and 1 means shrink everything (ignore MSE);
@@ -265,7 +265,6 @@ alm <- function(formula, data, subset, na.action,
     # Create substitute and remove the original data
     dataSubstitute <- substitute(data);
 
-    B <- parameters;
     cl <- match.call();
     # This is needed in order to have a reasonable formula saved, so that there are no issues with it
     cl$formula <- eval(cl$formula);
@@ -342,7 +341,7 @@ alm <- function(formula, data, subset, na.action,
                 B <- B[-1];
             }
             else{
-                other <- df;
+                other <- nu;
             }
         }
         else if(distribution=="dfnorm"){
@@ -378,7 +377,7 @@ alm <- function(formula, data, subset, na.action,
                 B <- B[-1];
             }
             else{
-                other <- df;
+                other <- nu;
             }
         }
         else{
@@ -401,6 +400,11 @@ alm <- function(formula, data, subset, na.action,
         }
         else if(arOrder>0){
             poly1[-1] <- -B[(nVariablesExo+1):nVariables];
+        }
+
+        # This is a hack. If lambda=1, then we only need the mean of the data
+        if(any(loss==c("LASSO","RIDGE")) && lambda==1){
+            B[-1] <- 0;
         }
 
         mu[] <- switch(distribution,
@@ -473,7 +477,7 @@ alm <- function(formula, data, subset, na.action,
         return(fitterReturn);
     }
 
-    CF <- function(B, distribution, loss, y, matrixXreg, recursiveModel){
+    CF <- function(B, distribution, loss, y, matrixXreg, recursiveModel, denominator){
         if(recursiveModel){
             fitterReturn <- fitterRecursive(B, distribution, y, matrixXreg);
         }
@@ -569,7 +573,7 @@ alm <- function(formula, data, subset, na.action,
                                 "ds" =,
                                 "dpois" =,
                                 "dnbinom" = fitterReturn$mu,
-                                "dchisq" = fitterReturn$mu + df,
+                                "dchisq" = fitterReturn$mu + nu,
                                 "dlnorm" =,
                                 "dllaplace" =,
                                 "dls" =,
@@ -590,20 +594,32 @@ alm <- function(formula, data, subset, na.action,
                 CFValue <- meanFast(sqrt(abs(y-yFitted)));
             }
             else if(loss=="LASSO"){
-                denominator <- colMeans(matrixXreg);
-                # If it is lower than 1, then we are probably dealing with (0, 1). No need to normalise
-                denominator[abs(denominator)<1] <- 1;
                 B[] <- B / denominator;
 
-                CFValue <- (1-lambda) * sqrt(meanFast((y-yFitted)^2)) + lambda * sum(abs(B))
+                if(interceptIsNeeded){
+                    CFValue <- (1-lambda) * sqrt(meanFast((y-yFitted)^2)) + lambda * sum(abs(B[-1]))
+                }
+                else{
+                    CFValue <- (1-lambda) * sqrt(meanFast((y-yFitted)^2)) + lambda * sum(abs(B))
+                }
+                # This is a hack. If lambda=1, then we only need the mean of the data
+                if(lambda==1){
+                    CFValue <- sqrt(meanFast((y-yFitted)^2));
+                }
             }
             else if(loss=="RIDGE"){
-                denominator <- colMeans(matrixXreg);
-                # If it is lower than 1, then we are probably dealing with (0, 1). No need to normalise
-                denominator[abs(denominator)<1] <- 1;
                 B[] <- B / denominator;
 
-                CFValue <- (1-lambda) * sqrt(meanFast((y-yFitted)^2)) + lambda * sqrt(sum(B^2))
+                if(interceptIsNeeded){
+                    CFValue <- (1-lambda) * sqrt(meanFast((y-yFitted)^2)) + lambda * sqrt(sum(B[-1]^2))
+                }
+                else{
+                    CFValue <- (1-lambda) * sqrt(meanFast((y-yFitted)^2)) + lambda * sqrt(sum(B^2))
+                }
+                # This is a hack. If lambda=1, then we only need the mean of the data
+                if(lambda==1){
+                    CFValue <- sqrt(meanFast((y-yFitted)^2));
+                }
             }
             else if(loss=="custom"){
                 CFValue <- lossFunction(actual=y,fitted=yFitted,B=B,xreg=matrixXreg);
@@ -625,7 +641,7 @@ alm <- function(formula, data, subset, na.action,
     #### Define the rest of parameters ####
     ellipsis <- list(...);
 
-    # If this is ALD, then see if alpha was provided. Otherwise estimate it.
+    # Parameters for distributions
     if(distribution=="dalaplace"){
         if(is.null(ellipsis$alpha)){
             ellipsis$alpha <- 0.5
@@ -637,11 +653,11 @@ alm <- function(formula, data, subset, na.action,
         }
     }
     else if(distribution=="dchisq"){
-        if(is.null(ellipsis$df)){
+        if(is.null(ellipsis$nu)){
             aParameterProvided <- FALSE;
         }
         else{
-            df <- ellipsis$df;
+            nu <- ellipsis$nu;
             aParameterProvided <- TRUE;
         }
     }
@@ -682,18 +698,20 @@ alm <- function(formula, data, subset, na.action,
         }
     }
     else if(distribution=="dt"){
-        if(is.null(ellipsis$df)){
+        if(is.null(ellipsis$nu)){
             aParameterProvided <- FALSE;
         }
         else{
-            df <- ellipsis$df;
+            nu <- ellipsis$nu;
             aParameterProvided <- TRUE;
         }
     }
+    # LASSO / RIDGE loss
     if(any(loss==c("LASSO","RIDGE"))){
         warning(paste0("Please, keep in mind that loss='",loss,
                        "' is an experimental option. It might not work correctly."), call.=FALSE);
         if(is.null(ellipsis$lambda)){
+            warning(paste0("You have not provided lambda parameter. We will set it to zero."), call.=FALSE);
             lambda <- 0;
         }
         else{
@@ -748,6 +766,10 @@ alm <- function(formula, data, subset, na.action,
     }
     if(is.null(ellipsis$ftol_rel)){
         ftol_rel <- 1E-4;
+        # LASSO / RIDGE need more accurate estimation
+        if(any(loss==c("LASSO","RIDGE"))){
+            ftol_rel <- 1e-8;
+        }
     }
     else{
         ftol_rel <- ellipsis$ftol_rel;
@@ -863,7 +885,8 @@ alm <- function(formula, data, subset, na.action,
         }
 
         # The gsub is needed in order to remove accidental special characters
-        colnames(mf$data) <- gsub("\`","",colnames(mf$data),ignore.case=TRUE);
+        colnames(mf$data) <- make.names(colnames(mf$data), unique=TRUE);
+        # colnames(mf$data) <- gsub("\`","",colnames(mf$data),ignore.case=TRUE);
     }
     else{
         dataContainsNaNs <- FALSE;
@@ -889,6 +912,10 @@ alm <- function(formula, data, subset, na.action,
         }
         else{
             maxeval <- 200;
+        }
+        # LASSO / RIDGE need more iterations to converge
+        if(any(loss==c("LASSO","RIDGE"))){
+            maxeval <- 1000;
         }
     }
     else{
@@ -1027,39 +1054,42 @@ alm <- function(formula, data, subset, na.action,
             }
         }
 
-        corThreshold <- 0.999;
-        if(nVariables>1){
-            # Check perfectly correlated cases
-            corMatrix <- cor(matrixXreg[otU,,drop=FALSE]);
-            corHigh <- upper.tri(corMatrix) & abs(corMatrix)>=corThreshold;
-            if(any(corHigh)){
-                removexreg <- unique(which(corHigh,arr.ind=TRUE)[,1]);
-                matrixXreg <- matrixXreg[,-removexreg,drop=FALSE];
-                nVariables <- ncol(matrixXreg);
-                variablesNames <- colnames(matrixXreg);
-                if(!occurrenceModel && !CDF){
-                    warning("Some exogenous variables were perfectly correlated. We've dropped them out.",
-                            call.=FALSE);
-                }
-            }
-        }
-
-        # Do these checks only when intercept is needed. Otherwise in case of dummies this might cause chaos
-        if(nVariables>1 & interceptIsNeeded){
-            # Check dummy variables trap
-            detHigh <- determination(matrixXreg[otU,,drop=FALSE])>=corThreshold;
-            if(any(detHigh)){
-                while(any(detHigh)){
-                    removexreg <- which(detHigh>=corThreshold)[1];
+        # Check the multicollinearity. Don't do it for LASSO / RIDGE
+        if(all(loss!=c("LASSO","RIDGE"))){
+            corThreshold <- 0.999;
+            if(nVariables>1){
+                # Check perfectly correlated cases
+                corMatrix <- cor(matrixXreg[otU,,drop=FALSE]);
+                corHigh <- upper.tri(corMatrix) & abs(corMatrix)>=corThreshold;
+                if(any(corHigh)){
+                    removexreg <- unique(which(corHigh,arr.ind=TRUE)[,1]);
                     matrixXreg <- matrixXreg[,-removexreg,drop=FALSE];
                     nVariables <- ncol(matrixXreg);
                     variablesNames <- colnames(matrixXreg);
-
-                    detHigh <- determination(matrixXreg)>=corThreshold;
+                    if(!occurrenceModel && !CDF){
+                        warning("Some exogenous variables were perfectly correlated. We've dropped them out.",
+                                call.=FALSE);
+                    }
                 }
-                if(!occurrenceModel){
-                    warning("Some combinations of exogenous variables were perfectly correlated. We've dropped them out.",
-                            call.=FALSE);
+            }
+
+            # Do these checks only when intercept is needed. Otherwise in case of dummies this might cause chaos
+            if(nVariables>1 & interceptIsNeeded){
+                # Check dummy variables trap
+                detHigh <- suppressWarnings(determination(matrixXreg[otU,,drop=FALSE]))>=corThreshold;
+                if(any(detHigh)){
+                    while(any(detHigh)){
+                        removexreg <- which(detHigh>=corThreshold)[1];
+                        matrixXreg <- matrixXreg[,-removexreg,drop=FALSE];
+                        nVariables <- ncol(matrixXreg);
+                        variablesNames <- colnames(matrixXreg);
+
+                        detHigh <- suppressWarnings(determination(matrixXreg))>=corThreshold;
+                    }
+                    if(!occurrenceModel){
+                        warning("Some combinations of exogenous variables were perfectly correlated. We've dropped them out.",
+                                call.=FALSE);
+                    }
                 }
             }
         }
@@ -1077,9 +1107,10 @@ alm <- function(formula, data, subset, na.action,
         variablesNames <- c("(Intercept)",variablesNames);
         colnames(matrixXreg) <- variablesNames;
 
-        if(is.null(parameters) && !fast){
-            # Check, if redundant dummies are left. Remove the first if this is the case
-            determValues <- determination(matrixXreg[otU, -1, drop=FALSE]);
+        # Check, if redundant dummies are left. Remove the first if this is the case
+        # Don't do the check for LASSO / RIDGE
+        if(is.null(parameters) && !fast && all(loss!=c("LASSO","RIDGE"))){
+            determValues <- suppressWarnings(determination(matrixXreg[otU, -1, drop=FALSE]));
             determValues[is.nan(determValues)] <- 0;
             if(any(determValues==1)){
                 matrixXreg <- matrixXreg[,-(which(determValues==1)[1]+1),drop=FALSE];
@@ -1175,6 +1206,9 @@ alm <- function(formula, data, subset, na.action,
             # dataWork <- cbind(dataWork, ariElements);
         }
 
+        # Set bounds for B as NULL. Then amend if needed
+        BLower <- NULL;
+        BUpper <- NULL;
         if(is.null(B)){
             #### I(0) initialisation ####
             if(iOrder==0){
@@ -1369,26 +1403,42 @@ alm <- function(formula, data, subset, na.action,
             print_level[] <- 0;
         }
 
+        if(any(loss==c("LASSO","RIDGE"))){
+            denominator <- apply(matrixXreg, 2, sd);
+            # No variability, substitute by 1
+            denominator[is.infinite(denominator)] <- 1;
+            # # If it is lower than 1, then we are probably dealing with (0, 1). No need to normalise
+            # denominator[abs(denominator)<1] <- 1;
+        }
+        else{
+            denominator <- NULL;
+        }
+
         # Although this is not needed in case of distribution="dnorm", we do that in a way, for the code consistency purposes
         res <- nloptr(B, CF,
                       opts=list(algorithm=algorithm, xtol_rel=xtol_rel, maxeval=maxeval, print_level=print_level,
                                 maxtime=maxtime, xtol_abs=xtol_abs, ftol_rel=ftol_rel, ftol_abs=ftol_abs),
                       lb=BLower, ub=BUpper,
                       distribution=distribution, loss=loss, y=y, matrixXreg=matrixXreg,
-                      recursiveModel=recursiveModel);
+                      recursiveModel=recursiveModel, denominator=denominator);
         if(recursiveModel){
             res2 <- nloptr(res$solution, CF,
                            opts=list(algorithm=algorithm, xtol_rel=xtol_rel, maxeval=maxeval, print_level=print_level,
                                 maxtime=maxtime, xtol_abs=xtol_abs, ftol_rel=ftol_rel, ftol_abs=ftol_abs),
                            lb=BLower, ub=BUpper,
                            distribution=distribution, loss=loss, y=y, matrixXreg=matrixXreg,
-                           recursiveModel=recursiveModel);
+                           recursiveModel=recursiveModel, denominator=denominator);
             if(res2$objective<res$objective){
                 res[] <- res2;
             }
         }
         B[] <- res$solution;
         CFValue <- res$objective;
+
+        # A hack for LASSO / RIDGE, lambda==1 and intercept
+        if(any(loss==c("LASSO","RIDGE")) && lambda==1 && interceptIsNeeded){
+            B[-1] <- 0;
+        }
 
         if(print_level_hidden>0){
             print(res);
@@ -1417,6 +1467,16 @@ alm <- function(formula, data, subset, na.action,
     }
     # If the parameters are provided
     else{
+        if(any(loss==c("LASSO","RIDGE"))){
+            denominator <- apply(matrixXreg, 2, sd);
+            # No variability, substitute by 1
+            denominator[is.infinite(denominator)] <- 1;
+            # # If it is lower than 1, then we are probably dealing with (0, 1). No need to normalise
+            # denominator[abs(denominator)<1] <- 1;
+        }
+        else{
+            denominator <- NULL;
+        }
         # The data are provided, so no need to do recursive fitting
         recursiveModel <- FALSE;
         # If this was ARI, then don't count the AR parameters
@@ -1425,8 +1485,14 @@ alm <- function(formula, data, subset, na.action,
         # }
         B <- parameters;
         nVariables <- length(B);
-        variablesNames <- names(B);
-        CFValue <- CF(B, distribution, loss, y, matrixXreg, recursiveModel);
+        if(!is.null(names(B))){
+            variablesNames <- names(B);
+        }
+        else{
+            names(B) <- variablesNames;
+            names(parameters) <- variablesNames;
+        }
+        CFValue <- CF(B, distribution, loss, y, matrixXreg, recursiveModel, denominator);
     }
 
     #### Form the fitted values, location and scale ####
@@ -1455,9 +1521,9 @@ alm <- function(formula, data, subset, na.action,
         }
         else if(distribution=="dchisq"){
             if(!aParameterProvided){
-                ellipsis$df <- df <- abs(parameters[1]);
+                ellipsis$nu <- nu <- abs(parameters[1]);
                 parameters <- parameters[-1];
-                names(B) <- c("df",variablesNames);
+                names(B) <- c("nu",variablesNames);
             }
             else{
                 names(B) <- variablesNames;
@@ -1466,9 +1532,9 @@ alm <- function(formula, data, subset, na.action,
         }
         else if(distribution=="dt"){
             if(!aParameterProvided){
-                ellipsis$df <- df <- abs(parameters[1]);
+                ellipsis$nu <- nu <- abs(parameters[1]);
                 parameters <- parameters[-1];
-                names(B) <- c("df",variablesNames);
+                names(B) <- c("nu",variablesNames);
             }
             else{
                 names(B) <- variablesNames;
@@ -1547,7 +1613,7 @@ alm <- function(formula, data, subset, na.action,
                        "ds" =,
                        "dpois" =,
                        "dnbinom" = mu,
-                       "dchisq" = mu + df,
+                       "dchisq" = mu + nu,
                        "dlnorm" =,
                        "dllaplace" =,
                        "dls" =,
@@ -1608,6 +1674,11 @@ alm <- function(formula, data, subset, na.action,
         }
     }
 
+    # Do not count zero parameters in LASSO / RIDGE
+    if(any(loss==c("LASSO","RIDGE"))){
+        nParam <- sum(B!=0);
+    }
+
     # If we had huge numbers for cumulative models, fix errors and scale
     if(any(distribution==c("plogis","pnorm")) && (any(is.nan(errors)) || any(is.infinite(errors)))){
         errorsNaN <- is.nan(errors) | is.infinite(errors);
@@ -1631,7 +1702,7 @@ alm <- function(formula, data, subset, na.action,
         occurrenceModel <- FALSE;
         FI <- hessian(CF, B,
                       distribution=distribution, loss=loss, y=y, matrixXreg=matrixXreg,
-                      recursiveModel=recursiveModel);
+                      recursiveModel=recursiveModel, denominator=denominator);
 
         if(any(is.nan(FI))){
             warning(paste0("Something went wrong and we failed to produce the covariance matrix of the parameters.\n",

@@ -92,7 +92,13 @@ xreg <- as.data.frame(xreg)
 ourCall <- "predict(lm(y~x1+x2+x3,xreg[counti,]),newdata=xreg[counto,],interval='p')"
 
 ## -----------------------------------------------------------------------------
-ourROReturn <- ro(y, h=3, origins=8, call=ourCall, ci=TRUE, co=TRUE)
+ourROReturn <- ro(xreg$y, h=3, origins=8, call=ourCall, ci=TRUE, co=TRUE)
+
+## -----------------------------------------------------------------------------
+ourCall <- "predict(alm(y~x1+x2+x3,xreg[counti,]),newdata=xreg[counto,],interval='p')"
+ourValue <- c("mean","lower","upper")
+ourROReturn <- ro(xreg$y, h=3, origins=8, call=ourCall, value=ourValue, ci=TRUE, co=TRUE)
+plot(ourROReturn)
 
 ## -----------------------------------------------------------------------------
 xreg <- matrix(rnorm(120*3,c(100,50,150),c(10,5,15)), 120, 3, byrow=TRUE)

@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2020-08-05" />
+<meta name="date" content="2020-09-02" />
 
 <title>Greybox main vignette</title>
 
@@ -301,7 +301,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Greybox main vignette</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2020-08-05</h4>
+<h4 class="date">2020-09-02</h4>
 
 
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 </div>
 <div id="methods" class="section level2">
 <h2>Methods</h2>
-<p>The following methods can be applied to the models, produced by <code>alm()</code>, <code>stepwise()</code>, <code>lmCombine()</code> and <code>lmDynamic()</code>: 1. <code>logLik()</code> - extracts log-likelihood. 2. <code>AIC()</code>, <code>AICc()</code>, <code>BIC()</code>, <code>BICc()</code> - calculates the respective information criteria. 3. <code>pointLik()</code> - extracts the point likelihood. 4. <code>pAIC()</code>, <code>pAICc()</code>, <code>pBIC()</code>, <code>pBICc()</code> - calculates the respective point information criteria, based on pointLik. 5. <code>actuals()</code> - extracts the actual values of the response variable. 6. <code>coef()</code>, <code>coefficients()</code> - extract the parameters of the model. 7. <code>confint()</code> - extracts the confidence intervals for the parameters. 8. <code>vcov()</code> - extracts the variance-covariance matrix of the parameters. 9. <code>sigma()</code> - extracts the standard deviation of the residuals. 10. <code>nobs()</code> - the number of the in-sample observations of the model. 11. <code>nparam()</code> - the number of all the estimated parameters in the model. 12. <code>summary()</code> - produces the summary of the model. 13. <code>predict()</code> - produces the predictions based on the model and the provided <code>newdata</code>. If the <code>newdata</code> is not provided, then it uses the already available data in the model. Can also produce <code>confidence</code> and <code>prediction</code> intervals. 14. <code>forecast()</code> - acts similarly to <code>predict()</code> with few differences. It has a parameter <code>h</code> - forecast horizon - which is <code>NULL</code> by default and is set to be equal to the number of rows in <code>newdata</code>. However, if the <code>newdata</code> is not provided, then it will produce forecasts of the explanatory variables to the horizon <code>h</code> and use them as <code>newdata</code>. Finally, if <code>h</code> and <code>newdata</code> are provided, then the number of rows to use will be regulated by <code>h</code>. 15. <code>plot()</code> - produces several plots for the analysis of the residuals. This includes: Fitted over time, Standardised residuals vs Fitted, Absolute residuals vs Fitted, Q-Q plot with the specified distribution, Squared residuals vs Fitted, ACF of the residuals and PACF of the residuals, which is regulated by <code>which</code> parameter. See documentation for more info: <code>?plot.greybox</code>.</p>
+<p>The following methods can be applied to the models, produced by <code>alm()</code>, <code>stepwise()</code>, <code>lmCombine()</code> and <code>lmDynamic()</code>: 1. <code>logLik()</code> - extracts log-likelihood. 2. <code>AIC()</code>, <code>AICc()</code>, <code>BIC()</code>, <code>BICc()</code> - calculates the respective information criteria. 3. <code>pointLik()</code> - extracts the point likelihood. 4. <code>pAIC()</code>, <code>pAICc()</code>, <code>pBIC()</code>, <code>pBICc()</code> - calculates the respective point information criteria, based on pointLik. 5. <code>actuals()</code> - extracts the actual values of the response variable. 6. <code>coefbootstrap()</code> - produces bootstrapped values of parameters, taking <code>nsim</code> samples of the size <code>size</code> from the data and reapplying the model. 7. <code>coef()</code>, <code>coefficients()</code> - extract the parameters of the model. 8. <code>confint()</code> - extracts the confidence intervals for the parameters. 9. <code>vcov()</code> - extracts the variance-covariance matrix of the parameters. 10. <code>sigma()</code> - extracts the standard deviation of the residuals. 11. <code>nobs()</code> - the number of the in-sample observations of the model. 12. <code>nparam()</code> - the number of all the estimated parameters in the model. 13. <code>summary()</code> - produces the summary of the model. 14. <code>predict()</code> - produces the predictions based on the model and the provided <code>newdata</code>. If the <code>newdata</code> is not provided, then it uses the already available data in the model. Can also produce <code>confidence</code> and <code>prediction</code> intervals. 15. <code>forecast()</code> - acts similarly to <code>predict()</code> with few differences. It has a parameter <code>h</code> - forecast horizon - which is <code>NULL</code> by default and is set to be equal to the number of rows in <code>newdata</code>. However, if the <code>newdata</code> is not provided, then it will produce forecasts of the explanatory variables to the horizon <code>h</code> and use them as <code>newdata</code>. Finally, if <code>h</code> and <code>newdata</code> are provided, then the number of rows to use will be regulated by <code>h</code>. 16. <code>plot()</code> - produces several plots for the analysis of the residuals. This includes: Fitted over time, Standardised residuals vs Fitted, Absolute residuals vs Fitted, Q-Q plot with the specified distribution, Squared residuals vs Fitted, ACF of the residuals and PACF of the residuals, which is regulated by <code>which</code> parameter. See documentation for more info: <code>?plot.greybox</code>.</p>
 </div>
 <div id="exogenous-variables-transformation-tools" class="section level2">
 <h2>Exogenous variables transformation tools</h2>
@@ -349,7 +349,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <li><code>xregExpander()</code> - expand the provided data by including leads and lags of the variables. See details below.</li>
 <li><code>xregTransformer()</code> - produce non-linear transformations of the provided data (logs, inverse etc).</li>
 <li><code>xregMultiplier()</code> - produce cross-products of the variables in the provided matrix. Could be useful when exploring interaction effects of dummy variables.</li>
-<li><code>temporaldummy()</code> - the method that generates a matrix with dymmy variables based on the provided object and selected <code>type</code> and <code>of</code>. Can be handy, when you want to construct a regression with dummies for a time series object (e.g. zoo).</li>
+<li><code>temporaldummy()</code> - the method that generates a matrix with dummy variables based on the provided object and selected <code>type</code> and <code>of</code>. Can be handy, when you want to construct a regression with dummies for a time series object (e.g. zoo).</li>
 <li><code>outlierdummy()</code> - the method that creates a matrix of dummy variables based on the residuals of an object, selected confidence level and type of residuals.</li>
 </ol>
 </div>

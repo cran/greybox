@@ -44,7 +44,7 @@
 #' @template keywords
 #'
 #' @seealso \code{\link[greybox]{xregExpander}, \link[greybox]{xregMultiplier},
-#' \link[greybox]{xregTransformer}}
+#' \link[greybox]{outlierdummy}}
 #'
 #' @examples
 #' # Generate matrix with dummies for a ts object
@@ -202,7 +202,7 @@ temporaldummy.Date <- function(object, type=c("month","quarter","week","day","ho
         }
     }
     else if(any(type==c("hour","halfhour","minute","second"))){
-        warning("The Date class does not support hours, minutes and seconds. Use POSIXct instead.", call.=FALSE);
+        warning("The Date class does not support hours, minutes and seconds. Use POSIXt instead.", call.=FALSE);
         return(NULL);
     }
 
@@ -217,7 +217,7 @@ temporaldummy.Date <- function(object, type=c("month","quarter","week","day","ho
 }
 
 #' @export
-temporaldummy.POSIXct <- function(object, type=c("month","quarter","week","day","hour","halfhour","minute","second"),
+temporaldummy.POSIXt <- function(object, type=c("month","quarter","week","day","hour","halfhour","minute","second"),
                          of=c("year","quarter","month","week","day","hour","minute"), h=0){
     type <- match.arg(type);
     of <- match.arg(of);
@@ -338,7 +338,6 @@ temporaldummy.POSIXct <- function(object, type=c("month","quarter","week","day",
                     # There's 168 hours in a week, so repeat that stuff
                     # +1 is needed just in case, not to create a smaller object than needed
                     dateFinal <- rep(c(1:(24*60)),ceiling(obsAll/(24*60))+1)[dateStart+1:obsAll];
-                    print(head(dateFinal))
                 }
                 else if(of=="hour"){
                     dateFinal <- as.numeric(strftime(object, format="%M"));
