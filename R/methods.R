@@ -734,7 +734,7 @@ vcov.alm <- function(object, bootstrap=FALSE, ...){
         }
 
         if(any(object$distribution==c("dnorm","dlnorm","dbcnorm"))){
-            matrixXreg <- object$data[eval(object$subset),-1,drop=FALSE];
+            matrixXreg <- object$data[,-1,drop=FALSE];
             if(interceptIsNeeded){
                 matrixXreg <- cbind(1,matrixXreg);
                 colnames(matrixXreg)[1] <- "(Intercept)";
@@ -762,7 +762,7 @@ vcov.alm <- function(object, bootstrap=FALSE, ...){
             rownames(vcov) <- colnames(vcov) <- variablesNames;
         }
         else if(object$distribution=="dpois"){
-            matrixXreg <- object$data[eval(object$subset),-1,drop=FALSE];
+            matrixXreg <- object$data[,-1,drop=FALSE];
             obsInsample <- nobs(object);
             if(interceptIsNeeded){
                 matrixXreg <- cbind(1,matrixXreg);
@@ -862,7 +862,7 @@ vcov.alm <- function(object, bootstrap=FALSE, ...){
             if(any(class(FIMatrix)=="try-error")){
                 warning(paste0("Sorry, but the hessian is singular, so we could not invert it.\n",
                                "Switching to bootstrap of covariance matrix of parameters."),
-                        call.=FALSE);
+                        call.=FALSE, immediate.=TRUE);
                 vcov <- coefbootstrap(object, ...)$vcov;
             }
         }
@@ -2322,6 +2322,44 @@ print.outlierdummy <- function(x, ...){
 }
 
 #### Summary ####
+#' @importFrom stats summary.lm
+#' @export
+summary.greybox <- function(object, level=0.95, ...){
+    ourReturn <- summary.lm(object, ...);
+    errors <- residuals(object);
+    obs <- nobs(object, all=TRUE);
+
+    # Collect parameters and their standard errors
+    parametersTable <- ourReturn$coefficients[,1:2];
+    parametersTable <- cbind(parametersTable,confint(object, level=level));
+    rownames(parametersTable) <- names(coef(object));
+    colnames(parametersTable) <- c("Estimate","Std. Error",
+                                   paste0("Lower ",(1-level)/2*100,"%"),
+                                   paste0("Upper ",(1+level)/2*100,"%"));
+    ourReturn$coefficients <- parametersTable;
+
+    ICs <- c(AIC(object),AICc(object),BIC(object),BICc(object));
+    names(ICs) <- c("AIC","AICc","BIC","BICc");
+    ourReturn$ICs <- ICs;
+    ourReturn$distribution <- object$distribution;
+    ourReturn$responseName <- formula(object)[[2]];
+
+    # Table with degrees of freedom
+    dfTable <- c(obs,nparam(object),obs-nparam(object));
+    names(dfTable) <- c("n","k","df");
+
+    ourReturn$r.squared <- 1 - sum(errors^2) / sum((actuals(object)-mean(actuals(object)))^2);
+    ourReturn$adj.r.squared <- 1 - (1 - ourReturn$r.squared) * (obs - 1) / (dfTable[3]);
+
+    ourReturn$dfTable <- dfTable;
+    ourReturn$arima <- object$other$arima;
+
+    ourReturn$bootstrap <- FALSE;
+
+    ourReturn <- structure(ourReturn,class="summary.greybox");
+    return(ourReturn);
+}
+
 #' @aliases summary.alm
 #' @rdname coef.alm
 #' @export
@@ -2363,45 +2401,7 @@ summary.alm <- function(object, level=0.95, bootstrap=FALSE, ...){
 
     ourReturn$bootstrap <- bootstrap;
 
-    ourReturn <- structure(ourReturn,class="summary.alm");
-    return(ourReturn);
-}
-
-#' @importFrom stats summary.lm
-#' @export
-summary.greybox <- function(object, level=0.95, ...){
-    ourReturn <- summary.lm(object, ...);
-    errors <- residuals(object);
-    obs <- nobs(object, all=TRUE);
-
-    # Collect parameters and their standard errors
-    parametersTable <- ourReturn$coefficients[,1:2];
-    parametersTable <- cbind(parametersTable,confint(object, level=level));
-    rownames(parametersTable) <- names(coef(object));
-    colnames(parametersTable) <- c("Estimate","Std. Error",
-                                   paste0("Lower ",(1-level)/2*100,"%"),
-                                   paste0("Upper ",(1+level)/2*100,"%"));
-    ourReturn$coefficients <- parametersTable;
-
-    ICs <- c(AIC(object),AICc(object),BIC(object),BICc(object));
-    names(ICs) <- c("AIC","AICc","BIC","BICc");
-    ourReturn$ICs <- ICs;
-    ourReturn$distribution <- object$distribution;
-    ourReturn$responseName <- formula(object)[[2]];
-
-    # Table with degrees of freedom
-    dfTable <- c(obs,nparam(object),obs-nparam(object));
-    names(dfTable) <- c("n","k","df");
-
-    ourReturn$r.squared <- 1 - sum(errors^2) / sum((actuals(object)-mean(actuals(object)))^2);
-    ourReturn$adj.r.squared <- 1 - (1 - ourReturn$r.squared) * (obs - 1) / (dfTable[3]);
-
-    ourReturn$dfTable <- dfTable;
-    ourReturn$arima <- object$other$arima;
-
-    ourReturn$bootstrap <- FALSE;
-
-    ourReturn <- structure(ourReturn,class="summary.greybox");
+    ourReturn <- structure(ourReturn,class=c("summary.alm","summary.greybox"));
     return(ourReturn);
 }
 
@@ -2439,7 +2439,7 @@ summary.greyboxC <- function(object, level=0.95, ...){
                                 ICs=ICs, ICType=object$ICType, df=df, r.squared=R2, adj.r.squared=R2Adj,
                                 distribution=object$distribution, responseName=formula(object)[[2]],
                                 dfTable=dfTable, bootstrap=FALSE),
-                           class="summary.greyboxC");
+                           class=c("summary.greyboxC","summary.greybox"));
     return(ourReturn);
 }
 
@@ -2480,7 +2480,7 @@ summary.greyboxD <- function(object, level=0.95, ...){
                                 ICs=ICs, ICType=object$ICType, df=df, r.squared=R2, adj.r.squared=R2Adj,
                                 distribution=object$distribution, responseName=formula(object)[[2]],
                                 nobs=nobs(object), nparam=nparam(object), dfTable=dfTable, bootstrap=FALSE),
-                           class="summary.greyboxC");
+                           class=c("summary.greyboxC","summary.greybox"));
     return(ourReturn);
 }
 
@@ -2494,6 +2494,44 @@ summary.lmGreybox <- function(object, level=0.95, ...){
                                    paste0("Upper ",(1+level)/2*100,"%"));
     return(parametersTable)
 }
+
+
+#' @export
+as.data.frame.summary.greybox <- function(x, ...){
+    return(as.data.frame(x$coefficients, ...));
+}
+
+#' @importFrom texreg extract createTexreg
+extract.greybox <- function(model, ...){
+    summaryALM <- summary(model, ...);
+    tr <- extract(summaryALM);
+    return(tr)
+}
+
+extract.summary.greybox <- function(model, ...){
+    gof <- c(model$dfTable, model$ICs)
+    gof.names <- c("Num.\\ obs.", "Num.\\ param.", "Num.\\ df", names(model$ICs))
+
+    tr <- createTexreg(
+        coef.names=rownames(model$coefficients),
+        coef=model$coef[, 1],
+        se=model$coef[, 2],
+        ci.low=model$coef[, 3],
+        ci.up=model$coef[, 4],
+        gof.names=gof.names,
+        gof=gof
+    )
+    return(tr)
+}
+
+#' @importFrom methods setMethod
+setMethod("extract", signature=className("alm","greybox"), definition=extract.greybox)
+setMethod("extract", signature=className("greybox","greybox"), definition=extract.greybox)
+setMethod("extract", signature=className("greyboxC","greybox"), definition=extract.greybox)
+setMethod("extract", signature=className("greyboxD","greybox"), definition=extract.greybox)
+setMethod("extract", signature=className("summary.alm","greybox"), definition=extract.summary.greybox)
+setMethod("extract", signature=className("summary.greybox","greybox"), definition=extract.summary.greybox)
+setMethod("extract", signature=className("summary.greyboxC","greybox"), definition=extract.summary.greybox)
 
 #### Predictions and forecasts ####
 
@@ -2820,9 +2858,14 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
         }
     }
 
-    greyboxForecast$level <- cbind(levelOriginal, levelLow, levelUp);
-    colnames(greyboxForecast$level) <- c("Original",paste0("Lower",c(1:nLevels)),paste0("Upper",c(1:nLevels)));
-    rownames(greyboxForecast$level) <- paste0("h",c(1:h));
+    greyboxForecast$level <- cbind(levelLow, levelUp);
+    colnames(greyboxForecast$level) <- c(paste0("Lower",c(1:nLevels)),paste0("Upper",c(1:nLevels)));
+    greyboxForecast$level <- rbind(switch(side,
+                                          "both"=c((1-levelOriginal)/2,(1+levelOriginal)/2),
+                                          "lower"=c(levelOriginal,rep(0,nLevels)),
+                                          "upper"=c(rep(0,nLevels),levelOriginal)),
+                                   greyboxForecast$level);
+    rownames(greyboxForecast$level) <- c("Original",paste0("h",c(1:h)));
     greyboxForecast$newdataProvided <- newdataProvided;
     return(structure(greyboxForecast,class="predict.greybox"));
 }
@@ -3128,6 +3171,7 @@ predict.almari <- function(object, newdata=NULL, interval=c("none", "confidence"
             }
         }
 
+        colnames(newdata) <- make.names(colnames(newdata), unique=TRUE);
         # Extract the formula and get rid of the response variable
         testFormula <- formula(object)
         testFormula[[2]] <- NULL;

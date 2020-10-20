@@ -8,7 +8,7 @@
 #' \item \link[stats]{dnorm} - Normal distribution,
 #' \item \link[greybox]{dlaplace} - Laplace distribution,
 #' \item \link[greybox]{ds} - S-distribution,
-#' \item \link[gnorm]{dgnorm} - Generalised Normal distribution,
+#' \item dgnorm - Generalised Normal distribution,
 #' \item \link[stats]{dlogis} - Logistic Distribution,
 #' \item \link[stats]{dt} - T-distribution,
 #' \item \link[greybox]{dalaplace} - Asymmetric Laplace distribution,
@@ -190,55 +190,49 @@
 #' xreg <- cbind(rlaplace(100,10,3),rnorm(100,50,5))
 #' xreg <- cbind(100+0.5*xreg[,1]-0.75*xreg[,2]+rlaplace(100,0,3),xreg,rnorm(100,300,10))
 #' colnames(xreg) <- c("y","x1","x2","Noise")
-#' inSample <- xreg[1:80,]
-#' outSample <- xreg[-c(1:80),]
 #'
 #' # An example with Laplace distribution
-#' ourModel <- alm(y~x1+x2, inSample, distribution="dlaplace")
+#' ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dlaplace")
 #' summary(ourModel)
-#' plot(predict(ourModel,outSample))
+#' plot(predict(ourModel,xreg[-c(1:80),]))
 #'
 #' # And another one with Asymmetric Laplace distribution (quantile regression)
 #' # with optimised alpha
-#' ourModel <- alm(y~x1+x2, inSample, distribution="dalaplace")
+#' ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dalaplace")
 #' summary(ourModel)
-#' plot(predict(ourModel,outSample))
+#' plot(predict(ourModel,xreg[-c(1:80),]))
 #'
 #' # An example with AR(1) order
-#' ourModel <- alm(y~x1+x2, inSample, distribution="dnorm", ar=1)
+#' ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dnorm", ar=1)
 #' summary(ourModel)
-#' plot(predict(ourModel,outSample))
+#' plot(predict(ourModel,xreg[-c(1:80),]))
 #'
 #' ### Examples with the count data
 #' xreg[,1] <- round(exp(xreg[,1]-70),0)
-#' inSample <- xreg[1:80,]
-#' outSample <- xreg[-c(1:80),]
 #'
 #' # Negative Binomial distribution
-#' ourModel <- alm(y~x1+x2, inSample, distribution="dnbinom")
+#' ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dnbinom")
 #' summary(ourModel)
-#' predict(ourModel,outSample,interval="p",side="u")
+#' predict(ourModel,xreg[-c(1:80),],interval="p",side="u")
 #'
 #' # Poisson distribution
-#' ourModel <- alm(y~x1+x2, inSample, distribution="dpois")
+#' ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dpois")
 #' summary(ourModel)
-#' predict(ourModel,outSample,interval="p",side="u")
+#' predict(ourModel,xreg[-c(1:80),],interval="p",side="u")
 #'
 #'
 #' ### Examples with binary response variable
 #' xreg[,1] <- round(xreg[,1] / (1 + xreg[,1]),0)
-#' inSample <- xreg[1:80,]
-#' outSample <- xreg[-c(1:80),]
 #'
 #' # Logistic distribution (logit regression)
-#' ourModel <- alm(y~x1+x2, inSample, distribution="plogis")
+#' ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="plogis")
 #' summary(ourModel)
-#' plot(predict(ourModel,outSample,interval="c"))
+#' plot(predict(ourModel,xreg[-c(1:80),],interval="c"))
 #'
 #' # Normal distribution (probit regression)
-#' ourModel <- alm(y~x1+x2, inSample, distribution="pnorm")
+#' ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="pnorm")
 #' summary(ourModel)
-#' plot(predict(ourModel,outSample,interval="p"))
+#' plot(predict(ourModel,xreg[-c(1:80),],interval="p"))
 #'
 #' @importFrom pracma hessian
 #' @importFrom nloptr nloptr
@@ -256,6 +250,7 @@ alm <- function(formula, data, subset, na.action,
                                "plogis","pnorm"),
                 loss=c("likelihood","MSE","MAE","HAM","LASSO","RIDGE"),
                 occurrence=c("none","plogis","pnorm"),
+                # scaleFormula=NULL,
                 ar=0,# i=0,
                 parameters=NULL, fast=FALSE, ...){
 # Useful stuff for dnbinom: https://scialert.net/fulltext/?doi=ajms.2010.1.15
@@ -477,7 +472,10 @@ alm <- function(formula, data, subset, na.action,
         return(fitterReturn);
     }
 
-    CF <- function(B, distribution, loss, y, matrixXreg, recursiveModel, denominator){
+    CF <- function(B, distribution, loss, y, matrixXreg, recursiveModel, denominator, hessianCalculation=FALSE){
+        if(hessianCalculation){
+            B[] <- B * denominator;
+        }
         if(recursiveModel){
             fitterReturn <- fitterRecursive(B, distribution, y, matrixXreg);
         }
@@ -502,7 +500,7 @@ alm <- function(formula, data, subset, na.action,
                                                           scale=fitterReturn$scale, log=TRUE)-log(y[otU]),
                                    "dls" = ds(log(y[otU]), mu=fitterReturn$mu[otU], scale=fitterReturn$scale, log=TRUE)-log(y[otU]),
                                    "dlgnorm" = dgnorm(log(y[otU]), mu=fitterReturn$mu[otU], alpha=fitterReturn$scale,
-                                                     beta=fitterReturn$other, log=TRUE)-log(y[otU]),
+                                                      beta=fitterReturn$other, log=TRUE)-log(y[otU]),
                                    "dbcnorm" = dbcnorm(y[otU], mu=fitterReturn$mu[otU], sigma=fitterReturn$scale,
                                                        lambda=fitterReturn$other, log=TRUE),
                                    "dfnorm" = dfnorm(y[otU], mu=fitterReturn$mu[otU], sigma=fitterReturn$scale, log=TRUE),
@@ -1005,7 +1003,7 @@ alm <- function(formula, data, subset, na.action,
         CDF <- FALSE;
     }
 
-    if(CDF & any(y!=0 & y!=1)){
+    if(CDF && any(y!=0 & y!=1)){
         y[] <- (y!=0)*1;
     }
 
@@ -1121,6 +1119,10 @@ alm <- function(formula, data, subset, na.action,
     }
     # The number of exogenous variables (no ARI elements)
     nVariablesExo <- nVariables;
+
+    #### The model for the scale ####
+    # if(!is.null(scaleFormula)){
+    # }
 
     #### Estimate parameters of the model ####
     if(is.null(parameters)){
@@ -1420,14 +1422,14 @@ alm <- function(formula, data, subset, na.action,
                                 maxtime=maxtime, xtol_abs=xtol_abs, ftol_rel=ftol_rel, ftol_abs=ftol_abs),
                       lb=BLower, ub=BUpper,
                       distribution=distribution, loss=loss, y=y, matrixXreg=matrixXreg,
-                      recursiveModel=recursiveModel, denominator=denominator);
+                      recursiveModel=recursiveModel, denominator=denominator, hessianCalculation=FALSE);
         if(recursiveModel){
             res2 <- nloptr(res$solution, CF,
                            opts=list(algorithm=algorithm, xtol_rel=xtol_rel, maxeval=maxeval, print_level=print_level,
                                 maxtime=maxtime, xtol_abs=xtol_abs, ftol_rel=ftol_rel, ftol_abs=ftol_abs),
                            lb=BLower, ub=BUpper,
                            distribution=distribution, loss=loss, y=y, matrixXreg=matrixXreg,
-                           recursiveModel=recursiveModel, denominator=denominator);
+                           recursiveModel=recursiveModel, denominator=denominator, hessianCalculation=FALSE);
             if(res2$objective<res$objective){
                 res[] <- res2;
             }
@@ -1700,9 +1702,16 @@ alm <- function(formula, data, subset, na.action,
     if(FI){
         # Only vcov is needed, no point in redoing the occurrenceModel
         occurrenceModel <- FALSE;
-        FI <- hessian(CF, B,
+        # Standartisation is needed in order to get accurate hessian
+        denominator <- apply(matrixXreg, 2, sd);
+        # No variability, substitute by 1
+        denominator[is.infinite(denominator)] <- 1;
+        # Fix the denominator for the intercept
+        denominator[denominator==0] <- B[denominator==0];
+        BNew <- B / denominator;
+        FI <- hessian(CF, BNew,
                       distribution=distribution, loss=loss, y=y, matrixXreg=matrixXreg,
-                      recursiveModel=recursiveModel, denominator=denominator);
+                      recursiveModel=recursiveModel, denominator=denominator, hessianCalculation=TRUE);
 
         if(any(is.nan(FI))){
             warning(paste0("Something went wrong and we failed to produce the covariance matrix of the parameters.\n",
@@ -1726,6 +1735,7 @@ alm <- function(formula, data, subset, na.action,
             dataWork <- cbind(y,matrixXreg);
             variablesUsed <- variablesNames;
         }
+        colnames(dataWork)[1] <- responseName;
 
         # If there are NaN values, remove the respective observations
         if(any(sapply(mf$data,is.nan))){

@@ -1,3 +1,22 @@
+greybox v0.6.3 (Release data: 2020-10-20)
+==============
+
+Changes:
+* Corrections in the main greybox vignette - just fixed some typos and formatting issues.
+* Examples in alm() now rely on subset parameter.
+* xregExpander() now selects between "extrapolate" and "naive" in case of gaps="auto".
+* The as.data.frame.summary.greybox() method, which produces the matrix of coefficients. This should be handy when printing the outputs.
+* We now support texreg package, so that the ALM regression outputs can be printed in a fine quality.
+* detectdst() now complains, when it finds several missing hours
+
+Bugfixes:
+* alm() occurence!="none" would not work if the response variable was not called "y".
+* Corrected the table with levels for the predict function.
+* A fix in alm() with ar and complicated names of variables.
+* A fix in subset parameter for normal distribution.
+* The parameters are now standardised for the hessian calculation in order to get more accurate vcov.
+
+
 greybox v0.6.2 (Release data: 2020-09-02)
 ==============
 

@@ -31,6 +31,9 @@ ourModel <- stepwise(BJxreg)
 ## ----BJStepwiseResult---------------------------------------------------------
 ourModel
 
+## ----texregExample, results = 'asis'------------------------------------------
+texreg::htmlreg(ourModel)
+
 ## ----BJcombine1---------------------------------------------------------------
 ourModel <- lmCombine(BJxreg[,-c(3:7,18:22)],bruteforce=TRUE)
 summary(ourModel)
@@ -49,33 +52,6 @@ summary(ourModel)
 plot(ourModel)
 
 ## ----BJcombineForecast--------------------------------------------------------
-ourForecast <- predict(ourModel,BJHoldout)
-plot(ourForecast)
-
-## ----BJDynamicModel-----------------------------------------------------------
-ourModel <- lmDynamic(BJInsample,bruteforce=FALSE)
-
-## ----BJDynamicPlot------------------------------------------------------------
-ourSummary <- summary(ourModel)
-ourSummary
-plot(ourModel)
-
-## ----BJDynamicCoefficients----------------------------------------------------
-# Coefficients in dynamics
-head(ourModel$coefficientsDynamic)
-# Standard errors of the coefficients in dynamics
-head(ourModel$se)
-# Importance of parameters in dynamics
-head(ourModel$importance)
-
-## ----BJDynamicCoefficientsPlots, eval=FALSE, include=FALSE--------------------
-#  plot(coef(ourModel))
-
-## ----BJDynamicdf--------------------------------------------------------------
-ourModel$dfDynamic
-ourModel$df.residualDynamic
-
-## ----BJDynamicForecast--------------------------------------------------------
 ourForecast <- predict(ourModel,BJHoldout)
 plot(ourForecast)
 
