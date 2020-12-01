@@ -1,9 +1,9 @@
-#' Advanced Linear Model
+#' Augmented Linear Model
 #'
 #' Function estimates model based on the selected distribution
 #'
-#' This is a function, similar to \link[stats]{lm}, but for the cases of several
-#' non-normal distributions. These include:
+#' This is a function, similar to \link[stats]{lm}, but using likelihood for the cases
+#' of several non-normal distributions. These include:
 #' \enumerate{
 #' \item \link[stats]{dnorm} - Normal distribution,
 #' \item \link[greybox]{dlaplace} - Laplace distribution,
@@ -20,6 +20,7 @@
 #' \item \link[greybox]{dbcnorm} - Box-Cox normal distribution,
 # \item \link[stats]{dchisq} - Chi-Squared Distribution,
 #' \item \link[statmod]{dinvgauss} - Inverse Gaussian distribution,
+#' \item \link[greybox]{dlogitnorm} - Logit-normal distribution,
 #' \item \link[stats]{dbeta} - Beta distribution,
 #' \item \link[stats]{dpois} - Poisson Distribution,
 #' \item \link[stats]{dnbinom} - Negative Binomial Distribution,
@@ -35,10 +36,12 @@
 #' of parameters, hessian calculation and matrix multiplication. So think twice when
 #' using \code{distribution="dnorm"} here.
 #'
-#' The estimation is done using likelihood of respective distributions.
+#' The estimation is done via the maximisation of likelihood of a selected distribution,
+#' so the number of estimated parameters always includes the scale. Thus the number of degrees
+#' of freedom of the model in case of \code{alm} will typically be lower than in the case of
+#' \code{lm}.
 #'
-#' See more details and examples in the vignette "ALM":
-#' \code{vignette("alm","greybox")}
+#' See more details and examples in the vignette for "ALM": \code{vignette("alm","greybox")}
 #'
 #' @template author
 #' @template keywords
@@ -70,12 +73,15 @@
 #' \item \code{RIDGE} - use RIDGE to shrink the parameters of the model;
 #' }
 #' In case of LASSO / RIDGE, the variables are not normalised prior to the estimation,
-#' but the parameters are divided by the mean values of explanatory variables.
-#' Note that you are expected to provide the parameter lambda.
+#' but the parameters are divided by the standard deviations of explanatory variables
+#' inside the optimisation. As the result the parameters of the final model have the
+#' same interpretation as in the case of classical linear regression. Note that the
+#' user is expected to provide the parameter \code{lambda}.
 #'
 #' A user can also provide their own function here as well, making sure
 #' that it accepts parameters \code{actual}, \code{fitted} and \code{B}. Here is an
 #' example:
+#'
 #' \code{lossFunction <- function(actual, fitted, B, xreg) return(mean(abs(actual-fitted)))}
 #' \code{loss=lossFunction}
 #'
@@ -246,11 +252,11 @@ alm <- function(formula, data, subset, na.action,
                 distribution=c("dnorm","dlaplace","ds","dgnorm","dlogis","dt","dalaplace",
                                "dlnorm","dllaplace","dls","dlgnorm","dbcnorm","dfnorm","dinvgauss",
                                "dpois","dnbinom",
-                               "dbeta",
+                               "dbeta","dlogitnorm",
                                "plogis","pnorm"),
                 loss=c("likelihood","MSE","MAE","HAM","LASSO","RIDGE"),
                 occurrence=c("none","plogis","pnorm"),
-                # scaleFormula=NULL,
+                # scale=NULL,
                 ar=0,# i=0,
                 parameters=NULL, fast=FALSE, ...){
 # Useful stuff for dnbinom: https://scialert.net/fulltext/?doi=ajms.2010.1.15
@@ -408,6 +414,7 @@ alm <- function(formula, data, subset, na.action,
                        "dnbinom" = exp(matrixXreg %*% B),
                        "dchisq" = ifelseFast(any(matrixXreg %*% B <0),1E+100,(matrixXreg %*% B)^2),
                        "dbeta" = exp(matrixXreg %*% B[1:(length(B)/2)]),
+                       "dlogitnorm"=,
                        "dnorm" =,
                        "dlaplace" =,
                        "ds" =,
@@ -439,6 +446,7 @@ alm <- function(formula, data, subset, na.action,
                         "dlgnorm" = (other*sum(abs(log(y[otU])-mu[otU])^other)/obsInsample)^{1/other},
                         "dbcnorm" = sqrt(sum((bcTransform(y[otU],other)-mu[otU])^2)/obsInsample),
                         "dinvgauss" = sum((y[otU]/mu[otU]-1)^2 / (y[otU]/mu[otU]))/obsInsample,
+                        "dlogitnorm" = sqrt(sum((log(y[otU]/(1-y[otU]))-mu[otU])^2)/obsInsample),
                         "dfnorm" = abs(other),
                         "dt" = ,
                         "dchisq" =,
@@ -472,10 +480,7 @@ alm <- function(formula, data, subset, na.action,
         return(fitterReturn);
     }
 
-    CF <- function(B, distribution, loss, y, matrixXreg, recursiveModel, denominator, hessianCalculation=FALSE){
-        if(hessianCalculation){
-            B[] <- B * denominator;
-        }
+    CF <- function(B, distribution, loss, y, matrixXreg, recursiveModel, denominator){
         if(recursiveModel){
             fitterReturn <- fitterRecursive(B, distribution, y, matrixXreg);
         }
@@ -509,6 +514,7 @@ alm <- function(formula, data, subset, na.action,
                                    "dchisq" = dchisq(y[otU], df=fitterReturn$scale, ncp=fitterReturn$mu[otU], log=TRUE),
                                    "dpois" = dpois(y[otU], lambda=fitterReturn$mu[otU], log=TRUE),
                                    "dnbinom" = dnbinom(y[otU], mu=fitterReturn$mu[otU], size=fitterReturn$scale, log=TRUE),
+                                   "dlogitnorm" = dlogitnorm(y[otU], mu=fitterReturn$mu[otU], sigma=fitterReturn$scale, log=TRUE),
                                    "dbeta" = dbeta(y[otU], shape1=fitterReturn$mu[otU], shape2=fitterReturn$scale[otU], log=TRUE),
                                    "pnorm" = c(pnorm(fitterReturn$mu[ot], mean=0, sd=1, log.p=TRUE),
                                                pnorm(fitterReturn$mu[!ot], mean=0, sd=1, lower.tail=FALSE, log.p=TRUE)),
@@ -522,6 +528,7 @@ alm <- function(formula, data, subset, na.action,
                                               "dnorm" =,
                                               "dfnorm" =,
                                               "dbcnorm" =,
+                                              "dlogitnorm" =,
                                               "dlnorm" = obsZero*(log(sqrt(2*pi)*fitterReturn$scale)+0.5),
                                               "dgnorm" =,
                                               "dlgnorm" =obsZero*(1/fitterReturn$other-
@@ -559,8 +566,8 @@ alm <- function(formula, data, subset, na.action,
         else{
             ### Fitted values in the scale of the original variable
             yFitted[] <- switch(distribution,
-                                "dfnorm" = sqrt(2/pi)*scale*exp(-fitterReturn$mu^2/(2*scale^2))+
-                                    fitterReturn$mu*(1-2*pnorm(-fitterReturn$mu/scale)),
+                                "dfnorm" = sqrt(2/pi)*fitterReturn$scale*exp(-fitterReturn$mu^2/(2*fitterReturn$scale^2))+
+                                    fitterReturn$mu*(1-2*pnorm(-fitterReturn$mu/fitterReturn$scale)),
                                 "dnorm" =,
                                 "dgnorm" =,
                                 "dinvgauss" =,
@@ -576,8 +583,9 @@ alm <- function(formula, data, subset, na.action,
                                 "dllaplace" =,
                                 "dls" =,
                                 "dlgnorm" = exp(fitterReturn$mu),
-                                "dbcnorm" = bcTransformInv(fitterReturn$mu,lambdaBC),
-                                "dbeta" = fitterReturn$mu / (fitterReturn$mu + scale),
+                                "dlogitnorm" = exp(fitterReturn$mu)/(1+exp(fitterReturn$mu)),
+                                "dbcnorm" = bcTransformInv(fitterReturn$mu,fitterReturn$other),
+                                "dbeta" = fitterReturn$mu / (fitterReturn$mu + fitterReturn$scale),
                                 "pnorm" = pnorm(fitterReturn$mu, mean=0, sd=1),
                                 "plogis" = plogis(fitterReturn$mu, location=0, scale=1)
             );
@@ -704,12 +712,22 @@ alm <- function(formula, data, subset, na.action,
             aParameterProvided <- TRUE;
         }
     }
+    else{
+        aParameterProvided <- TRUE;
+    }
+    if(!aParameterProvided && loss!="likelihood"){
+        warning("The chosen loss function does not allow optimisation of additional parameters ",
+                "for the distribution=\"",distribution,"\". Use likelihood instead. We will use 0.5.",
+                call.=FALSE);
+            alpha <- nu <- size <- sigma <- beta <- lambdaBC <- nu <- 0.5;
+            aParameterProvided <- TRUE;
+    }
     # LASSO / RIDGE loss
     if(any(loss==c("LASSO","RIDGE"))){
         warning(paste0("Please, keep in mind that loss='",loss,
                        "' is an experimental option. It might not work correctly."), call.=FALSE);
         if(is.null(ellipsis$lambda)){
-            warning(paste0("You have not provided lambda parameter. We will set it to zero."), call.=FALSE);
+            warning("You have not provided lambda parameter. We will set it to zero.", call.=FALSE);
             lambda <- 0;
         }
         else{
@@ -882,9 +900,23 @@ alm <- function(formula, data, subset, na.action,
             dataContainsNaNs <- FALSE;
         }
 
-        # The gsub is needed in order to remove accidental special characters
+        # If there are spaces in names, give a warning
+        if(any(grepl("[^A-Za-z0-9,;._-]", all.vars(formula)))){
+            warning("The names of your variables contain special characters ",
+                    "(such as spaces, comas, brackets etc). alm() might not work properly. ",
+                    "It is recommended to use `make.names()` function to fix the names of variables.",
+                    call.=FALSE);
+            formula <- as.formula(paste0(gsub(paste0("`",all.vars(formula)[1],"`"),
+                                              make.names(all.vars(formula)[1]),
+                                              all.vars(formula)[1]),"~",
+                                         paste0(mapply(gsub, paste0("`",all.vars(formula)[-1],"`"),
+                                                       make.names(all.vars(formula)[-1]),
+                                                       labels(terms(formula))),
+                                                collapse="+")));
+            mf$formula <- formula;
+        }
+        # Fix names of variables
         colnames(mf$data) <- make.names(colnames(mf$data), unique=TRUE);
-        # colnames(mf$data) <- gsub("\`","",colnames(mf$data),ignore.case=TRUE);
     }
     else{
         dataContainsNaNs <- FALSE;
@@ -905,8 +937,8 @@ alm <- function(formula, data, subset, na.action,
             maxeval <- 500;
         }
         # The following ones don't really need the estimation. This is for consistency only
-        else if(any(distribution==c("dnorm","dlnorm")) & !recursiveModel && any(loss==c("likelihood","MSE"))){
-            maxeval <- 2;
+        else if(any(distribution==c("dnorm","dlnorm","dlogitnorm")) & !recursiveModel && any(loss==c("likelihood","MSE"))){
+            maxeval <- 1;
         }
         else{
             maxeval <- 200;
@@ -939,8 +971,8 @@ alm <- function(formula, data, subset, na.action,
         matrixXreg <- dataWork;
         # Include response to the data
         # dataWork <- cbind(y,dataWork);
-        warning(paste0("You have asked not to include intercept in the model. We will try to fit the model, ",
-                      "but this is a very naughty thing to do, and we cannot guarantee that it will work..."), call.=FALSE);
+        warning("You have asked not to include intercept in the model. We will try to fit the model, ",
+                "but this is a very naughty thing to do, and we cannot guarantee that it will work...", call.=FALSE);
     }
     # colnames(dataWork) <- c(responseName, variablesNames);
     rm(dataWork);
@@ -984,13 +1016,14 @@ alm <- function(formula, data, subset, na.action,
         }
     }
 
-    if(distribution=="dbeta"){
+    if(any(distribution==c("dbeta","dlogitnorm"))){
         if(any((y>1) | (y<0))){
-            stop("The response variable should lie between 0 and 1 in the Beta distribution", call.=FALSE);
+            stop(paste0("The response variable should lie between 0 and 1 in distribution=\"",
+                        distribution,"\""), call.=FALSE);
         }
         else if(any(y==c(0,1))){
             warning(paste0("The response variable contains boundary values (either zero or one). ",
-                           "Beta distribution is not estimable in this case. ",
+                           "distribution=\"",distribution,"\" is not estimable in this case. ",
                            "So we used a minor correction for it, in order to overcome this limitation."), call.=FALSE);
             y <- y*(1-2*1e-10);
         }
@@ -1121,7 +1154,7 @@ alm <- function(formula, data, subset, na.action,
     nVariablesExo <- nVariables;
 
     #### The model for the scale ####
-    # if(!is.null(scaleFormula)){
+    # if(!is.null(scale)){
     # }
 
     #### Estimate parameters of the model ####
@@ -1241,6 +1274,9 @@ alm <- function(formula, data, subset, na.action,
                     B <- .lm.fit(matrixXreg[otU,,drop=FALSE],log(y[otU]/(1-y[otU])))$coefficients;
                     B <- c(B, -B);
                 }
+                else if(distribution=="dlogitnorm"){
+                    B <- .lm.fit(matrixXreg[otU,,drop=FALSE],log(y[otU]/(1-y[otU])))$coefficients;
+                }
                 else if(distribution=="dchisq"){
                     B <- .lm.fit(matrixXreg[otU,,drop=FALSE],sqrt(y[otU]))$coefficients;
                     if(aParameterProvided){
@@ -1307,8 +1343,13 @@ alm <- function(formula, data, subset, na.action,
                 else if(distribution=="dbeta"){
                     # In Beta we set B to be twice longer, using first half of parameters for shape1, and the second for shape2
                     # Transform y, just in case, to make sure that it does not hit boundary values
-                    B <- .lm.fit(matrixXregForDiffs,diff(log(y/(1-y)),differences=iOrder)[c(1:nrow(matrixXregForDiffs))])$coefficients;
+                    B <- .lm.fit(matrixXregForDiffs,
+                                 diff(log(y/(1-y)),differences=iOrder)[c(1:nrow(matrixXregForDiffs))])$coefficients;
                     B <- c(B, -B);
+                }
+                else if(distribution=="dlogitnorm"){
+                    B <- .lm.fit(matrixXregForDiffs,
+                                 diff(log(y/(1-y)),differences=iOrder)[c(1:nrow(matrixXregForDiffs))])$coefficients;
                 }
                 else if(distribution=="dchisq"){
                     B <- .lm.fit(matrixXregForDiffs,diff(sqrt(y[otU]),differences=iOrder))$coefficients;
@@ -1422,14 +1463,14 @@ alm <- function(formula, data, subset, na.action,
                                 maxtime=maxtime, xtol_abs=xtol_abs, ftol_rel=ftol_rel, ftol_abs=ftol_abs),
                       lb=BLower, ub=BUpper,
                       distribution=distribution, loss=loss, y=y, matrixXreg=matrixXreg,
-                      recursiveModel=recursiveModel, denominator=denominator, hessianCalculation=FALSE);
+                      recursiveModel=recursiveModel, denominator=denominator);
         if(recursiveModel){
             res2 <- nloptr(res$solution, CF,
                            opts=list(algorithm=algorithm, xtol_rel=xtol_rel, maxeval=maxeval, print_level=print_level,
                                 maxtime=maxtime, xtol_abs=xtol_abs, ftol_rel=ftol_rel, ftol_abs=ftol_abs),
                            lb=BLower, ub=BUpper,
                            distribution=distribution, loss=loss, y=y, matrixXreg=matrixXreg,
-                           recursiveModel=recursiveModel, denominator=denominator, hessianCalculation=FALSE);
+                           recursiveModel=recursiveModel, denominator=denominator);
             if(res2$objective<res$objective){
                 res[] <- res2;
             }
@@ -1508,6 +1549,7 @@ alm <- function(formula, data, subset, na.action,
     mu[] <- fitterReturn$mu;
     scale <- fitterReturn$scale;
 
+    # Give names to additional parameters
     if(is.null(parameters)){
         parameters <- B;
         if(distribution=="dnbinom"){
@@ -1620,6 +1662,7 @@ alm <- function(formula, data, subset, na.action,
                        "dllaplace" =,
                        "dls" =,
                        "dlgnorm" = exp(mu),
+                       "dlogitnorm" = exp(mu)/(1+exp(mu)),
                        "dbcnorm" = bcTransformInv(mu,lambdaBC),
                        "dbeta" = mu / (mu + scale),
                        "pnorm" = pnorm(mu, mean=0, sd=1),
@@ -1646,6 +1689,7 @@ alm <- function(formula, data, subset, na.action,
                        "dls" =,
                        "dlgnorm" = log(y) - mu,
                        "dbcnorm" = bcTransform(y,lambdaBC) - mu,
+                       "dlogitnorm" = log(y/(1-y)) - mu,
                        "pnorm" = qnorm((y - pnorm(mu, 0, 1) + 1) / 2, 0, 1),
                        "plogis" = log((1 + y * (1 + exp(mu))) / (1 + exp(mu) * (2 - y) - y))
                        # Here we use the proxy from Svetunkov & Boylan (2019)
@@ -1664,6 +1708,7 @@ alm <- function(formula, data, subset, na.action,
     # Parameters of the model + scale
     nParam <- nVariables + (loss=="likelihood")*1;
 
+    # Amend the number of parameters, depending on the type of distribution
     if(any(distribution==c("dnbinom","dchisq","dt","dfnorm","dbcnorm","dgnorm","dlgnorm","dalaplace"))){
         if(!aParameterProvided){
             nParam <- nParam + 1;
@@ -1702,21 +1747,14 @@ alm <- function(formula, data, subset, na.action,
     if(FI){
         # Only vcov is needed, no point in redoing the occurrenceModel
         occurrenceModel <- FALSE;
-        # Standartisation is needed in order to get accurate hessian
-        denominator <- apply(matrixXreg, 2, sd);
-        # No variability, substitute by 1
-        denominator[is.infinite(denominator)] <- 1;
-        # Fix the denominator for the intercept
-        denominator[denominator==0] <- B[denominator==0];
-        BNew <- B / denominator;
-        FI <- hessian(CF, BNew,
+        FI <- hessian(CF, B,
                       distribution=distribution, loss=loss, y=y, matrixXreg=matrixXreg,
-                      recursiveModel=recursiveModel, denominator=denominator, hessianCalculation=TRUE);
+                      recursiveModel=recursiveModel, denominator=denominator);
 
         if(any(is.nan(FI))){
-            warning(paste0("Something went wrong and we failed to produce the covariance matrix of the parameters.\n",
-                           "Obviously, it's not our fault. Probably Russians have hacked your computer...\n",
-                           "Try a different distribution maybe?"), call.=FALSE);
+            warning("Something went wrong and we failed to produce the covariance matrix of the parameters.\n",
+                    "Obviously, it's not our fault. Probably Russians have hacked your computer...\n",
+                    "Try a different distribution maybe?", call.=FALSE);
             FI <- diag(1e+100,nVariables);
         }
         dimnames(FI) <- list(variablesNames,variablesNames);
@@ -1799,11 +1837,15 @@ alm <- function(formula, data, subset, na.action,
         mu <- yFitted;
     }
 
-    if(loss=="likelihood" ||
-       (loss=="MSE" && any(distribution==c("dnorm","dlnorm","dbcnorm"))) ||
+    # Return LogLik, depending on the used loss
+    if(loss=="likelihood"){
+        logLik <- -CFValue;
+    }
+    else if((loss=="MSE" && any(distribution==c("dnorm","dlnorm","dbcnorm","dlogitnorm"))) ||
        (loss=="MAE" && any(distribution==c("dlaplace","dllaplace"))) ||
        (loss=="HAM" && any(distribution==c("ds","dls")))){
-        logLik <- -CFValue;
+        logLik <- -CF(B, distribution, loss="likelihood", y,
+                      matrixXreg, recursiveModel, denominator);
     }
     else{
         logLik <- NA;

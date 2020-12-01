@@ -8,7 +8,7 @@ The package _greybox_ contains functions for model building, which is currently 
 There are several groups of functions in the package.
 
 ### Regression model functions
-1. alm - advanced linear regression model that implements likelihood estimation of parameters for Normal, Laplace, Asymmetric Laplace, Logistic, Student's t, S, Folded Normal, Log Normal, Box-Cox Normal, Inverse Gaussian, Chi-Squared, Beta, Poisson, Negative Binomial, Cumulative Logistic and Cumulative Normal distributions. In a sense this is similar to `glm()` function, but with a different set of distributions and with a focus on forecasting.
+1. alm - augmented linear regression model that implements likelihood estimation of parameters for Normal, Laplace, Asymmetric Laplace, Logistic, Student's t, S, Folded Normal, Log Normal, Box-Cox Normal, Inverse Gaussian, Chi-Squared, Beta, Poisson, Negative Binomial, Cumulative Logistic and Cumulative Normal distributions. In a sense this is similar to `glm()` function, but with a different set of distributions and with a focus on forecasting.
 2. stepwise - function implements stepwise IC based on partial correlations.
 3. lmCombine - function combines the regression models from the provided data, based on IC weights and returns the combined alm object.
 
@@ -39,6 +39,7 @@ There are several groups of functions in the package.
 4. qfnorm, dfnorm, rfnorm, pfnorm - functions for folded normal distribution.
 5. qtplnorm, dtplnorm, rtplnorm, ptplnorm - functions for three parameter log normal distribution.
 6. qbcnorm, dbcnorm, rbcnorm, pbcnorm - functions for Box-Cox normal distribution (discussed in Box & Cox, 1964).
+7. qlogitnorm, dlogitnorm, rlogitnorm, plogitnorm - functions for Logit-normal distribution.
 
 ### Methods for the introduced and some existing classes:
 1. temporaldummy - the method that creates a matrix of dummy variables for an object based on the selected frequency. e.g. this can create week of year based on the provided zoo object.

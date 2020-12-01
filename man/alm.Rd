@@ -2,14 +2,14 @@
 % Please edit documentation in R/alm.R
 \name{alm}
 \alias{alm}
-\title{Advanced Linear Model}
+\title{Augmented Linear Model}
 \usage{
 alm(formula, data, subset, na.action, distribution = c("dnorm", "dlaplace",
   "ds", "dgnorm", "dlogis", "dt", "dalaplace", "dlnorm", "dllaplace", "dls",
   "dlgnorm", "dbcnorm", "dfnorm", "dinvgauss", "dpois", "dnbinom", "dbeta",
-  "plogis", "pnorm"), loss = c("likelihood", "MSE", "MAE", "HAM", "LASSO",
-  "RIDGE"), occurrence = c("none", "plogis", "pnorm"), ar = 0,
-  parameters = NULL, fast = FALSE, ...)
+  "dlogitnorm", "plogis", "pnorm"), loss = c("likelihood", "MSE", "MAE",
+  "HAM", "LASSO", "RIDGE"), occurrence = c("none", "plogis", "pnorm"),
+  ar = 0, parameters = NULL, fast = FALSE, ...)
 }
 \arguments{
 \item{formula}{an object of class "formula" (or one that can be coerced to
@@ -44,12 +44,15 @@ likelihood of the function specified in \code{distribution};
 \item \code{RIDGE} - use RIDGE to shrink the parameters of the model;
 }
 In case of LASSO / RIDGE, the variables are not normalised prior to the estimation,
-but the parameters are divided by the mean values of explanatory variables.
-Note that you are expected to provide the parameter lambda.
+but the parameters are divided by the standard deviations of explanatory variables
+inside the optimisation. As the result the parameters of the final model have the
+same interpretation as in the case of classical linear regression. Note that the
+user is expected to provide the parameter \code{lambda}.
 
 A user can also provide their own function here as well, making sure
 that it accepts parameters \code{actual}, \code{fitted} and \code{B}. Here is an
 example:
+
 \code{lossFunction <- function(actual, fitted, B, xreg) return(mean(abs(actual-fitted)))}
 \code{loss=lossFunction}
 
@@ -146,8 +149,8 @@ function or estimated in the process, but not included in the standard output
 Function estimates model based on the selected distribution
 }
 \details{
-This is a function, similar to \link[stats]{lm}, but for the cases of several
-non-normal distributions. These include:
+This is a function, similar to \link[stats]{lm}, but using likelihood for the cases
+of several non-normal distributions. These include:
 \enumerate{
 \item \link[stats]{dnorm} - Normal distribution,
 \item \link[greybox]{dlaplace} - Laplace distribution,
@@ -163,6 +166,7 @@ non-normal distributions. These include:
 \item \link[greybox]{dfnorm} - Folded normal distribution,
 \item \link[greybox]{dbcnorm} - Box-Cox normal distribution,
 \item \link[statmod]{dinvgauss} - Inverse Gaussian distribution,
+\item \link[greybox]{dlogitnorm} - Logit-normal distribution,
 \item \link[stats]{dbeta} - Beta distribution,
 \item \link[stats]{dpois} - Poisson Distribution,
 \item \link[stats]{dnbinom} - Negative Binomial Distribution,
@@ -178,10 +182,12 @@ This function is slower than \code{lm}, because it relies on likelihood estimati
 of parameters, hessian calculation and matrix multiplication. So think twice when
 using \code{distribution="dnorm"} here.
 
-The estimation is done using likelihood of respective distributions.
+The estimation is done via the maximisation of likelihood of a selected distribution,
+so the number of estimated parameters always includes the scale. Thus the number of degrees
+of freedom of the model in case of \code{alm} will typically be lower than in the case of
+\code{lm}.
 
-See more details and examples in the vignette "ALM":
-\code{vignette("alm","greybox")}
+See more details and examples in the vignette for "ALM": \code{vignette("alm","greybox")}
 }
 \examples{
 
