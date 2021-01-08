@@ -69,10 +69,10 @@
 #' \item Davydenko, A., Fildes, R. (2013). Measuring Forecasting Accuracy:
 #' The Case Of Judgmental Adjustments To Sku-Level Demand Forecasts.
 #' International Journal of Forecasting, 29(3), 510-522.
-#' \url{https://doi.org/10.1016/j.ijforecast.2012.09.002}
+#' \doi{10.1016/j.ijforecast.2012.09.002}
 #' \item Gneiting, T., & Raftery, A. E. (2007). Strictly proper scoring rules,
 #' prediction, and estimation. Journal of the American Statistical Association,
-#' 102(477), 359–378. \url{https://doi.org/10.1198/016214506000001437}
+#' 102(477), 359–378. \doi{10.1198/016214506000001437}
 #' }
 #'
 #' @seealso \link[greybox]{pinball}, \link[greybox]{hm}, \link[greybox]{measures}
@@ -566,7 +566,7 @@ sMIS <- function(actual,lower,upper,scale,level=0.95){
 #' \item Davydenko, A., Fildes, R. (2013). Measuring Forecasting Accuracy:
 #' The Case Of Judgmental Adjustments To Sku-Level Demand Forecasts.
 #' International Journal of Forecasting, 29(3), 510-522.
-#' \url{https://doi.org/10.1016/j.ijforecast.2012.09.002}
+#' \doi{10.1016/j.ijforecast.2012.09.002}
 #' }
 #' @examples
 #'
@@ -625,7 +625,7 @@ measures <- function(holdout, forecast, actual, digits=NULL, benchmark=c("naive"
 #'
 #' @aliases hm
 #' @param x A variable based on which HM is estimated.
-#' @param C Centering parameter.
+#' @param C Centring parameter.
 #' @param ...  Other parameters passed to mean function.
 #' @return A complex variable is returned for \code{hm} function and real values
 #' are returned for \code{cbias} and \code{ham}.

@@ -65,16 +65,16 @@
 #' \item Geraci Marco, Bottai Matteo (2007). Quantile regression for
 #' longitudinal data using the asymmetric Laplace distribution.
 #' Biostatistics (2007), 8, 1, pp. 140-154
-#' \url{https://doi.org/10.1093/biostatistics/kxj039}
+#' \doi{10.1093/biostatistics/kxj039}
 #' \item Yu, K., & Zhang, J. (2005). A three-parameter asymmetric
 #' laplace distribution and its extension. Communications in Statistics
 #' - Theory and Methods, 34, 1867-1879.
-#' \url{https://doi.org/10.1080/03610920500199018}
+#' \doi{10.1080/03610920500199018}
 #' }
 #'
-#' @rdname alaplace-distribution
+#' @rdname ALaplace
 #' @export dalaplace
-#' @aliases dalaplace
+#' @aliases ALaplace dalaplace
 dalaplace <- function(q, mu=0, scale=1, alpha=0.5, log=FALSE){
     alaplaceReturn <- alpha * (1-alpha) / scale * exp(-(q-mu)/scale * (alpha - (q<=mu)*1));
     if(log){
@@ -83,7 +83,7 @@ dalaplace <- function(q, mu=0, scale=1, alpha=0.5, log=FALSE){
     return(alaplaceReturn);
 }
 
-#' @rdname alaplace-distribution
+#' @rdname ALaplace
 #' @export palaplace
 #' @aliases palaplace
 palaplace <- function(q, mu=0, scale=1, alpha=0.5){
@@ -93,7 +93,7 @@ palaplace <- function(q, mu=0, scale=1, alpha=0.5){
     return(alaplaceReturn);
 }
 
-#' @rdname alaplace-distribution
+#' @rdname ALaplace
 #' @export qalaplace
 #' @aliases qalaplace
 qalaplace <- function(p, mu=0, scale=1, alpha=0.5){
@@ -135,7 +135,7 @@ qalaplace <- function(p, mu=0, scale=1, alpha=0.5){
     return(alaplaceReturn);
 }
 
-#' @rdname alaplace-distribution
+#' @rdname ALaplace
 #' @export ralaplace
 #' @aliases ralaplace
 ralaplace <- function(n=1, mu=0, scale=1, alpha=0.5){

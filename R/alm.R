@@ -8,7 +8,7 @@
 #' \item \link[stats]{dnorm} - Normal distribution,
 #' \item \link[greybox]{dlaplace} - Laplace distribution,
 #' \item \link[greybox]{ds} - S-distribution,
-#' \item dgnorm - Generalised Normal distribution,
+#' \item \link[greybox]{dgnorm} - Generalised Normal distribution,
 #' \item \link[stats]{dlogis} - Logistic Distribution,
 #' \item \link[stats]{dt} - T-distribution,
 #' \item \link[greybox]{dalaplace} - Asymmetric Laplace distribution,
@@ -47,7 +47,8 @@
 #' @template keywords
 #'
 #' @param formula an object of class "formula" (or one that can be coerced to
-#' that class): a symbolic description of the model to be fitted.
+#' that class): a symbolic description of the model to be fitted. Can also include
+#' \code{trend}, which would add the global trend.
 #' @param data a data frame or a matrix, containing the variables in the model.
 #' @param subset an optional vector specifying a subset of observations to be
 #' used in the fitting process.
@@ -112,6 +113,7 @@
 #' \item \code{alpha} - value for Asymmetric Laplace distribution;
 #' \item \code{size} - the size for the Negative Binomial distribution;
 #' \item \code{nu} - the number of degrees of freedom for Chi-Squared and Student's t;
+#' \item \code{shape} - the shape parameter for Generalised Normal distribution;
 #' \item \code{lambda} - the meta parameter for LASSO / RIDGE. Should be between 0 and 1,
 #' regulating the strength of shrinkage, where 0 means don't shrink parameters (use MSE)
 #' and 1 means shrink everything (ignore MSE);
@@ -163,6 +165,7 @@
 #' \item call - how the model was called,
 #' \item rank - rank of the model,
 #' \item data - data used for the model construction,
+#' \item terms - terms of the data. Needed for some additional methods to work,
 #' \item occurrence - the occurrence model used in the estimation,
 #' \item B - the value of the optimised parameters. Typically, this is a duplicate of coefficients,
 #' \item other - the list of all the other parameters either passed to the
@@ -193,52 +196,50 @@
 #'
 #'
 #' ### Artificial data for the other examples
-#' xreg <- cbind(rlaplace(100,10,3),rnorm(100,50,5))
+#' \dontrun{xreg <- cbind(rlaplace(100,10,3),rnorm(100,50,5))
 #' xreg <- cbind(100+0.5*xreg[,1]-0.75*xreg[,2]+rlaplace(100,0,3),xreg,rnorm(100,300,10))
-#' colnames(xreg) <- c("y","x1","x2","Noise")
+#' colnames(xreg) <- c("y","x1","x2","Noise")}
 #'
 #' # An example with Laplace distribution
-#' ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dlaplace")
+#' \dontrun{ourModel <- alm(y~x1+x2+trend, xreg, subset=c(1:80), distribution="dlaplace")
 #' summary(ourModel)
-#' plot(predict(ourModel,xreg[-c(1:80),]))
+#' plot(predict(ourModel,xreg[-c(1:80),]))}
 #'
 #' # And another one with Asymmetric Laplace distribution (quantile regression)
 #' # with optimised alpha
-#' ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dalaplace")
-#' summary(ourModel)
-#' plot(predict(ourModel,xreg[-c(1:80),]))
+#' \dontrun{ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dalaplace")}
 #'
 #' # An example with AR(1) order
-#' ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dnorm", ar=1)
+#' \dontrun{ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dnorm", ar=1)
 #' summary(ourModel)
-#' plot(predict(ourModel,xreg[-c(1:80),]))
+#' plot(predict(ourModel,xreg[-c(1:80),]))}
 #'
 #' ### Examples with the count data
-#' xreg[,1] <- round(exp(xreg[,1]-70),0)
+#' \dontrun{xreg[,1] <- round(exp(xreg[,1]-70),0)}
 #'
 #' # Negative Binomial distribution
-#' ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dnbinom")
+#' \dontrun{ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dnbinom")
 #' summary(ourModel)
-#' predict(ourModel,xreg[-c(1:80),],interval="p",side="u")
+#' predict(ourModel,xreg[-c(1:80),],interval="p",side="u")}
 #'
 #' # Poisson distribution
-#' ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dpois")
+#' \dontrun{ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dpois")
 #' summary(ourModel)
-#' predict(ourModel,xreg[-c(1:80),],interval="p",side="u")
+#' predict(ourModel,xreg[-c(1:80),],interval="p",side="u")}
 #'
 #'
 #' ### Examples with binary response variable
-#' xreg[,1] <- round(xreg[,1] / (1 + xreg[,1]),0)
+#' \dontrun{xreg[,1] <- round(xreg[,1] / (1 + xreg[,1]),0)}
 #'
 #' # Logistic distribution (logit regression)
-#' ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="plogis")
+#' \dontrun{ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="plogis")
 #' summary(ourModel)
-#' plot(predict(ourModel,xreg[-c(1:80),],interval="c"))
+#' plot(predict(ourModel,xreg[-c(1:80),],interval="c"))}
 #'
 #' # Normal distribution (probit regression)
-#' ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="pnorm")
+#' \dontrun{ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="pnorm")
 #' summary(ourModel)
-#' plot(predict(ourModel,xreg[-c(1:80),],interval="p"))
+#' plot(predict(ourModel,xreg[-c(1:80),],interval="p"))}
 #'
 #' @importFrom pracma hessian
 #' @importFrom nloptr nloptr
@@ -268,7 +269,7 @@ alm <- function(formula, data, subset, na.action,
 
     cl <- match.call();
     # This is needed in order to have a reasonable formula saved, so that there are no issues with it
-    cl$formula <- eval(cl$formula);
+        cl$formula <- eval(cl$formula);
     distribution <- match.arg(distribution);
     if(is.function(loss)){
         lossFunction <- loss;
@@ -360,7 +361,7 @@ alm <- function(formula, data, subset, na.action,
                 B <- B[-1];
             }
             else{
-                other <- beta;
+                other <- shape;
             }
         }
         else if(distribution=="dbcnorm"){
@@ -494,8 +495,8 @@ alm <- function(formula, data, subset, na.action,
                                    "dnorm" = dnorm(y[otU], mean=fitterReturn$mu[otU], sd=fitterReturn$scale, log=TRUE),
                                    "dlaplace" = dlaplace(y[otU], mu=fitterReturn$mu[otU], scale=fitterReturn$scale, log=TRUE),
                                    "ds" = ds(y[otU], mu=fitterReturn$mu[otU], scale=fitterReturn$scale, log=TRUE),
-                                   "dgnorm" = dgnorm(y[otU], mu=fitterReturn$mu[otU], alpha=fitterReturn$scale,
-                                                     beta=fitterReturn$other, log=TRUE),
+                                   "dgnorm" = dgnorm(y[otU], mu=fitterReturn$mu[otU], scale=fitterReturn$scale,
+                                                     shape=fitterReturn$other, log=TRUE),
                                    "dlogis" = dlogis(y[otU], location=fitterReturn$mu[otU], scale=fitterReturn$scale, log=TRUE),
                                    "dt" = dt(y[otU]-fitterReturn$mu[otU], df=fitterReturn$scale, log=TRUE),
                                    "dalaplace" = dalaplace(y[otU], mu=fitterReturn$mu[otU], scale=fitterReturn$scale,
@@ -504,8 +505,8 @@ alm <- function(formula, data, subset, na.action,
                                    "dllaplace" = dlaplace(log(y[otU]), mu=fitterReturn$mu[otU],
                                                           scale=fitterReturn$scale, log=TRUE)-log(y[otU]),
                                    "dls" = ds(log(y[otU]), mu=fitterReturn$mu[otU], scale=fitterReturn$scale, log=TRUE)-log(y[otU]),
-                                   "dlgnorm" = dgnorm(log(y[otU]), mu=fitterReturn$mu[otU], alpha=fitterReturn$scale,
-                                                      beta=fitterReturn$other, log=TRUE)-log(y[otU]),
+                                   "dlgnorm" = dgnorm(log(y[otU]), mu=fitterReturn$mu[otU], scale=fitterReturn$scale,
+                                                      shape=fitterReturn$other, log=TRUE)-log(y[otU]),
                                    "dbcnorm" = dbcnorm(y[otU], mu=fitterReturn$mu[otU], sigma=fitterReturn$scale,
                                                        lambda=fitterReturn$other, log=TRUE),
                                    "dfnorm" = dfnorm(y[otU], mu=fitterReturn$mu[otU], sigma=fitterReturn$scale, log=TRUE),
@@ -686,11 +687,11 @@ alm <- function(formula, data, subset, na.action,
         }
     }
     else if(any(distribution==c("dgnorm","dlgnorm"))){
-        if(is.null(ellipsis$beta)){
+        if(is.null(ellipsis$shape)){
             aParameterProvided <- FALSE;
         }
         else{
-            beta <- ellipsis$beta;
+            shape <- ellipsis$shape;
             aParameterProvided <- TRUE;
         }
     }
@@ -719,7 +720,7 @@ alm <- function(formula, data, subset, na.action,
         warning("The chosen loss function does not allow optimisation of additional parameters ",
                 "for the distribution=\"",distribution,"\". Use likelihood instead. We will use 0.5.",
                 call.=FALSE);
-            alpha <- nu <- size <- sigma <- beta <- lambdaBC <- nu <- 0.5;
+            alpha <- nu <- size <- sigma <- shape <- lambdaBC <- nu <- 0.5;
             aParameterProvided <- TRUE;
     }
     # LASSO / RIDGE loss
@@ -917,6 +918,19 @@ alm <- function(formula, data, subset, na.action,
         }
         # Fix names of variables
         colnames(mf$data) <- make.names(colnames(mf$data), unique=TRUE);
+
+        # If the data is a matrix / data.frame, get the nrows
+        if(!is.null(dim(mf$data))){
+            obsAll <- nrow(mf$data);
+        }
+        else{
+            obsAll <- length(mf$data);
+        }
+
+        # If the user asked for trend, but it's not in the data, add it
+        if(any(all.vars(formula)=="trend") && all(colnames(mf$data)!="trend")){
+            mf$data <- cbind(mf$data,trend=c(1:obsAll));
+        }
     }
     else{
         dataContainsNaNs <- FALSE;
@@ -953,6 +967,7 @@ alm <- function(formula, data, subset, na.action,
     }
 
     dataWork <- eval(mf, parent.frame());
+    dataTerms <- terms(dataWork);
     y <- dataWork[,1];
 
     interceptIsNeeded <- attr(terms(dataWork),"intercept")!=0;
@@ -1147,8 +1162,8 @@ alm <- function(formula, data, subset, na.action,
                 matrixXreg <- matrixXreg[,-(which(determValues==1)[1]+1),drop=FALSE];
                 variablesNames <- colnames(matrixXreg);
             }
-            nVariables <- length(variablesNames);
         }
+        nVariables <- length(variablesNames);
     }
     # The number of exogenous variables (no ARI elements)
     nVariablesExo <- nVariables;
@@ -1598,9 +1613,9 @@ alm <- function(formula, data, subset, na.action,
         }
         else if(any(distribution==c("dgnorm","dlgnorm"))){
             if(!aParameterProvided){
-                ellipsis$beta <- beta <- abs(parameters[1]);
+                ellipsis$shape <- shape <- abs(parameters[1]);
                 parameters <- parameters[-1];
-                names(B) <- c("beta",variablesNames);
+                names(B) <- c("shape",variablesNames);
             }
             else{
                 names(B) <- variablesNames;
@@ -1855,7 +1870,7 @@ alm <- function(formula, data, subset, na.action,
                                  mu=mu, scale=scale, distribution=distribution, logLik=logLik,
                                  loss=loss, lossFunction=lossFunction, lossValue=CFValue,
                                  df.residual=obsInsample-nParam, df=nParam, call=cl, rank=nParam,
-                                 data=dataWork,
+                                 data=dataWork, terms=dataTerms,
                                  occurrence=occurrence, subset=subset, other=ellipsis, B=B),
                             class=c("alm","greybox"));
 

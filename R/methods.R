@@ -105,6 +105,18 @@ BICc.varest <- function(object, ...){
     return(IC);
 }
 
+#' @export
+extractAIC.alm <- function(fit, scale=NULL, k=2, ...){
+    ellipsis <- list(...);
+    if(!is.null(ellipsis$ic)){
+        IC <- switch(ellipsis$ic,"AIC"=AIC,"BIC"=BIC,"BICc"=BICc,AICc);
+        return(c(nparam(fit),IC(fit)));
+    }
+    else{
+        return(c(nparam(fit),k*nparam(fit)-2*logLik(fit)));
+    }
+}
+
 #' Functions that extracts type of error from the model
 #'
 #' This function allows extracting error type from any model.
@@ -225,8 +237,8 @@ pointLik.alm <- function(object, ...){
     likValues[otU] <- switch(distribution,
                             "dnorm" = dnorm(y, mean=mu, sd=scale, log=TRUE),
                             "dlnorm" = dlnorm(y, meanlog=mu, sdlog=scale, log=TRUE),
-                            "dgnorm" = dgnorm(y, mu=mu, alpha=scale, beta=object$other$beta, log=TRUE),
-                            "dlgnorm" = dgnorm(log(y), mu=mu, alpha=scale, beta=object$other$beta, log=TRUE),
+                            "dgnorm" = dgnorm(y, mu=mu, scale=scale, shape=object$other$shape, log=TRUE),
+                            "dlgnorm" = dgnorm(log(y), mu=mu, scale=scale, shape=object$other$shape, log=TRUE),
                             "dfnorm" = dfnorm(y, mu=mu, sigma=scale, log=TRUE),
                             "dbcnorm" = dbcnorm(y, mu=mu, sigma=scale, lambda=object$other$lambdaBC, log=TRUE),
                             "dlogitnorm" = dlogitnorm(y, mu=mu, sigma=scale, log=TRUE),
@@ -260,8 +272,8 @@ pointLik.alm <- function(object, ...){
                                    "dlogitnorm" =,
                                    "dlnorm" = log(sqrt(2*pi)*scale)+0.5,
                                    "dgnorm" =,
-                                   "dlgnorm" = 1/object$other$beta -
-                                       log(object$other$beta / (2*scale*gamma(1/object$other$beta))),
+                                   "dlgnorm" = 1/object$other$shape -
+                                       log(object$other$shape / (2*scale*gamma(1/object$other$shape))),
                                    "dinvgauss" = 0.5*(log(pi/2)+1+log(scale)),
                                    "dlaplace" =,
                                    "dllaplace" =,
@@ -842,7 +854,7 @@ vcov.alm <- function(object, bootstrap=FALSE, ...){
                 newCall$lambdaBC <- object$other$lambdaBC;
             }
             else if(any(object$distribution==c("dgnorm","dlgnorm"))){
-                newCall$beta <- object$other$beta;
+                newCall$shape <- object$other$shape;
             }
             newCall$FI <- TRUE;
             # newCall$occurrence <- NULL;
@@ -1257,10 +1269,10 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             if(!any(names(ellipsis)=="main")){
                 ellipsis$main <- "QQ-plot of Generalised Normal distribution";
             }
-            ellipsis$x <- qgnorm(ppoints(500), mu=0, alpha=x$scale, beta=x$other$beta);
+            ellipsis$x <- qgnorm(ppoints(500), mu=0, scale=x$scale, shape=x$other$shape);
 
             do.call(qqplot, ellipsis);
-            qqline(ellipsis$y, distribution=function(p) qgnorm(p, mu=0, alpha=x$scale, beta=x$other$beta));
+            qqline(ellipsis$y, distribution=function(p) qgnorm(p, mu=0, scale=x$scale, shape=x$other$shape));
         }
         else if(any(x$distribution==c("dlaplace","dllaplace"))){
             if(!any(names(ellipsis)=="main")){
@@ -1865,6 +1877,7 @@ print.mcor <- function(x, ...){
     cat("\n");
 }
 
+#' @importFrom stats setNames
 #' @export
 print.summary.alm <- function(x, ...){
     ellipsis <- list(...);
@@ -1877,8 +1890,8 @@ print.summary.alm <- function(x, ...){
 
     distrib <- switch(x$distribution,
                       "dnorm" = "Normal",
-                      "dgnorm" = paste0("Generalised Normal Distribution with shape=",round(x$other$beta,digits)),
-                      "dlgnorm" = paste0("Log Generalised Normal Distribution with shape=",round(x$other$beta,digits)),
+                      "dgnorm" = paste0("Generalised Normal Distribution with shape=",round(x$other$shape,digits)),
+                      "dlgnorm" = paste0("Log Generalised Normal Distribution with shape=",round(x$other$shape,digits)),
                       "dlogis" = "Logistic",
                       "dlaplace" = "Laplace",
                       "dllaplace" = "Log Laplace",
@@ -1919,7 +1932,11 @@ print.summary.alm <- function(x, ...){
         cat("\nBootstrap was used for the estimation of uncertainty of parameters");
     }
     cat("\nCoefficients:\n");
-    print(round(x$coefficients,digits));
+    stars <- setNames(vector("character",length(x$significance)),
+                      names(x$significance));
+    stars[x$significance] <- "*";
+    print(data.frame(round(x$coefficients,digits),stars,
+                     check.names=FALSE,fix.empty.names=FALSE));
 
     cat("\nError standard deviation: "); cat(round(sqrt(x$s2),digits));
     cat("\nSample size: "); cat(x$dfTable[1]);
@@ -1972,7 +1989,11 @@ print.summary.greybox <- function(x, ...){
         cat(paste0("\n",x$arima," components were included in the model"));
     }
     cat("\nCoefficients:\n");
-    print(round(x$coefficients,digits));
+    stars <- setNames(vector("character",length(x$significance)),
+                      names(x$significance));
+    stars[x$significance] <- "*";
+    print(data.frame(round(x$coefficients,digits),stars,
+                     check.names=FALSE,fix.empty.names=FALSE));
     cat("\nError standard deviation: "); cat(round(x$sigma,digits));
     cat("\nSample size: "); cat(x$dfTable[1]);
     cat("\nNumber of estimated parameters: "); cat(x$dfTable[2]);
@@ -2025,7 +2046,11 @@ print.summary.greyboxC <- function(x, ...){
     cat(paste0("Response variable: ", paste0(x$responseName,collapse=""),"\n"));
     cat(paste0("Distribution used in the estimation: ", distrib));
     cat("\nCoefficients:\n");
-    print(round(x$coefficients,digits));
+    stars <- setNames(vector("character",length(x$significance)),
+                      names(x$significance));
+    stars[x$significance] <- "*";
+    print(data.frame(round(x$coefficients,digits),stars,
+                     check.names=FALSE,fix.empty.names=FALSE));
     cat("\nError standard deviation: "); cat(round(x$sigma,digits));
     cat("\nSample size: "); cat(round(x$dfTable[1],digits));
     cat("\nNumber of estimated parameters: "); cat(round(x$dfTable[2],digits));
@@ -2126,7 +2151,7 @@ rstandard.greybox <- function(model, ...){
     }
     else if(any(model$distribution==c("dgnorm","dlgnorm"))){
         errors[residsToGo] <- ((errors[residsToGo] - mean(errors[residsToGo])) /
-                         (model$scale^model$other$beta * obs / df)^{1/model$other$beta});
+                         (model$scale^model$other$shape * obs / df)^{1/model$other$shape});
     }
     else if(model$distribution=="dinvgauss"){
         errors[residsToGo] <- errors[residsToGo] / mean(errors[residsToGo]);
@@ -2194,7 +2219,7 @@ rstudent.greybox <- function(model, ...){
     }
     else if(any(model$distribution==c("dgnorm","dlgnorm"))){
         for(i in which(residsToGo)){
-            rstudentised[i] <- errors[i] /  (sum(abs(errors[-i])^model$other$beta) * (model$other$beta/df))^{1/model$other$beta};
+            rstudentised[i] <- errors[i] /  (sum(abs(errors[-i])^model$other$shape) * (model$other$shape/df))^{1/model$other$shape};
         }
     }
     else if(model$distribution=="dlogis"){
@@ -2312,7 +2337,7 @@ outlierdummy.alm <- function(object, level=0.999, type=c("rstandard","rstudent")
                       "dlogis"=qlogis(c((1-level)/2, (1+level)/2), 0, 1),
                       "dt"=qt(c((1-level)/2, (1+level)/2), nobs(object)-nparam(object)),
                       "dgnorm"=,
-                      "dlgnorm"=qgnorm(c((1-level)/2, (1+level)/2), 0, 1, object$other$beta),
+                      "dlgnorm"=qgnorm(c((1-level)/2, (1+level)/2), 0, 1, object$other$shape),
                       "ds"=,
                       "dls"=qs(c((1-level)/2, (1+level)/2), 0, 1),
                       # In the next one, the scale is debiased, taking n-k into account
@@ -2360,6 +2385,8 @@ summary.greybox <- function(object, level=0.95, ...){
                                    paste0("Lower ",(1-level)/2*100,"%"),
                                    paste0("Upper ",(1+level)/2*100,"%"));
     ourReturn$coefficients <- parametersTable;
+    # Mark those that are significant on the selected level
+    ourReturn$significance <- !(parametersTable[,3]<=0 & parametersTable[,4]>=0);
 
     ICs <- c(AIC(object),AICc(object),BIC(object),BICc(object));
     names(ICs) <- c("AIC","AICc","BIC","BICc");
@@ -2398,6 +2425,8 @@ summary.alm <- function(object, level=0.95, bootstrap=FALSE, ...){
                                    paste0("Lower ",(1-level)/2*100,"%"),
                                    paste0("Upper ",(1+level)/2*100,"%"));
     ourReturn <- list(coefficients=parametersTable);
+    # Mark those that are significant on the selected level
+    ourReturn$significance <- !(parametersTable[,3]<=0 & parametersTable[,4]>=0);
 
     # If there is a likelihood, then produce ICs
     if(!is.na(logLik(object))){
@@ -2442,6 +2471,8 @@ summary.greyboxC <- function(object, level=0.95, ...){
     colnames(parametersTable) <- c("Estimate","Std. Error","Importance",
                                    paste0("Lower ",(1-level)/2*100,"%"),
                                    paste0("Upper ",(1+level)/2*100,"%"));
+    # Mark those that are significant on the selected level
+    significance <- !(parametersTable[,4]<=0 & parametersTable[,5]>=0);
 
     # Extract degrees of freedom
     df <- c(object$df, object$df.residual, object$rank);
@@ -2458,7 +2489,7 @@ summary.greyboxC <- function(object, level=0.95, ...){
     R2 <- 1 - sum(errors^2) / sum((actuals(object)-mean(actuals(object)))^2);
     R2Adj <- 1 - (1 - R2) * (obs - 1) / (dfTable[3]);
 
-    ourReturn <- structure(list(coefficients=parametersTable, sigma=residSE,
+    ourReturn <- structure(list(coefficients=parametersTable, significance=significance, sigma=residSE,
                                 ICs=ICs, ICType=object$ICType, df=df, r.squared=R2, adj.r.squared=R2Adj,
                                 distribution=object$distribution, responseName=formula(object)[[2]],
                                 dfTable=dfTable, bootstrap=FALSE),
@@ -2482,6 +2513,8 @@ summary.greyboxD <- function(object, level=0.95, ...){
     colnames(parametersTable) <- c("Estimate","Std. Error","Importance",
                                    paste0("Lower ",(1-level)/2*100,"%"),
                                    paste0("Upper ",(1+level)/2*100,"%"));
+    # Mark those that are significant on the selected level
+    significance <- !(parametersTable[,4]<=0 & parametersTable[,5]>=0);
 
     # Extract degrees of freedom
     df <- c(object$df, object$df.residual, object$rank);
@@ -2498,7 +2531,7 @@ summary.greyboxD <- function(object, level=0.95, ...){
     dfTable <- c(nobs(object), nparam(object), object$df.residual);
     names(dfTable) <- c("n","k","df");
 
-    ourReturn <- structure(list(coefficients=parametersTable, sigma=residSE,
+    ourReturn <- structure(list(coefficients=parametersTable, significance=significance, sigma=residSE,
                                 dynamic=coef(object)$dynamic,
                                 ICs=ICs, ICType=object$ICType, df=df, r.squared=R2, adj.r.squared=R2Adj,
                                 distribution=object$distribution, responseName=formula(object)[[2]],
@@ -2521,7 +2554,12 @@ summary.lmGreybox <- function(object, level=0.95, ...){
 
 #' @export
 as.data.frame.summary.greybox <- function(x, ...){
-    return(as.data.frame(x$coefficients, ...));
+    stars <- setNames(vector("character",length(x$significance)),
+                      names(x$significance));
+    stars[x$significance] <- "*";
+    return(data.frame(x$coefficients,stars,
+                      row.names=rownames(x$coefficients),
+                      check.names=FALSE,fix.empty.names=FALSE));
 }
 
 #' @importFrom texreg extract createTexreg
@@ -2589,7 +2627,9 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
         greyboxForecast <- predict.almari(object, newdata, interval, level, side=side, ...);
     }
     greyboxForecast$location <- greyboxForecast$mean;
-    greyboxForecast$scale <- sqrt(greyboxForecast$variance);
+    if(interval!="none"){
+        greyboxForecast$scale <- sqrt(greyboxForecast$variance);
+    }
     greyboxForecast$distribution <- object$distribution;
 
     # If there is an occurrence part of the model, use it
@@ -2637,18 +2677,23 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     }
     else if(object$distribution=="dlaplace"){
         # Use the connection between the variance and MAE in Laplace distribution
-        scaleValues <- sqrt(greyboxForecast$variances/2);
+        if(interval!="none"){
+            scaleValues <- sqrt(greyboxForecast$variances/2);
+            greyboxForecast$scale <- scaleValues;
+        }
         if(interval=="prediction"){
             for(i in 1:nLevels){
                 greyboxForecast$lower[,i] <- qlaplace(levelLow[,i],greyboxForecast$mean,scaleValues);
                 greyboxForecast$upper[,i] <- qlaplace(levelUp[,i],greyboxForecast$mean,scaleValues);
             }
         }
-        greyboxForecast$scale <- scaleValues;
     }
     else if(object$distribution=="dllaplace"){
         # Use the connection between the variance and MAE in Laplace distribution
-        scaleValues <- sqrt(greyboxForecast$variances/2);
+        if(interval!="none"){
+            scaleValues <- sqrt(greyboxForecast$variances/2);
+            greyboxForecast$scale <- scaleValues;
+        }
         if(interval=="prediction"){
             for(i in 1:nLevels){
                 greyboxForecast$lower[,i] <- exp(qlaplace(levelLow[,i],greyboxForecast$mean,scaleValues));
@@ -2665,29 +2710,36 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     else if(object$distribution=="dalaplace"){
         # Use the connection between the variance and scale in ALaplace distribution
         alpha <- object$other$alpha;
-        scaleValues <- sqrt(greyboxForecast$variances * alpha^2 * (1-alpha)^2 / (alpha^2 + (1-alpha)^2));
+        if(interval!="none"){
+            scaleValues <- sqrt(greyboxForecast$variances * alpha^2 * (1-alpha)^2 / (alpha^2 + (1-alpha)^2));
+            greyboxForecast$scale <- scaleValues;
+        }
         if(interval=="prediction"){
             for(i in 1:nLevels){
                 greyboxForecast$lower[,i] <- qalaplace(levelLow[,i],greyboxForecast$mean,scaleValues,alpha);
                 greyboxForecast$upper[,i] <- qalaplace(levelUp[,i],greyboxForecast$mean,scaleValues,alpha);
             }
         }
-        greyboxForecast$scale <- scaleValues;
     }
     else if(object$distribution=="ds"){
         # Use the connection between the variance and scale in S distribution
-        scaleValues <- (greyboxForecast$variances/120)^0.25;
+        if(interval!="none"){
+            scaleValues <- (greyboxForecast$variances/120)^0.25;
+            greyboxForecast$scale <- scaleValues;
+        }
         if(interval=="prediction"){
             for(i in 1:nLevels){
                 greyboxForecast$lower[,i] <- qs(levelLow[,i],greyboxForecast$mean,scaleValues);
                 greyboxForecast$upper[,i] <- qs(levelUp[,i],greyboxForecast$mean,scaleValues);
             }
         }
-        greyboxForecast$scale <- scaleValues;
     }
     else if(object$distribution=="dls"){
         # Use the connection between the variance and scale in S distribution
-        scaleValues <- (greyboxForecast$variances/120)^0.25;
+        if(interval!="none"){
+            scaleValues <- (greyboxForecast$variances/120)^0.25;
+            greyboxForecast$scale <- scaleValues;
+        }
         if(interval=="prediction"){
             for(i in 1:nLevels){
                 greyboxForecast$lower[,i] <- exp(qs(levelLow[,i],greyboxForecast$mean,scaleValues));
@@ -2699,20 +2751,24 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
             greyboxForecast$upper[] <- exp(greyboxForecast$upper);
         }
         greyboxForecast$mean <- exp(greyboxForecast$mean);
-        greyboxForecast$scale <- scaleValues;
     }
     else if(object$distribution=="dgnorm"){
         # Use the connection between the variance and scale in Generalised Normal distribution
-        scaleValues <- sqrt(greyboxForecast$variances*(gamma(1/object$other$beta)/gamma(3/object$other$beta)));
-        if(interval=="prediction"){
-            greyboxForecast$lower[] <- qgnorm(levelLow,greyboxForecast$mean,scaleValues,object$other$beta);
-            greyboxForecast$upper[] <- qgnorm(levelUp,greyboxForecast$mean,scaleValues,object$other$beta);
+        if(interval!="none"){
+            scaleValues <- sqrt(greyboxForecast$variances*(gamma(1/object$other$shape)/gamma(3/object$other$shape)));
+            greyboxForecast$scale <- scaleValues;
         }
-        greyboxForecast$scale <- scaleValues;
+        if(interval=="prediction"){
+            greyboxForecast$lower[] <- qgnorm(levelLow,greyboxForecast$mean,scaleValues,object$other$shape);
+            greyboxForecast$upper[] <- qgnorm(levelUp,greyboxForecast$mean,scaleValues,object$other$shape);
+        }
     }
     else if(object$distribution=="dlgnorm"){
         # Use the connection between the variance and scale in Generalised Normal distribution
-        scaleValues <- sqrt(greyboxForecast$variances*(gamma(1/object$other$beta)/gamma(3/object$other$beta)));
+        if(interval!="none"){
+            scaleValues <- sqrt(greyboxForecast$variances*(gamma(1/object$other$beta)/gamma(3/object$other$beta)));
+            greyboxForecast$scale <- scaleValues;
+        }
         if(interval=="prediction"){
             greyboxForecast$lower[] <- exp(qgnorm(levelLow,greyboxForecast$mean,scaleValues,object$other$beta));
             greyboxForecast$upper[] <- exp(qgnorm(levelUp,greyboxForecast$mean,scaleValues,object$other$beta));
@@ -2722,7 +2778,6 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
             greyboxForecast$upper[] <- exp(greyboxForecast$upper);
         }
         greyboxForecast$mean <- exp(greyboxForecast$mean);
-        greyboxForecast$scale <- scaleValues;
     }
     else if(object$distribution=="dt"){
         # Use df estimated by the model and then construct conventional intervals. df=2 is the minimum in this model.
@@ -2739,10 +2794,17 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
                 greyboxForecast$upper[,i] <- qfnorm(levelUp[,i],greyboxForecast$mean,sqrt(greyboxForecast$variance));
             }
         }
-        # Correct the mean value
-        greyboxForecast$mean <- (sqrt(2/pi)*sqrt(greyboxForecast$variance)*exp(-greyboxForecast$mean^2 /
-                                                                                   (2*greyboxForecast$variance)) +
-                                     greyboxForecast$mean*(1-2*pnorm(-greyboxForecast$mean/sqrt(greyboxForecast$variance))));
+        if(interval!="none"){
+            # Correct the mean value
+            greyboxForecast$mean <- (sqrt(2/pi)*sqrt(greyboxForecast$variance)*exp(-greyboxForecast$mean^2 /
+                                                                                       (2*greyboxForecast$variance)) +
+                                         greyboxForecast$mean*(1-2*pnorm(-greyboxForecast$mean/sqrt(greyboxForecast$variance))));
+        }
+        else{
+            warning("The mean of Folded Normal distribution was not corrected. ",
+                    "We only do that, when interval!='none'.",
+                    call.=FALSE)
+        }
     }
     else if(object$distribution=="dchisq"){
         greyboxForecast$mean <- greyboxForecast$mean^2;
@@ -2754,25 +2816,36 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
             greyboxForecast$lower[] <- (greyboxForecast$lower)^2;
             greyboxForecast$upper[] <- (greyboxForecast$upper)^2;
         }
-        greyboxForecast$mean <- greyboxForecast$mean + object$scale;
-        greyboxForecast$scale <- object$scale;
+        if(interval!="none"){
+            greyboxForecast$mean <- greyboxForecast$mean + object$scale;
+            greyboxForecast$scale <- object$scale;
+        }
+        else{
+            warning("The mean of Chi Squared distribution was not corrected. ",
+                    "We only do that, when interval!='none'.",
+                    call.=FALSE)
+        }
     }
     else if(object$distribution=="dlnorm"){
         if(interval=="prediction"){
             sdlog <- sqrt(greyboxForecast$variance - sigma(object)^2 + object$scale^2);
+            greyboxForecast$scale <- sdlog;
         }
-        else{
+        else if(interval=="confidence"){
             sdlog <- sqrt(greyboxForecast$variance);
+            greyboxForecast$scale <- sdlog;
         }
         if(interval!="none"){
             greyboxForecast$lower[] <- qlnorm(levelLow,greyboxForecast$mean,sdlog);
             greyboxForecast$upper[] <- qlnorm(levelUp,greyboxForecast$mean,sdlog);
         }
         greyboxForecast$mean <- exp(greyboxForecast$mean);
-        greyboxForecast$scale <- sdlog;
     }
     else if(object$distribution=="dbcnorm"){
-        sigma <- sqrt(greyboxForecast$variance);
+        if(interval!="none"){
+            sigma <- sqrt(greyboxForecast$variance);
+            greyboxForecast$scale <- sigma;
+        }
         # If negative values were produced, zero them out
         if(any(greyboxForecast$mean<0)){
             greyboxForecast$mean[greyboxForecast$mean<0] <- 0;
@@ -2791,14 +2864,15 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
         else{
             greyboxForecast$mean[] <- (greyboxForecast$mean*object$other$lambdaBC+1)^{1/object$other$lambdaBC};
         }
-        greyboxForecast$scale <- sigma;
     }
     else if(object$distribution=="dlogitnorm"){
         if(interval=="prediction"){
             sigma <- sqrt(greyboxForecast$variance - sigma(object)^2 + object$scale^2);
+            greyboxForecast$scale <- sigma;
         }
-        else{
+        else if(interval=="confidence"){
             sigma <- sqrt(greyboxForecast$variance);
+            greyboxForecast$scale <- sigma;
         }
         if(interval=="prediction"){
             greyboxForecast$lower[] <- qlogitnorm(levelLow,greyboxForecast$mean,sigma);
@@ -2809,7 +2883,6 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
             greyboxForecast$upper[] <- exp(greyboxForecast$upper)/(1+exp(greyboxForecast$upper));
         }
         greyboxForecast$mean[] <- exp(greyboxForecast$mean)/(1+exp(greyboxForecast$mean));
-        greyboxForecast$scale <- sigma;
     }
     else if(object$distribution=="dinvgauss"){
         greyboxForecast$mean <- exp(greyboxForecast$mean);
@@ -2827,12 +2900,14 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     }
     else if(object$distribution=="dlogis"){
         # Use the connection between the variance and scale in logistic distribution
-        scale <- sqrt(greyboxForecast$variances * 3 / pi^2);
+        if(interval!="none"){
+            scale <- sqrt(greyboxForecast$variances * 3 / pi^2);
+            greyboxForecast$scale <- scale;
+        }
         if(interval=="prediction"){
             greyboxForecast$lower[] <- qlogis(levelLow,greyboxForecast$mean,scale);
             greyboxForecast$upper[] <- qlogis(levelUp,greyboxForecast$mean,scale);
         }
-        greyboxForecast$scale <- scale;
     }
     else if(object$distribution=="dpois"){
         greyboxForecast$mean <- exp(greyboxForecast$mean);
@@ -2848,7 +2923,7 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     }
     else if(object$distribution=="dnbinom"){
         greyboxForecast$mean <- exp(greyboxForecast$mean);
-        if(is.null(object$scale)){
+        if(interval!="none" && is.null(object$scale)){
             # This is a very approximate thing in order for something to work...
             greyboxForecast$scale <- abs(greyboxForecast$mean^2 / (greyboxForecast$variances - greyboxForecast$mean));
         }
@@ -2884,8 +2959,9 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     }
     else if(object$distribution=="plogis"){
         # The intervals are based on the assumption that a~N(0, sigma^2), and p=exp(a) / (1 + exp(a))
-        greyboxForecast$scale <- object$scale;
-
+        if(interval!="none"){
+            greyboxForecast$scale <- object$scale;
+        }
         greyboxForecast$mean <- plogis(greyboxForecast$location, location=0, scale=1);
 
         if(interval!="none"){
@@ -2897,7 +2973,9 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     }
     else if(object$distribution=="pnorm"){
         # The intervals are based on the assumption that a~N(0, sigma^2), and pnorm link
-        greyboxForecast$scale <- object$scale;
+        if(interval!="none"){
+            greyboxForecast$scale <- object$scale;
+        }
 
         greyboxForecast$mean <- pnorm(greyboxForecast$location, mean=0, sd=1);
 
@@ -3077,6 +3155,12 @@ predict.greybox <- function(object, newdata=NULL, interval=c("none", "confidence
 
         # Extract the formula and get rid of the response variable
         testFormula <- formula(object);
+
+        # If the user asked for trend, but it's not in the data, add it
+        if(any(all.vars(testFormula)=="trend") && all(colnames(newdata)!="trend")){
+            newdata <- cbind(newdata,trend=nobs(object)+c(1:nrow(newdata)));
+        }
+
         testFormula[[2]] <- NULL;
         # Expand the data frame
         newdataExpanded <- model.frame(testFormula, newdata);
@@ -3121,10 +3205,11 @@ predict.greybox <- function(object, newdata=NULL, interval=c("none", "confidence
     }
     else{
         ourForecast <- as.vector(matrixOfxreg %*% parameters);
-        # abs is needed for some cases, when the likelihood was not fully optimised
-        vectorOfVariances <- abs(diag(matrixOfxreg %*% ourVcov %*% t(matrixOfxreg)));
+        vectorOfVariances <- NULL;
 
         if(interval!="none"){
+            # abs is needed for some cases, when the likelihood was not fully optimised
+            vectorOfVariances <- abs(diag(matrixOfxreg %*% ourVcov %*% t(matrixOfxreg)));
             yUpper <- yLower <- matrix(NA, h, nLevels);
             if(interval=="confidence"){
                 for(i in 1:nLevels){
@@ -3421,17 +3506,28 @@ forecast.greybox <- function(object, newdata=NULL, h=NULL, ...){
     else if(is.null(newdata) & !is.null(h)){
         warning("No newdata provided, the values will be forecasted", call.=FALSE, immediate.=TRUE);
         if(ncol(object$data)>1){
-            # If smooth is not installed, use Naive
-            if(!requireNamespace("smooth", quietly = TRUE)){
-                newdata <- matrix(object$data[nobs(object),], h, ncol(object$data), byrow=TRUE,
-                                  dimnames=list(NULL, colnames(object$data)));
-            }
-            # Otherwise use es()
-            else{
+
+            # If smooth is installed, use ADAM
+            if(requireNamespace("smooth", quietly=TRUE) && (packageVersion("smooth")>="3.0.0")){
                 newdata <- matrix(NA, h, ncol(object$data)-1, dimnames=list(NULL, colnames(object$data)[-1]));
 
+                # If the user asked for trend, but it's not in the data, add it
+                if(any(all.vars(formula(object))=="trend")){
+                    newdata[,"trend"] <- nobs(object)+c(1:h);
+                }
                 for(i in 1:ncol(newdata)){
-                    newdata[,i] <- smooth::es(object$data[,i+1], occurrence="i", h=h)$forecast;
+                    if(colnames(newdata)[i]!="trend"){
+                        newdata[,i] <- smooth::adam(object$data[,i+1], occurrence="i", h=h)$forecast;
+                    }
+                }
+            }
+            # Otherwise use Naive
+            else{
+                newdata <- matrix(object$data[nobs(object),], h, ncol(object$data), byrow=TRUE,
+                                  dimnames=list(NULL, colnames(object$data)));
+                # If the user asked for trend, but it's not in the data, add it
+                if(any(all.vars(formula(object))=="trend")){
+                    newdata[,"trend"] <- nobs(object)+c(1:h);
                 }
             }
         }
@@ -3462,13 +3558,8 @@ forecast.alm <- function(object, newdata=NULL, h=NULL, ...){
     else if(is.null(newdata) & !is.null(h)){
         warning("No newdata provided, the values will be forecasted", call.=FALSE, immediate.=TRUE);
         if(ncol(object$data)>1){
-            # If smooth is not installed, use Naive
-            if(!requireNamespace("smooth", quietly = TRUE)){
-                newdata <- matrix(object$data[nobs(object),], h, ncol(object$data), byrow=TRUE,
-                                  dimnames=list(NULL, colnames(object$data)));
-            }
-            # Otherwise use es()
-            else{
+            # If smooth is installed, use ADAM
+            if(requireNamespace("smooth", quietly=TRUE) && (packageVersion("smooth")>="3.0.0")){
                 if(!is.null(object$other$polynomial)){
                     ariLength <- length(object$other$polynomial);
                     newdata <- matrix(NA, h, ncol(object$data)-ariLength-1,
@@ -3478,8 +3569,23 @@ forecast.alm <- function(object, newdata=NULL, h=NULL, ...){
                     newdata <- matrix(NA, h, ncol(object$data)-1, dimnames=list(NULL, colnames(object$data)[-1]));
                 }
 
+                # If the user asked for trend, but it's not in the data, add it
+                if(any(all.vars(formula(object))=="trend")){
+                    newdata[,"trend"] <- nobs(object)+c(1:h);
+                }
                 for(i in 1:ncol(newdata)){
-                    newdata[,i] <- smooth::es(object$data[,i+1], occurrence="i", h=h)$forecast;
+                    if(colnames(newdata)[i]!="trend"){
+                        newdata[,i] <- smooth::adam(object$data[,i+1], occurrence="i", h=h)$forecast;
+                    }
+                }
+            }
+            # Otherwise use Naive
+            else{
+                newdata <- matrix(object$data[nobs(object),], h, ncol(object$data), byrow=TRUE,
+                                  dimnames=list(NULL, colnames(object$data)));
+                # If the user asked for trend, but it's not in the data, add it
+                if(any(all.vars(formula(object))=="trend")){
+                    newdata[,"trend"] <- nobs(object)+c(1:h);
                 }
             }
         }

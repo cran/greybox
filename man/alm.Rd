@@ -13,7 +13,8 @@ alm(formula, data, subset, na.action, distribution = c("dnorm", "dlaplace",
 }
 \arguments{
 \item{formula}{an object of class "formula" (or one that can be coerced to
-that class): a symbolic description of the model to be fitted.}
+that class): a symbolic description of the model to be fitted. Can also include
+\code{trend}, which would add the global trend.}
 
 \item{data}{a data frame or a matrix, containing the variables in the model.}
 
@@ -86,6 +87,7 @@ includes:
 \item \code{alpha} - value for Asymmetric Laplace distribution;
 \item \code{size} - the size for the Negative Binomial distribution;
 \item \code{nu} - the number of degrees of freedom for Chi-Squared and Student's t;
+\item \code{shape} - the shape parameter for Generalised Normal distribution;
 \item \code{lambda} - the meta parameter for LASSO / RIDGE. Should be between 0 and 1,
 regulating the strength of shrinkage, where 0 means don't shrink parameters (use MSE)
 and 1 means shrink everything (ignore MSE);
@@ -138,6 +140,7 @@ distribution="dnorm"),
 \item call - how the model was called,
 \item rank - rank of the model,
 \item data - data used for the model construction,
+\item terms - terms of the data. Needed for some additional methods to work,
 \item occurrence - the occurrence model used in the estimation,
 \item B - the value of the optimised parameters. Typically, this is a duplicate of coefficients,
 \item other - the list of all the other parameters either passed to the
@@ -155,7 +158,7 @@ of several non-normal distributions. These include:
 \item \link[stats]{dnorm} - Normal distribution,
 \item \link[greybox]{dlaplace} - Laplace distribution,
 \item \link[greybox]{ds} - S-distribution,
-\item dgnorm - Generalised Normal distribution,
+\item \link[greybox]{dgnorm} - Generalised Normal distribution,
 \item \link[stats]{dlogis} - Logistic Distribution,
 \item \link[stats]{dt} - T-distribution,
 \item \link[greybox]{dalaplace} - Asymmetric Laplace distribution,
@@ -209,52 +212,50 @@ predict(ourModel, mtcars2[-c(1:30),], interval="p", side="u")
 
 
 ### Artificial data for the other examples
-xreg <- cbind(rlaplace(100,10,3),rnorm(100,50,5))
+\dontrun{xreg <- cbind(rlaplace(100,10,3),rnorm(100,50,5))
 xreg <- cbind(100+0.5*xreg[,1]-0.75*xreg[,2]+rlaplace(100,0,3),xreg,rnorm(100,300,10))
-colnames(xreg) <- c("y","x1","x2","Noise")
+colnames(xreg) <- c("y","x1","x2","Noise")}
 
 # An example with Laplace distribution
-ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dlaplace")
+\dontrun{ourModel <- alm(y~x1+x2+trend, xreg, subset=c(1:80), distribution="dlaplace")
 summary(ourModel)
-plot(predict(ourModel,xreg[-c(1:80),]))
+plot(predict(ourModel,xreg[-c(1:80),]))}
 
 # And another one with Asymmetric Laplace distribution (quantile regression)
 # with optimised alpha
-ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dalaplace")
-summary(ourModel)
-plot(predict(ourModel,xreg[-c(1:80),]))
+\dontrun{ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dalaplace")}
 
 # An example with AR(1) order
-ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dnorm", ar=1)
+\dontrun{ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dnorm", ar=1)
 summary(ourModel)
-plot(predict(ourModel,xreg[-c(1:80),]))
+plot(predict(ourModel,xreg[-c(1:80),]))}
 
 ### Examples with the count data
-xreg[,1] <- round(exp(xreg[,1]-70),0)
+\dontrun{xreg[,1] <- round(exp(xreg[,1]-70),0)}
 
 # Negative Binomial distribution
-ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dnbinom")
+\dontrun{ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dnbinom")
 summary(ourModel)
-predict(ourModel,xreg[-c(1:80),],interval="p",side="u")
+predict(ourModel,xreg[-c(1:80),],interval="p",side="u")}
 
 # Poisson distribution
-ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dpois")
+\dontrun{ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dpois")
 summary(ourModel)
-predict(ourModel,xreg[-c(1:80),],interval="p",side="u")
+predict(ourModel,xreg[-c(1:80),],interval="p",side="u")}
 
 
 ### Examples with binary response variable
-xreg[,1] <- round(xreg[,1] / (1 + xreg[,1]),0)
+\dontrun{xreg[,1] <- round(xreg[,1] / (1 + xreg[,1]),0)}
 
 # Logistic distribution (logit regression)
-ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="plogis")
+\dontrun{ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="plogis")
 summary(ourModel)
-plot(predict(ourModel,xreg[-c(1:80),],interval="c"))
+plot(predict(ourModel,xreg[-c(1:80),],interval="c"))}
 
 # Normal distribution (probit regression)
-ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="pnorm")
+\dontrun{ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="pnorm")
 summary(ourModel)
-plot(predict(ourModel,xreg[-c(1:80),],interval="p"))
+plot(predict(ourModel,xreg[-c(1:80),],interval="p"))}
 
 }
 \seealso{

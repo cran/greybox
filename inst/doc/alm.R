@@ -38,32 +38,6 @@ lines(seq(-5,5,0.01),ds(seq(-5,5,0.01),1,1), col="red")
 legend("topright",legend=c("S(0,1)","S(0,2)","S(1,1)"), lwd=1, col=c("black","blue","red"))
 
 ## ----pdfgnorm, echo=FALSE-----------------------------------------------------
-dgnorm <- function(x, mu = 0, alpha = 1, beta = 1,
-                   log = FALSE) {
-    # A failsafe for NaN / NAs of alpha / beta
-    if(any(is.nan(alpha))){
-        alpha[is.nan(alpha)] <- 0
-    }
-    if(any(is.na(alpha))){
-        alpha[is.na(alpha)] <- 0
-    }
-    if(any(alpha<0)){
-        alpha[alpha<0] <- 0
-    }
-    if(any(is.nan(beta))){
-        beta[is.nan(beta)] <- 0
-    }
-    if(any(is.na(beta))){
-        beta[is.na(beta)] <- 0
-    }
-    gnormValues <- (exp(-(abs(x-mu)/ alpha)^beta)* beta/(2*alpha*gamma(1/beta)))
-    if(log){
-        gnormValues[] <- log(gnormValues)
-    }
-
-    return(gnormValues)
-}
-
 plot(seq(-5,5,0.1),dgnorm(seq(-5,5,0.1),0,1,2),type="l",
      xlab="y_t",ylab="Density",main="PDF of Generalised Normal distribution")
 lines(seq(-5,5,0.1),dgnorm(seq(-5,5,0.1),0,1,1), col="blue")
@@ -87,12 +61,12 @@ lines(seq(-5,5,0.1),dt(seq(-5,5,0.1),1), col="red")
 legend("topright",legend=c("t(100)","t(10)","t(1)"), lwd=1, col=c("black","blue","red"))
 
 ## ----normalDistributionData---------------------------------------------------
-xreg <- cbind(rnorm(100,10,3),rnorm(100,50,5))
-xreg <- cbind(500+0.5*xreg[,1]-0.75*xreg[,2]+rs(100,0,3),xreg,rnorm(100,300,10))
+xreg <- cbind(rnorm(200,10,3),rnorm(200,50,5))
+xreg <- cbind(500+0.5*xreg[,1]-0.75*xreg[,2]+rs(200,0,3),xreg,rnorm(200,300,10))
 colnames(xreg) <- c("y","x1","x2","Noise")
 
-inSample <- xreg[1:80,]
-outSample <- xreg[-c(1:80),]
+inSample <- xreg[1:180,]
+outSample <- xreg[-c(1:180),]
 
 ## ----normalRegression---------------------------------------------------------
 ourModel <- alm(y~x1+x2, data=inSample, distribution="dnorm")
@@ -180,10 +154,40 @@ lines(seq(0.01,0.99,0.01),dbeta(seq(0.01,0.99,0.01),2,2), col="red")
 legend("topright",legend=c("Beta(1,1)","Beta(0.1,1)","Beta(1,0.1)","Beta(2,2)"),
        lwd=1, col=c("black","blue","purple","red"))
 
+## ----pmfPoisson, echo=FALSE---------------------------------------------------
+plot(seq(0,10,1),dpois(seq(0,10,1),0.1),type="b",ylim=c(0,1),
+     xlab="y_t",ylab="Density",main="PMF of Poisson distribution")
+par(new=TRUE)
+plot(seq(0,10,1),dpois(seq(0,10,1),0.5),type="b",
+     col="blue", ylim=c(0,1), axes=FALSE, xlab="", ylab="")
+par(new=TRUE)
+plot(seq(0,10,1),dpois(seq(0,10,1),1),type="b",
+     col="purple", ylim=c(0,1), axes=FALSE, xlab="", ylab="")
+par(new=TRUE)
+plot(seq(0,10,1),dpois(seq(0,10,1),5),type="b",
+     col="red", ylim=c(0,1), axes=FALSE, xlab="", ylab="")
+legend("topright",legend=c("Poisson(0.1)","Poisson(0.5)","Poisson(1)","Poisson(5)"),
+       lwd=1, col=c("black","blue","purple","red"))
+
+## ----pmfNegBin, echo=FALSE----------------------------------------------------
+plot(seq(0,10,1),dnbinom(seq(0,10,1),5,0.5),type="b",ylim=c(0,0.4),
+     xlab="y_t",ylab="Density",main="PMF of Negative Binomial distribution")
+par(new=TRUE)
+plot(seq(0,10,1),dnbinom(seq(0,10,1),5,0.75),type="b",
+     col="blue", ylim=c(0,0.4), axes=FALSE, xlab="", ylab="")
+par(new=TRUE)
+plot(seq(0,10,1),dnbinom(seq(0,10,1),5,0.25),type="b",
+     col="purple", ylim=c(0,0.4), axes=FALSE, xlab="", ylab="")
+par(new=TRUE)
+plot(seq(0,10,1),dnbinom(seq(0,10,1),3,0.5),type="b",
+     col="red", ylim=c(0,0.4), axes=FALSE, xlab="", ylab="")
+legend("topright",legend=c("NegBin(5,0.5)","NegBin(5,0.9)","NegBin(5,0.1)","NegBin(3,0.5)"),
+       lwd=1, col=c("black","blue","purple","red"))
+
 ## ----dataRound----------------------------------------------------------------
 xreg[,1] <- round(abs(xreg[,1]))
-inSample <- xreg[1:80,]
-outSample <- xreg[-c(1:80),]
+inSample <- xreg[1:180,]
+outSample <- xreg[-c(1:180),]
 
 ## ----negBinRegression---------------------------------------------------------
 ourModel <- alm(y~x1+x2, data=inSample, distribution="dnbinom")
@@ -215,8 +219,8 @@ legend("bottomright",legend=c("N(0,1)","N(-1,1)","N(1,1)","N(2,2)"),
 xreg[,1] <- round(exp(xreg[,1]-400) / (1 + exp(xreg[,1]-400)),0) * xreg[,1]
 # Sometimes the generated data contains huge values
 xreg[is.nan(xreg[,1]),1] <- 0;
-inSample <- xreg[1:80,]
-outSample <- xreg[-c(1:80),]
+inSample <- xreg[1:180,]
+outSample <- xreg[-c(1:180),]
 
 ## ----mixtureExampleOccurrence-------------------------------------------------
 modelOccurrence <- alm(y~x1+x2+Noise, inSample, distribution="plogis")
@@ -232,8 +236,8 @@ summary(modelMixture$occurrence)
 par(mfcol=c(3,3))
 plot(modelMixture, c(1:9))
 
-## ----mixturePredict-----------------------------------------------------------
-predict(modelMixture,outSample,interval="p",level=c(0.8,0.9,0.95))
+## ----mixturePredict, eval=FALSE-----------------------------------------------
+#  predict(modelMixture,outSample,interval="p",level=c(0.8,0.9,0.95))
 
 ## ----mixtureExampleFinalAR----------------------------------------------------
 modelMixtureAR <- alm(y~x1+x2+Noise, inSample, distribution="dlnorm", occurrence=modelOccurrence, ar=1)

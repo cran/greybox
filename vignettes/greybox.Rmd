@@ -32,7 +32,7 @@ At the moment the package contains augmented linear model function and several b
 ## Main functions
 The package includes the following functions for models construction:
 
-1. [alm()](alm.html) - Augmented Linear Model. This is something similar to GLM, but with a focus on forecasting and the information criteria usage for time series. It also supports mixture distribution models for the intermittent data.
+1. [alm()](alm.html) - Augmented Linear Model. This is something similar to GLM, but with a focus on forecasting and the information criteria usage for time series. It also supports mixture distribution models for the intermittent data and allows adding trend to the data via the formula.
 2. [stepwise()](#stepwise) - select the linear model with the lowest IC from all the possible in the provided data. Uses partial correlations. Works fast;
 3. [lmCombine()](#lmCombine) - combine the linear models into one using IC weights;
 4. [lmDynamic()](#lmDynamic) - produce model with dynamic weights and time varying parameters based on point IC weight.
@@ -91,10 +91,11 @@ The following methods can be applied to the models, produced by `alm()`, `stepwi
 1. `qlaplace()`, `dlaplace()`, `rlaplace()`, `plaplace()` - functions for Laplace distribution.
 2. `qalaplace()`, `dalaplace()`, `ralaplace()`, `palaplace()` - functions for Asymmetric Laplace distribution.
 3. `qs()`, `ds()`, `rs()`, `ps()` - functions for S distribution.
-4. `qfnorm()`, `dfnorm()`, `rfnorm()`, `pfnorm()` - functions for folded normal distribution.
-5. `qtplnorm()`, `dtplnorm()`, `rtplnorm()`, `ptplnorm()` - functions for three parameter log normal distribution.
-6. `qbcnorm()`, `dbcnorm()`, `rbcnorm()`, `pbcnorm()` - functions for the Box-Cox normal distribution.
-7. `qlogitnorm()`, `dlogitnorm()`, `rlogitnorm()`, `plogitnorm()` - functions for the Logit-normal distribution.
+4. `qgnorm()`, `dgnorm()`, `rgnorm()`, `pgnorm()` - functions for the Generalised normal distribution.
+5. `qfnorm()`, `dfnorm()`, `rfnorm()`, `pfnorm()` - functions for folded normal distribution.
+6. `qtplnorm()`, `dtplnorm()`, `rtplnorm()`, `ptplnorm()` - functions for three parameter log normal distribution.
+7. `qbcnorm()`, `dbcnorm()`, `rbcnorm()`, `pbcnorm()` - functions for the Box-Cox normal distribution.
+8. `qlogitnorm()`, `dlogitnorm()`, `rlogitnorm()`, `plogitnorm()` - functions for the Logit-normal distribution.
 
 
 ## Additional functions
@@ -158,12 +159,12 @@ The values in the function are listed in the order of most correlated with the r
 
 All the basic methods can be used together with the final model (e.g. `predict()`, `forecast()`, `summary()` etc).
 
-Furthremore, the `greybox` package implements `extract()` method from `texreg` package for the production of printable outputs from the regression, here is an example:
+Furthermore, the `greybox` package implements `extract()` method from `texreg` package for the production of printable outputs from the regression, here is an example:
 ```{r texregExample, results = 'asis'}
 texreg::htmlreg(ourModel)
 ```
 
-Similarly, you can produce pdf tables via `texreg()` function from that package.
+Similarly, you can produce pdf tables via `texreg()` function from that package. Alternatively, you can use `kable()` function from `knitr` package on the summary to get a table for LaTeX / HTML.
 
 ## lmCombine {#lmCombine}
 
