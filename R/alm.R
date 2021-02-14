@@ -20,6 +20,7 @@
 #' \item \link[greybox]{dbcnorm} - Box-Cox normal distribution,
 # \item \link[stats]{dchisq} - Chi-Squared Distribution,
 #' \item \link[statmod]{dinvgauss} - Inverse Gaussian distribution,
+#' \item \link[stats]{dgamma} - Gamma distribution,
 #' \item \link[greybox]{dlogitnorm} - Logit-normal distribution,
 #' \item \link[stats]{dbeta} - Beta distribution,
 #' \item \link[stats]{dpois} - Poisson Distribution,
@@ -29,8 +30,8 @@
 #' }
 #'
 #' This function can be considered as an analogue of \link[stats]{glm}, but with the
-#' focus on time series. This is why, for example, the function has \code{ar} and
-#' \code{i} parameters and produces time series analysis plots with \code{plot(alm(...))}.
+#' focus on time series. This is why, for example, the function has \code{orders} parameter
+#' for ARIMA and produces time series analysis plots with \code{plot(alm(...))}.
 #'
 #' This function is slower than \code{lm}, because it relies on likelihood estimation
 #' of parameters, hessian calculation and matrix multiplication. So think twice when
@@ -98,10 +99,8 @@
 #' If this is not \code{"none"}, then the model is estimated
 #' in two steps: 1. Occurrence part of the model; 2. Sizes part of the model
 #' (excluding zeroes from the data).
-#' @param ar the order of AR to include in the model. Only non-seasonal
+#' @param orders the orders of ARIMA to include in the model. Only non-seasonal
 #' orders are accepted.
-# @param i the order of I to include in the model. Only non-seasonal
-# orders are accepted.
 #' @param parameters vector of parameters of the linear model. When \code{NULL}, it
 #' is estimated.
 #' @param fast if \code{TRUE}, then the function won't check whether
@@ -210,7 +209,7 @@
 #' \dontrun{ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dalaplace")}
 #'
 #' # An example with AR(1) order
-#' \dontrun{ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dnorm", ar=1)
+#' \dontrun{ourModel <- alm(y~x1+x2, xreg, subset=c(1:80), distribution="dnorm", orders=c(1,0,0))
 #' summary(ourModel)
 #' plot(predict(ourModel,xreg[-c(1:80),]))}
 #'
@@ -244,32 +243,31 @@
 #' @importFrom pracma hessian
 #' @importFrom nloptr nloptr
 #' @importFrom stats model.frame sd terms model.matrix
-#' @importFrom stats dchisq dlnorm dnorm dlogis dpois dnbinom dt dbeta
+#' @importFrom stats dchisq dlnorm dnorm dlogis dpois dnbinom dt dbeta dgamma
 #' @importFrom stats plogis
 #' @importFrom statmod dinvgauss
-#' @importFrom forecast Arima
+#' @importFrom stats arima
 #' @export alm
 alm <- function(formula, data, subset, na.action,
                 distribution=c("dnorm","dlaplace","ds","dgnorm","dlogis","dt","dalaplace",
-                               "dlnorm","dllaplace","dls","dlgnorm","dbcnorm","dfnorm","dinvgauss",
+                               "dlnorm","dllaplace","dls","dlgnorm","dbcnorm","dfnorm",
+                               "dinvgauss","dgamma",
                                "dpois","dnbinom",
                                "dbeta","dlogitnorm",
                                "plogis","pnorm"),
                 loss=c("likelihood","MSE","MAE","HAM","LASSO","RIDGE"),
                 occurrence=c("none","plogis","pnorm"),
                 # scale=NULL,
-                ar=0,# i=0,
+                orders=c(0,0,0),
                 parameters=NULL, fast=FALSE, ...){
 # Useful stuff for dnbinom: https://scialert.net/fulltext/?doi=ajms.2010.1.15
 
-    # This is a temporary switch off of I(d)
-    i <- 0;
     # Create substitute and remove the original data
     dataSubstitute <- substitute(data);
 
     cl <- match.call();
     # This is needed in order to have a reasonable formula saved, so that there are no issues with it
-        cl$formula <- eval(cl$formula);
+    cl$formula <- eval(cl$formula);
     distribution <- match.arg(distribution);
     if(is.function(loss)){
         lossFunction <- loss;
@@ -388,10 +386,10 @@ alm <- function(formula, data, subset, na.action,
 
         # If there is ARI, then calculate polynomials
         if(all(c(arOrder,iOrder)>0)){
-            poly1[-1] <- -B[(nVariablesExo+1):nVariables];
+            poly1[-1] <- -tail(B,arOrder);
             # This condition is needed for cases of only ARI models
             if(nVariables>arOrder){
-                B <- c(B[1:nVariablesExo], -polyprod(poly2,poly1)[-1]);
+                B <- c(B[1:(length(B)-arOrder)], -polyprod(poly2,poly1)[-1]);
             }
             else{
                 B <- -polyprod(poly2,poly1)[-1];
@@ -401,7 +399,7 @@ alm <- function(formula, data, subset, na.action,
             B <- c(B, -poly2[-1]);
         }
         else if(arOrder>0){
-            poly1[-1] <- -B[(nVariablesExo+1):nVariables];
+            poly1[-1] <- -tail(B,arOrder);
         }
 
         # This is a hack. If lambda=1, then we only need the mean of the data
@@ -411,6 +409,7 @@ alm <- function(formula, data, subset, na.action,
 
         mu[] <- switch(distribution,
                        "dinvgauss"=,
+                       "dgamma"=,
                        "dpois" =,
                        "dnbinom" = exp(matrixXreg %*% B),
                        "dchisq" = ifelseFast(any(matrixXreg %*% B <0),1E+100,(matrixXreg %*% B)^2),
@@ -447,6 +446,7 @@ alm <- function(formula, data, subset, na.action,
                         "dlgnorm" = (other*sum(abs(log(y[otU])-mu[otU])^other)/obsInsample)^{1/other},
                         "dbcnorm" = sqrt(sum((bcTransform(y[otU],other)-mu[otU])^2)/obsInsample),
                         "dinvgauss" = sum((y[otU]/mu[otU]-1)^2 / (y[otU]/mu[otU]))/obsInsample,
+                        "dgamma" = sum((y[otU]/mu[otU]-1)^2)/obsInsample,
                         "dlogitnorm" = sqrt(sum((log(y[otU]/(1-y[otU]))-mu[otU])^2)/obsInsample),
                         "dfnorm" = abs(other),
                         "dt" = ,
@@ -512,6 +512,8 @@ alm <- function(formula, data, subset, na.action,
                                    "dfnorm" = dfnorm(y[otU], mu=fitterReturn$mu[otU], sigma=fitterReturn$scale, log=TRUE),
                                    "dinvgauss" = dinvgauss(y[otU], mean=fitterReturn$mu[otU],
                                                            dispersion=fitterReturn$scale/fitterReturn$mu[otU], log=TRUE),
+                                   "dgamma" = dgamma(y[otU], shape=1/fitterReturn$scale,
+                                                     scale=fitterReturn$scale*fitterReturn$mu[otU], log=TRUE),
                                    "dchisq" = dchisq(y[otU], df=fitterReturn$scale, ncp=fitterReturn$mu[otU], log=TRUE),
                                    "dpois" = dpois(y[otU], lambda=fitterReturn$mu[otU], log=TRUE),
                                    "dnbinom" = dnbinom(y[otU], mu=fitterReturn$mu[otU], size=fitterReturn$scale, log=TRUE),
@@ -538,6 +540,9 @@ alm <- function(formula, data, subset, na.action,
                                               # "dinvgauss" = 0.5*(obsZero*(log(pi/2)+1+suppressWarnings(log(fitterReturn$scale)))-
                                               #                                 sum(log(fitterReturn$mu[!otU]))),
                                               "dinvgauss" = obsZero*(0.5*(log(pi/2)+1+suppressWarnings(log(fitterReturn$scale)))),
+                                              "dgamma" = obsZero*(1/fitterReturn$scale + log(fitterReturn$scale) +
+                                                                  log(gamma(1/fitterReturn$scale)) +
+                                                                  (1-1/fitterReturn$scale)*digamma(1/fitterReturn$scale)),
                                               "dlaplace" =,
                                               "dllaplace" =,
                                               "ds" =,
@@ -570,13 +575,14 @@ alm <- function(formula, data, subset, na.action,
                                 "dfnorm" = sqrt(2/pi)*fitterReturn$scale*exp(-fitterReturn$mu^2/(2*fitterReturn$scale^2))+
                                     fitterReturn$mu*(1-2*pnorm(-fitterReturn$mu/fitterReturn$scale)),
                                 "dnorm" =,
-                                "dgnorm" =,
-                                "dinvgauss" =,
                                 "dlaplace" =,
+                                "ds" =,
+                                "dgnorm" =,
                                 "dalaplace" =,
                                 "dlogis" =,
                                 "dt" =,
-                                "ds" =,
+                                "dinvgauss" =,
+                                "dgamma" =,
                                 "dpois" =,
                                 "dnbinom" = fitterReturn$mu,
                                 "dchisq" = fitterReturn$mu + nu,
@@ -604,10 +610,10 @@ alm <- function(formula, data, subset, na.action,
                 B[] <- B / denominator;
 
                 if(interceptIsNeeded){
-                    CFValue <- (1-lambda) * sqrt(meanFast((y-yFitted)^2)) + lambda * sum(abs(B[-1]))
+                    CFValue <- (1-lambda) * sqrt(meanFast((y-yFitted)^2))/yDenominator + lambda * sum(abs(B[-1]))
                 }
                 else{
-                    CFValue <- (1-lambda) * sqrt(meanFast((y-yFitted)^2)) + lambda * sum(abs(B))
+                    CFValue <- (1-lambda) * sqrt(meanFast((y-yFitted)^2))/yDenominator + lambda * sum(abs(B))
                 }
                 # This is a hack. If lambda=1, then we only need the mean of the data
                 if(lambda==1){
@@ -618,10 +624,10 @@ alm <- function(formula, data, subset, na.action,
                 B[] <- B / denominator;
 
                 if(interceptIsNeeded){
-                    CFValue <- (1-lambda) * sqrt(meanFast((y-yFitted)^2)) + lambda * sqrt(sum(B[-1]^2))
+                    CFValue <- (1-lambda) * sqrt(meanFast((y-yFitted)^2))/yDenominator + lambda * sqrt(sum(B[-1]^2))
                 }
                 else{
-                    CFValue <- (1-lambda) * sqrt(meanFast((y-yFitted)^2)) + lambda * sqrt(sum(B^2))
+                    CFValue <- (1-lambda) * sqrt(meanFast((y-yFitted)^2))/yDenominator + lambda * sqrt(sum(B^2))
                 }
                 # This is a hack. If lambda=1, then we only need the mean of the data
                 if(lambda==1){
@@ -647,6 +653,16 @@ alm <- function(formula, data, subset, na.action,
 
     #### Define the rest of parameters ####
     ellipsis <- list(...);
+    # If arima was provided in the old style
+    if(orders[1]==0 && !is.null(ellipsis$ar)){
+        orders[1] <- ellipsis$ar;
+    }
+    if(orders[2]==0 && !is.null(ellipsis$i)){
+        orders[2] <- ellipsis$i;
+    }
+    if(orders[3]==0 && !is.null(ellipsis$ma)){
+        orders[3] <- ellipsis$ma;
+    }
 
     # Parameters for distributions
     if(distribution=="dalaplace"){
@@ -832,20 +848,30 @@ alm <- function(formula, data, subset, na.action,
         }
     }
 
-    arOrder <- ar;
-    iOrder <- i;
+    arOrder <- orders[1];
+    iOrder <- orders[2];
+    #### !!! This is not implemented yet
+    maOrder <- orders[3];
+    #### !!!
     # Check AR, I and form ARI order
-    if(length(arOrder)>1){
-        warning("ar must be a scalar, not a vector. Using the first value.", call.=FALSE);
-        arOrder <- arOrder[1];
+    if(arOrder<0){
+        warning("ar must be positive. Taking the absolute value.", call.=FALSE);
+        arOrder <- abs(arOrder);
     }
     if(length(iOrder)>1){
-        warning("i must be a scalar, not a vector. Using the first value.", call.=FALSE);
-        iOrder <- iOrder[1];
+        warning("i must be positive. Taking the absolute value.", call.=FALSE);
+        iOrder <- abs(iOrder);
     }
     ariOrder <- arOrder + iOrder;
     ariModel <- ifelseFast(ariOrder>0, TRUE, FALSE);
-    # Create polynomials for the i and ar orders
+
+    # Create polynomials for the ar, i and ma orders
+    if(arOrder>0){
+        poly1 <- rep(1,arOrder+1);
+    }
+    else{
+        poly1 <- c(1,1);
+    }
     if(iOrder>0){
         poly2 <- c(1,-1);
         if(iOrder>1){
@@ -854,11 +880,11 @@ alm <- function(formula, data, subset, na.action,
             }
         }
     }
-    if(arOrder>0){
-        poly1 <- rep(1,arOrder+1);
+    if(maOrder>0){
+        poly3 <- rep(1,maOrder+1);
     }
     else{
-        poly1 <- c(1,1);
+        poly3 <- c(1,1);
     }
 
     #### Form the necessary matrices ####
@@ -1013,12 +1039,13 @@ alm <- function(formula, data, subset, na.action,
     errors <- vector("numeric", obsInsample);
     ot <- vector("logical", obsInsample);
 
-    if(any(y<0) & any(distribution==c("dfnorm","dlnorm","dllaplace","dls","dbcnorm","dinvgauss","dchisq","dpois","dnbinom"))){
+    if(any(y<0) & any(distribution==c("dfnorm","dlnorm","dllaplace","dls","dbcnorm","dchisq","dpois","dnbinom",
+                                      "dinvgauss","dgamma"))){
         stop(paste0("Negative values are not allowed in the response variable for the distribution '",distribution,"'"),
              call.=FALSE);
     }
 
-    if(any(y==0) & any(distribution==c("dinvgauss")) & !occurrenceModel){
+    if(any(y==0) & any(distribution==c("dinvgauss","dgamma")) & !occurrenceModel){
         stop(paste0("Zero values are not allowed in the response variable for the distribution '",distribution,"'"),
              call.=FALSE);
     }
@@ -1105,7 +1132,7 @@ alm <- function(formula, data, subset, na.action,
             corThreshold <- 0.999;
             if(nVariables>1){
                 # Check perfectly correlated cases
-                corMatrix <- cor(matrixXreg[otU,,drop=FALSE]);
+                corMatrix <- cor(matrixXreg[otU,,drop=FALSE],use="pairwise.complete.obs");
                 corHigh <- upper.tri(corMatrix) & abs(corMatrix)>=corThreshold;
                 if(any(corHigh)){
                     removexreg <- unique(which(corHigh,arr.ind=TRUE)[,1]);
@@ -1139,14 +1166,14 @@ alm <- function(formula, data, subset, na.action,
                 }
             }
         }
-    }
 
-    #### Finish forming the matrix of exogenous variables ####
-    # Remove the redudant dummies, if there are any
-    varsToLeave <- apply(matrixXreg[otU,,drop=FALSE],2,var)!=0;
-    matrixXreg <- matrixXreg[,varsToLeave,drop=FALSE];
-    variablesNames <- variablesNames[varsToLeave];
-    nVariables <- length(variablesNames);
+        #### Finish forming the matrix of exogenous variables ####
+        # Remove the redudant dummies, if there are any
+        varsToLeave <- apply(matrixXreg[otU,,drop=FALSE],2,var)!=0;
+        matrixXreg <- matrixXreg[,varsToLeave,drop=FALSE];
+        variablesNames <- variablesNames[varsToLeave];
+        nVariables <- length(variablesNames);
+    }
 
     if(interceptIsNeeded){
         matrixXreg <- cbind(1,matrixXreg);
@@ -1165,6 +1192,7 @@ alm <- function(formula, data, subset, na.action,
         }
         nVariables <- length(variablesNames);
     }
+    variablesNamesAll <- variablesNames;
     # The number of exogenous variables (no ARI elements)
     nVariablesExo <- nVariables;
 
@@ -1180,7 +1208,7 @@ alm <- function(formula, data, subset, na.action,
             # In case of plogis and pnorm, the AR elements need to be generated from a model, i.e. oes from smooth.
             if(any(distribution==c("plogis","pnorm"))){
                 if(!requireNamespace("smooth", quietly = TRUE)){
-                    yNew <- abs(fitted(Arima(y, order=c(0,1,1))));
+                    yNew <- abs(fitted(arima(y, order=c(0,1,1))));
                     yNew[is.na(yNew)] <- min(yNew);
                     yNew[yNew==0] <- 1E-10;
                     yNew[] <- log(yNew / (1-yNew));
@@ -1188,7 +1216,7 @@ alm <- function(formula, data, subset, na.action,
                     yNew[is.infinite(yNew) & yNew<0] <- min(yNew[is.finite(yNew)]);
                 }
                 else{
-                    yNew <- smooth::oes(y, occurrence="i", model="MNN", h=1)$fittedModel
+                    yNew <- smooth::oes(y, occurrence="direct", model="MNN", h=1)$fittedModel
                 }
                 ariElements <- xregExpander(yNew, lags=-c(1:ariOrder), gaps="auto")[,-1,drop=FALSE];
                 ariZeroes <- matrix(TRUE,nrow=obsInsample,ncol=ariOrder);
@@ -1206,6 +1234,7 @@ alm <- function(formula, data, subset, na.action,
             ariNames <- paste0(responseName,"Lag",c(1:ariOrder));
             ariTransformedNames <- ariNames;
             colnames(ariElements) <- ariNames;
+            variablesNamesAll <- c(variablesNames,ariNames);
 
             # Non-zero sequencies for the recursion mechanism of ar
             if(occurrenceModel){
@@ -1213,13 +1242,14 @@ alm <- function(formula, data, subset, na.action,
                 ariZeroesLengths <- apply(ariZeroes, 2, sum);
             }
 
-            if(ar>0){
-                arNames <- paste0(responseName,"Lag",c(1:ar));
+            if(arOrder>0){
+                arNames <- paste0(responseName,"Lag",c(1:arOrder));
                 variablesNames <- c(variablesNames,arNames);
             }
             else{
                 arNames <- vector("character",0);
             }
+
             nVariables <- nVariables + arOrder;
             # Write down the values for the matrixXreg in the necessary transformations
             if(any(distribution==c("dlnorm","dllaplace","dls","dpois","dnbinom"))){
@@ -1262,7 +1292,8 @@ alm <- function(formula, data, subset, na.action,
         if(is.null(B)){
             #### I(0) initialisation ####
             if(iOrder==0){
-                if(any(distribution==c("dlnorm","dllaplace","dls","dlgnorm","dpois","dnbinom","dinvgauss"))){
+                if(any(distribution==c("dlnorm","dllaplace","dls","dlgnorm","dpois","dnbinom",
+                                       "dinvgauss","dgamma"))){
                     if(any(y[otU]==0)){
                         # Use Box-Cox if there are zeroes
                         B <- .lm.fit(matrixXreg[otU,,drop=FALSE],bcTransform(y[otU],0.01))$coefficients;
@@ -1340,7 +1371,8 @@ alm <- function(formula, data, subset, na.action,
                     matrixXregForDiffs <- matrixXregForDiffs[-c(1:iOrder),,drop=FALSE];
                 }
 
-                if(any(distribution==c("dlnorm","dllaplace","dls","dlgnorm","dpois","dnbinom","dinvgauss"))){
+                if(any(distribution==c("dlnorm","dllaplace","dls","dlgnorm","dpois","dnbinom",
+                                       "dinvgauss","dgamma"))){
                     B <- .lm.fit(matrixXregForDiffs,diff(log(y[otU]),differences=iOrder))$coefficients;
                 }
                 else if(any(distribution==c("plogis","pnorm"))){
@@ -1467,6 +1499,7 @@ alm <- function(formula, data, subset, na.action,
             denominator[is.infinite(denominator)] <- 1;
             # # If it is lower than 1, then we are probably dealing with (0, 1). No need to normalise
             # denominator[abs(denominator)<1] <- 1;
+            yDenominator <- max(sd(diff(y)),1);
         }
         else{
             denominator <- NULL;
@@ -1504,6 +1537,7 @@ alm <- function(formula, data, subset, na.action,
 
         # If there were ARI, write down the polynomial
         if(ariModel){
+            ellipsis$orders <- orders;
             # Some models save the first parameter for scale
             nVariablesForReal <- length(B);
             if(all(c(arOrder,iOrder)>0)){
@@ -1550,6 +1584,7 @@ alm <- function(formula, data, subset, na.action,
             names(B) <- variablesNames;
             names(parameters) <- variablesNames;
         }
+        variablesNamesAll <- colnames(matrixXreg);
         CFValue <- CF(B, distribution, loss, y, matrixXreg, recursiveModel, denominator);
     }
 
@@ -1665,6 +1700,7 @@ alm <- function(formula, data, subset, na.action,
                        "dnorm" =,
                        "dgnorm" =,
                        "dinvgauss" =,
+                       "dgamma" =,
                        "dlaplace" =,
                        "dalaplace" =,
                        "dlogis" =,
@@ -1688,16 +1724,17 @@ alm <- function(formula, data, subset, na.action,
     errors[] <- switch(distribution,
                        "dbeta" = y - yFitted,
                        "dfnorm" =,
+                       "dnorm" =,
                        "dlaplace" =,
+                       "ds" =,
+                       "dgnorm" =,
                        "dalaplace" =,
                        "dlogis" =,
                        "dt" =,
-                       "ds" =,
-                       "dnorm" =,
-                       "dgnorm" =,
                        "dnbinom" =,
                        "dpois" = y - mu,
-                       "dinvgauss" = y / mu,
+                       "dinvgauss" =,
+                       "dgamma" = y / mu,
                        "dchisq" = sqrt(y) - sqrt(mu),
                        "dlnorm" =,
                        "dllaplace" =,
@@ -1821,7 +1858,7 @@ alm <- function(formula, data, subset, na.action,
 
         # Change the names of variables used, if ARI was constructed.
         if(ariModel){
-            variablesUsed <- variablesUsed[!(variablesUsed %in% arNames)];
+            variablesUsed <- variablesUsed[!(variablesUsed %in% ariNames)];
             variablesUsed <- c(variablesUsed,ariTransformedNames);
         }
         colnames(dataWork)[1] <- responseName;
@@ -1831,11 +1868,11 @@ alm <- function(formula, data, subset, na.action,
         if(interceptIsNeeded){
             # This shit is needed, because R has habit of converting everything into vectors...
             dataWork <- cbind(y,matrixXreg[,-1,drop=FALSE]);
-            variablesUsed <- variablesNames[variablesNames!="(Intercept)"];
+            variablesUsed <- variablesNamesAll[variablesNamesAll!="(Intercept)"];
         }
         else{
             dataWork <- cbind(y,matrixXreg);
-            variablesUsed <- variablesNames;
+            variablesUsed <- variablesNamesAll;
         }
         colnames(dataWork) <- c(responseName, variablesUsed);
     }

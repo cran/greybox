@@ -11,7 +11,8 @@
 #' @param object The model estimated using either lm, or alm, or glm.
 #' @param nsim Number of iterations (simulations) to run.
 #' @param size A non-negative integer giving the number of items to choose (the sample size),
-#' passed to \link[base]{sample} function in R.
+#' passed to \link[base]{sample} function in R. If not provided and model contains ARIMA
+#' components, this value will be selected at random on each iteration.
 #' @param replace Should sampling be with replacement? Also, passed to \link[base]{sample}
 #' function in R.
 #' @param prob A vector of probability weights for obtaining the elements of the vector
@@ -45,11 +46,11 @@
 #'
 #' @rdname coefbootstrap
 #' @export
-coefbootstrap <- function(object, nsim=1000, size=floor(0.8*nobs(object)),
+coefbootstrap <- function(object, nsim=1000, size=floor(0.75*nobs(object)),
                           replace=FALSE, prob=NULL, parallel=FALSE) UseMethod("coefbootstrap")
 
 #' @export
-coefbootstrap.default <- function(object, nsim=1000, size=floor(0.8*nobs(object)),
+coefbootstrap.default <- function(object, nsim=1000, size=floor(0.75*nobs(object)),
                                   replace=FALSE, prob=NULL, parallel=FALSE){
 
     startTime <- Sys.time();
@@ -154,18 +155,19 @@ coefbootstrap.default <- function(object, nsim=1000, size=floor(0.8*nobs(object)
 
 #' @rdname coefbootstrap
 #' @export
-coefbootstrap.lm <- function(object, nsim=1000, size=floor(0.8*nobs(object)),
+coefbootstrap.lm <- function(object, nsim=1000, size=floor(0.75*nobs(object)),
                               replace=FALSE, prob=NULL, parallel=FALSE){
     return(coefbootstrap.default(object, nsim, size, replace, prob, parallel));
 }
 
 #' @rdname coefbootstrap
 #' @export
-coefbootstrap.alm <- function(object, nsim=1000, size=floor(0.8*nobs(object)),
+coefbootstrap.alm <- function(object, nsim=1000, size=floor(0.75*nobs(object)),
                               replace=FALSE, prob=NULL, parallel=FALSE){
 
     startTime <- Sys.time();
-    ariOrderNone <- is.null(object$other$polynomial);
+
+    cl <- match.call();
 
     if(is.numeric(parallel)){
         nCores <- parallel;
@@ -237,9 +239,7 @@ coefbootstrap.alm <- function(object, nsim=1000, size=floor(0.8*nobs(object)),
     else{
         newCall$formula <- as.formula(paste0("`",colnames(object$data)[1],"`~.-1"));
     }
-    # newCall$formula <- formula(object);
-    newCall$data <- substitute(object$data);
-    # newCall$subset <- object$subset;
+    newCall$data <- object$data;
     newCall$distribution <- object$distribution;
     if(object$loss=="custom"){
         newCall$loss <- object$lossFunction;
@@ -247,8 +247,20 @@ coefbootstrap.alm <- function(object, nsim=1000, size=floor(0.8*nobs(object)),
     else{
         newCall$loss <- object$loss;
     }
-    newCall$ar <- object$call$ar;
-    newCall$i <- object$call$i;
+    # ari is not needed, because it is in the object$data
+    newCall$ar <- NULL;
+    newCall$i <- NULL;
+    newCall$orders <- c(0,0,0);
+    arimaModel <- !is.null(object$other$polynomial);
+
+    # If this is ARIMA, and the size wasn't specified, make it changable
+    if(arimaModel && is.null(cl$size)){
+        changeSize <- TRUE;
+    }
+    else{
+        changeSize <- FALSE;
+    }
+
     newCall$fast <- TRUE;
     if(any(object$distribution==c("dchisq","dt"))){
         newCall$nu <- object$other$nu;
@@ -266,24 +278,28 @@ coefbootstrap.alm <- function(object, nsim=1000, size=floor(0.8*nobs(object)),
         newCall$lambdaBC <- object$other$lambdaBC;
     }
     else if(any(object$distribution==c("dgnorm","dlgnorm"))){
-        newCall$beta <- object$other$beta;
+        newCall$shape <- object$other$shape;
     }
     newCall$occurrence <- object$occurrence;
+    newCall$B <- object$B;
 
     # Function creates a random sample. Needed for dynamic models
-    sampler <- function(indices,size,replace,prob,ariOrderNone=TRUE){
-        if(ariOrderNone){
-            return(sample(indices,size=size,replace=replace,prob=prob));
+    sampler <- function(indices,size,replace,prob,arimaModel=FALSE,changeSize=FALSE){
+        if(arimaModel){
+            if(changeSize){
+                size[] <- floor(runif(1,nVariables,obsInsample))+1;
+            }
+            # This way we return the continuos sample, but with random starting point
+            return(floor(runif(1,0,obsInsample-size))+c(1:size));
         }
         else{
-            # This way we return the continuos sample, but with random starting point
-            return(ceiling(runif(1,1,obsInsample-size))+c(1:size));
+            return(sample(indices,size=size,replace=replace,prob=prob));
         }
     }
 
     if(!parallel){
         for(i in 1:nsim){
-            newCall$subset <- sampler(indices,size,replace,prob,ariOrderNone);
+            newCall$subset <- sampler(indices,size,replace,prob,arimaModel,changeSize);
             testModel <- suppressWarnings(eval(newCall));
             coefBootstrap[i,variablesNamesMade %in% names(coef(testModel))] <- coef(testModel);
         }
@@ -291,7 +307,7 @@ coefbootstrap.alm <- function(object, nsim=1000, size=floor(0.8*nobs(object)),
     else{
         # We don't do rbind for security reasons - in order to deal with skipped variables
         coefBootstrapParallel <- foreach::`%dopar%`(foreach::foreach(i=1:nsim),{
-            newCall$subset <- sampler(indices,size,replace,prob,ariOrderNone);
+            newCall$subset <- sampler(indices,size,replace,prob,arimaModel,changeSize);
             testModel <- eval(newCall);
             return(coef(testModel));
         })
@@ -317,6 +333,7 @@ coefbootstrap.alm <- function(object, nsim=1000, size=floor(0.8*nobs(object)),
                      class="bootstrap"));
 }
 
+#' @export
 print.bootstrap <- function(x, ...){
     cat(paste0("Bootstrap for the ", x$model, " model with nsim=",x$nsim," and size=",x$size,"\n"))
     cat(paste0("Time elapsed: ",round(as.numeric(x$timeElapsed,units="secs"),2)," seconds\n"));

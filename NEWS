@@ -1,3 +1,22 @@
+greybox v0.6.7 (Release data: 2021-02-14)
+==============
+
+Changes:
+* Gamma distribution in alm().
+* coefbootstrap() now uses changable sample size in case of ar!=0 in alm() and size not provided explicitly.
+* Proper distributions in stepwise(), lmCombine() and lmDynamic().
+* Scale the MSE part of LASSO and RIDGE in alm() by the sd(diff(y)).
+* Parameter orders in alm() instead of ar and i. Currently supports only ARIMA(p,d,0). MA(q) is in future plans.
+* Removed forecast package from imports. We now do not depend on it, but only suggest.
+* alm() will not drop the variables with no variability anymore if fast=TRUE.
+
+Bugfixes:
+* temporaldummy() now does not return zoo from zoo objects. This would break the factors.
+* Export print.bootstrap method.
+* Added `use="complete.obs"` in cor() in alm(), just in case.
+* Reset orders in coefbootstrap, because all orders are already in the object$data.
+
+
 greybox v0.6.6 (Release data: 2021-01-07)
 ==============
 

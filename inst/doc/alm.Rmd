@@ -54,7 +54,7 @@ where $y_t$ is the value of the response variable, $x_t$ is the vector of exogen
 \begin{equation} \label{eq:basicALMMixture}
     \begin{matrix}
         y_t = o_t f(x_t' B, \epsilon_t) \\
-        o_t \sim \mathcal{Bernoulli}(p_t) \\
+        o_t \sim \mathrm{Bernoulli}(p_t) \\
         p_t = g(z_t' A)
     \end{matrix},
 \end{equation}
@@ -327,10 +327,11 @@ This group includes:
 1. [Log Normal distribution](#lnormal),
 2. [Box-Cox Normal distribution](#bcnormal),
 3. [Inverse Gaussian distribution](#invgauss),
-4. [Log Laplace distribution](#llaplace),
-5. [Log S distribution](#lsvetunkov),
-6. [Log Generalised Normal distribution](#lgnormal),
-7. [Folded Normal distribution](#fnormal),
+4. [Gamma distribution](#gamma),
+5. [Log Laplace distribution](#llaplace),
+6. [Log S distribution](#lsvetunkov),
+7. [Log Generalised Normal distribution](#lgnormal),
+8. [Folded Normal distribution](#fnormal),
 
 Although (2) and (3) in theory allow having zeroes in data, given that the density function is equal to zero in any specific point, it will be zero in these cases as well. So the `alm()` will return some solutions for these distributions, but don't expect anything good. As for (1), it supports strictly positive data.
 
@@ -401,7 +402,7 @@ Inverse Gaussian distribution is an interesting distribution, which is defined f
 \begin{equation} \label{eq:InverseGaussianModel}
     y_t = \mu_t \times \epsilon_t 
 \end{equation}
-and that $\epsilon_t \sim \mathcal{IG}(1, \phi)$. This means that $y_t \sim \mathcal{IG}\left(\mu_t, \frac{\phi}{\mu_t} \right)$, implying that the dispersion of the model changes together with the expectation. The density function for the error term in this case is:
+and that $\epsilon_t \sim \mathcal{IG}(1, \phi)$. This means that $y_t \sim \mathcal{IG}\left(\mu_t, \frac{\phi}{\mu_t} \right)$, implying that the dispersion of the model changes together with the conditional expectation. The density function for the error term in this case is:
 \begin{equation} \label{eq:InverseGaussian}
     f(\epsilon_t) = \frac{1}{\sqrt{2 \pi \phi \epsilon_t^3}} \exp \left( -\frac{\left(\epsilon_t - 1 \right)^2}{2 \phi \epsilon_t} \right) ,
 \end{equation}
@@ -409,7 +410,7 @@ where the dispersion parameter is estimated via maximising the likelihood and is
 \begin{equation} \label{eq:InverseGaussianDispersion}
     \hat{\phi} = \frac{1}{T} \sum_{t=1}^T \frac{\left(\epsilon_t - 1 \right)^2}{\epsilon_t} .
 \end{equation}
-Note that in our formulation $\mu_t = \exp\left( x_t' B \right)$, so that the means is always positive. This implies that we deal with a pure multiplicative model. In addition, we assume that $\mu_t$ is just a scale for the distribution, otherwise $y_t$ would not follow the Inverse Gaussian distribution. The density function has following shapes depending on the values of parameters:
+Note that in our formulation $\mu_t = \exp\left( x_t' B \right)$, so that the mean is always positive. This implies that we deal with a pure multiplicative model. In addition, we assume that $\mu_t$ is just a scale for the distribution, otherwise $y_t$ would not follow the Inverse Gaussian distribution. The density function has following shapes depending on the values of parameters:
 ```{r pdfIG, echo=FALSE}
 library(statmod)
 plot(seq(0,5,0.01),dinvgauss(seq(0,5,0.01),1,1),type="l",
@@ -421,6 +422,37 @@ legend("topright",legend=c("IG(1,1)","IG(1,2)","IG(2,1)"),
 ```
 
 `alm()` with `distribution="dinvgauss"` estimates the density for $y_t$ using `dinvgauss()` function from `statmod` package. The $\mu_t$ is returned in the variables `mu` and `fitted.values`, the dispersion $\phi$ is in the variable `scale`. `resid()` method returns $e_t = \frac{y_t}{\mu_t}$. Finally, the prediction and confidence intervals for the regression model are generated using `qinvgauss()` function from the `statmod` package.
+
+
+### Gamma distribution {#gamma}
+Another popular distribution, defined for positive values only is called "Gamma". It is parametrised via the shape $k$ and scale $\sigma^2$ and has closed forms for mean and variance: $\mathrm{E}(x)=k \sigma^2$, $\mathrm{V}(x)=k \sigma^4$.
+
+The important thing that distinguishes the implementation in `alm()` from the one in `glm()` or in any other function is that we assume that the model has the following form (similar to the [Inverse Gaussian](#invgauss) model in alm):
+\begin{equation*}
+    y_t = \mu_t \times \epsilon_t 
+\end{equation*}
+and that $\epsilon_t \sim \Gamma \left(\sigma^{-2}, \sigma^2 \right)$, implying that $\mathrm{E}(\epsilon_t)= k \sigma^2 = 1$ and $\mathrm{V}(\epsilon_t)=\sigma^2$. This means that $y_t \sim \Gamma\left(\sigma^{-2}, \sigma^2 \mu_t \right)$, meaning that the variance of the model changes together with the conditional expectation. The density function for the error term in this case is:
+\begin{equation} \label{eq:Gamma}
+    f(\epsilon_t) = \frac{1}{\Gamma(\sigma^{-2}) (\sigma^{2})^{\sigma^{-2}}} \epsilon_t^{\sigma^{-2}-1}\exp \left(-\frac{\epsilon_t}{\sigma^2}\right),
+\end{equation}
+where the scale parameter $\sigma^2$ can be estimated via the method of moments based on its relation to the variance:
+\begin{equation} \label{eq:GammaDispersion}
+    \hat{\sigma}^2 = \frac{1}{T} \sum_{t=1}^T \left(\epsilon_t - 1 \right)^2.
+\end{equation}
+Note that in our formulation $\mu_t = \exp\left( x_t' B \right)$, so that the mean is always positive, which implies that we deal with a pure multiplicative model. In addition, we assume that $\mu_t$ is just a scale for the distribution, otherwise $y_t$ would not follow Gamma distribution. All of this makes the model restrictive, but arguably reasonable - otherwise the mean of the distribution might behave uncontrollably.
+
+The density function has following shapes depending on the values of parameters:
+```{r pdfGamma, echo=FALSE}
+library(statmod)
+plot(seq(0,5,0.01),dgamma(seq(0,5,0.01),shape=1,scale=1),type="l",
+     xlab="y_t",ylab="Density",main="PDF of Gamma distribution")
+lines(seq(0.01,5,0.01),dgamma(seq(0.01,5,0.01),shape=0.5,scale=2), col="blue")
+lines(seq(0,5,0.01),dgamma(seq(0,5,0.01),shape=2,scale=0.5), col="red")
+legend("topright",legend=c("Gamma(1,1)","Gamma(0.5,2)","Gamma(2,0.5)"),
+       lwd=1, col=c("black","blue","red","purple"))
+```
+
+`alm()` with `distribution="dgamma"` estimates the density for $y_t$ using `dgamma()` function from `stats` package. The $\mu_t$ is returned in the variables `mu` and `fitted.values`, the scale $\sigma^2$ is in the variable `scale`. `resid()` method returns $e_t = \frac{y_t}{\mu_t}$. Finally, the prediction and confidence intervals for the regression model are generated using `qgamma()` function from the `stats` package.
 
 
 ### Log Laplace distribution {#llaplace}
@@ -713,7 +745,7 @@ The final class of models includes two cases:
 In both of them it is assumed that the response variable is binary and can be either zero or one. The main idea for this class of models is to use a transformation of the original data and link a continuous latent variable with the binary one. As a reminder, all the models eventually assume that:
 \begin{equation} \label{eq:basicALMCumulative}
     \begin{matrix}
-        o_t \sim \mathcal{Bernoulli}(p_t) \\
+        o_t \sim \mathrm{Bernoulli}(p_t) \\
         p_t = g(x_t' A)
     \end{matrix},
 \end{equation}
@@ -819,9 +851,9 @@ After that we can produce forecasts using the data from the holdout sample (in t
 predict(modelMixture,outSample,interval="p",level=c(0.8,0.9,0.95))
 ```
 
-If you expect autoregressive elements in the data, then you can specify the order of AR via the respective parameter
+If you expect autoregressive elements in the data, then you can specify the order of ARIMA via the respective parameter (note that the MA part is not supported yet. Use `adam` function from `smooth` package for that):
 ```{r mixtureExampleFinalAR}
-modelMixtureAR <- alm(y~x1+x2+Noise, inSample, distribution="dlnorm", occurrence=modelOccurrence, ar=1)
+modelMixtureAR <- alm(y~x1+x2+Noise, inSample, distribution="dlnorm", occurrence=modelOccurrence, orders=c(1,0,0))
 summary(modelMixtureAR)
 plot(predict(modelMixtureAR,outSample,interval="p",side="u"))
 ```
@@ -855,7 +887,7 @@ summary(modelLossCustom)
 
 Keep in mind that it is important to have parameters `actual`, `fitted`, `B` and `xreg` in the custom loss function, even if they are not used. `xreg` is the matrix of the expanded explanatory variables (including the intercept in the first column if it is needed).
 
-You might also notice that there are LASSO and RIDGE available as options for `loss` parameter. These are experimental. When they are used, the explanatory variables are not normalised, but the parameters (all but intercept) are divided by the standard deviations of explanatory variables, which has a similar (but not the same) effect. Also, in order for this to work appropriately, *you need to provide* the parameter `lambda`, which should lie between 0 and 1, where `lambda=0` means that there is no shrinkage and `lambda=1` implies that there is only shrinkage, and the MSE is not used at all.
+You might also notice that there are LASSO and RIDGE available as options for `loss` parameter. These are experimental. When they are used, the explanatory variables are not normalised, but the parameters (all but intercept) are divided by the standard deviations of explanatory variables, which has a similar (but not the same) effect. Also, in order for this to work appropriately, *you need to provide* the parameter `lambda`, which should lie between 0 and 1, where `lambda=0` means that there is no shrinkage and `lambda=1` implies that there is only shrinkage, and the MSE is not used at all. The MSE part of the loss is divided by $\mathrm{V}\left({\Delta}y_t\right)$, where ${\Delta}y_t=y_t-y_{t-1}$, bringing it closer to the scale of parameters and hopefully making $\lambda$ a bit more meaningful.
 
 Note that due to the formulation of `alm()`, you can use LASSO for [Logistic](#logit) (`distribution="plogis"`), [Poisson](#poisson) (`distribution="dpois"`) and [Negative Binomial](#nbinom) (`distribution="dnbinom"`) regressions as well. Keep in mind that in order to get better results, you might need to tune [the parameters of the optimiser](#estimator) (e.g. set `maxeval` to a higher value or increase `ftol_rel`).
 

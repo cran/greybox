@@ -103,6 +103,15 @@ lines(seq(0,5,0.01),dinvgauss(seq(0,5,0.01),2,1), col="red")
 legend("topright",legend=c("IG(1,1)","IG(1,2)","IG(2,1)"),
        lwd=1, col=c("black","blue","red","purple"))
 
+## ----pdfGamma, echo=FALSE-----------------------------------------------------
+library(statmod)
+plot(seq(0,5,0.01),dgamma(seq(0,5,0.01),shape=1,scale=1),type="l",
+     xlab="y_t",ylab="Density",main="PDF of Gamma distribution")
+lines(seq(0.01,5,0.01),dgamma(seq(0.01,5,0.01),shape=0.5,scale=2), col="blue")
+lines(seq(0,5,0.01),dgamma(seq(0,5,0.01),shape=2,scale=0.5), col="red")
+legend("topright",legend=c("Gamma(1,1)","Gamma(0.5,2)","Gamma(2,0.5)"),
+       lwd=1, col=c("black","blue","red","purple"))
+
 ## ----pdflogLaplace, echo=FALSE------------------------------------------------
 plot(seq(0.01,5,0.01),dlaplace(log(seq(0.01,5,0.01)),0,1)/seq(0.01,5,0.01),type="l",ylim=c(0,1.5),
      xlab="y_t",ylab="Density",main="PDF of Log Laplace distribution")
@@ -240,7 +249,7 @@ plot(modelMixture, c(1:9))
 #  predict(modelMixture,outSample,interval="p",level=c(0.8,0.9,0.95))
 
 ## ----mixtureExampleFinalAR----------------------------------------------------
-modelMixtureAR <- alm(y~x1+x2+Noise, inSample, distribution="dlnorm", occurrence=modelOccurrence, ar=1)
+modelMixtureAR <- alm(y~x1+x2+Noise, inSample, distribution="dlnorm", occurrence=modelOccurrence, orders=c(1,0,0))
 summary(modelMixtureAR)
 plot(predict(modelMixtureAR,outSample,interval="p",side="u"))
 
