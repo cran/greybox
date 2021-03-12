@@ -128,8 +128,9 @@
 #' \item \code{B} - the vector of starting values of parameters for the optimiser,
 #' should correspond to the ordering of the explanatory variables;
 #' \item \code{algorithm} - the algorithm to use in optimisation
-#' (\code{"NLOPT_LN_SBPLX"} by default).
-#' \item \code{maxeval} - maximum number of evaluations to carry out (default is 100);
+#' (\code{"NLOPT_LN_SBPLX"} by default);
+#' \item \code{maxeval} - maximum number of evaluations to carry out. Default is 40 per
+#' estimated parameter. In case of LASSO / RIDGE the default is 80 per estimated parameter;
 #' \item \code{maxtime} - stop, when the optimisation time (in seconds) exceeds this;
 #' \item \code{xtol_rel} - the precision of the optimiser (the default is 1E-6);
 #' \item \code{xtol_abs} - the absolute precision of the optimiser (the default is 1E-8);
@@ -169,7 +170,8 @@
 #' \item B - the value of the optimised parameters. Typically, this is a duplicate of coefficients,
 #' \item other - the list of all the other parameters either passed to the
 #' function or estimated in the process, but not included in the standard output
-#' (e.g. \code{alpha} for Asymmetric Laplace).
+#' (e.g. \code{alpha} for Asymmetric Laplace),
+#' \item timeElapsed - the time elapsed for the estimation of the model.
 #' }
 #'
 #' @seealso \code{\link[greybox]{stepwise}, \link[greybox]{lmCombine},
@@ -261,6 +263,9 @@ alm <- function(formula, data, subset, na.action,
                 orders=c(0,0,0),
                 parameters=NULL, fast=FALSE, ...){
 # Useful stuff for dnbinom: https://scialert.net/fulltext/?doi=ajms.2010.1.15
+
+    # Start measuring the time of calculations
+    startTime <- Sys.time();
 
     # Create substitute and remove the original data
     dataSubstitute <- substitute(data);
@@ -654,14 +659,14 @@ alm <- function(formula, data, subset, na.action,
     #### Define the rest of parameters ####
     ellipsis <- list(...);
     # If arima was provided in the old style
-    if(orders[1]==0 && !is.null(ellipsis$ar)){
-        orders[1] <- ellipsis$ar;
+    if(orders[1]==0 && !is.null(ellipsis[["ar", exact=TRUE]])){
+        orders[1] <- ellipsis[["ar", exact=TRUE]];
     }
-    if(orders[2]==0 && !is.null(ellipsis$i)){
-        orders[2] <- ellipsis$i;
+    if(orders[2]==0 && !is.null(ellipsis[["i", exact=TRUE]])){
+        orders[2] <- ellipsis[["i", exact=TRUE]];
     }
-    if(orders[3]==0 && !is.null(ellipsis$ma)){
-        orders[3] <- ellipsis$ma;
+    if(orders[3]==0 && !is.null(ellipsis[["ma", exact=TRUE]])){
+        orders[3] <- ellipsis[["ma", exact=TRUE]];
     }
 
     # Parameters for distributions
@@ -971,30 +976,10 @@ alm <- function(formula, data, subset, na.action,
         recursiveModel <- TRUE;
     }
 
-    #### Define what to do with the maxeval ####
-    if(is.null(ellipsis$maxeval)){
-        if(any(distribution==c("dchisq","dpois","dnbinom","dbcnorm","plogis","pnorm")) || recursiveModel){
-            maxeval <- 500;
-        }
-        # The following ones don't really need the estimation. This is for consistency only
-        else if(any(distribution==c("dnorm","dlnorm","dlogitnorm")) & !recursiveModel && any(loss==c("likelihood","MSE"))){
-            maxeval <- 1;
-        }
-        else{
-            maxeval <- 200;
-        }
-        # LASSO / RIDGE need more iterations to converge
-        if(any(loss==c("LASSO","RIDGE"))){
-            maxeval <- 1000;
-        }
-    }
-    else{
-        maxeval <- ellipsis$maxeval;
-    }
-
     dataWork <- eval(mf, parent.frame());
     dataTerms <- terms(dataWork);
-    y <- dataWork[,1];
+    # Make this numeric, to address potential issues with zoo + data.table
+    y <- as.numeric(dataWork[,1]);
 
     interceptIsNeeded <- attr(terms(dataWork),"intercept")!=0;
     # Create a model from the provided stuff. This way we can work with factors
@@ -1039,23 +1024,22 @@ alm <- function(formula, data, subset, na.action,
     errors <- vector("numeric", obsInsample);
     ot <- vector("logical", obsInsample);
 
-    if(any(y<0) & any(distribution==c("dfnorm","dlnorm","dllaplace","dls","dbcnorm","dchisq","dpois","dnbinom",
-                                      "dinvgauss","dgamma"))){
+    if(any(distribution==c("dfnorm","dlnorm","dllaplace","dls","dbcnorm","dchisq",
+                           "dpois","dnbinom",
+                           "dinvgauss","dgamma")) && any(y<0)){
         stop(paste0("Negative values are not allowed in the response variable for the distribution '",distribution,"'"),
              call.=FALSE);
     }
 
-    if(any(y==0) & any(distribution==c("dinvgauss","dgamma")) & !occurrenceModel){
+    if(any(distribution==c("dinvgauss","dgamma")) && any(y==0) && !occurrenceModel){
         stop(paste0("Zero values are not allowed in the response variable for the distribution '",distribution,"'"),
              call.=FALSE);
     }
 
-    if(any(distribution==c("dpois","dnbinom"))){
-        if(any(y!=trunc(y))){
-            stop(paste0("Count data is needed for the distribution '",distribution,"', but you have fractional numbers. ",
-                        "Maybe you should try some other distribution?"),
-                 call.=FALSE);
-        }
+    if(any(distribution==c("dpois","dnbinom")) && any(y!=trunc(y))){
+        stop(paste0("Count data is needed for the distribution '",distribution,"', but you have fractional numbers. ",
+                    "Maybe you should try some other distribution?"),
+             call.=FALSE);
     }
 
     if(any(distribution==c("dbeta","dlogitnorm"))){
@@ -1505,6 +1489,30 @@ alm <- function(formula, data, subset, na.action,
             denominator <- NULL;
         }
 
+        #### Define what to do with the maxeval ####
+        if(is.null(ellipsis$maxeval)){
+            if(any(distribution==c("dchisq","dpois","dnbinom","dbcnorm","plogis","pnorm")) || recursiveModel){
+                # maxeval <- 500;
+                maxeval <- length(B) * 40;
+            }
+            # The following ones don't really need the estimation. This is for consistency only
+            else if(any(distribution==c("dnorm","dlnorm","dlogitnorm")) & !recursiveModel && any(loss==c("likelihood","MSE"))){
+                maxeval <- 1;
+            }
+            else{
+                # maxeval <- 200;
+                maxeval <- length(B) * 40;
+            }
+            # LASSO / RIDGE need more iterations to converge
+            if(any(loss==c("LASSO","RIDGE"))){
+                # maxeval <- 1000;
+                maxeval <- length(B) * 80;
+            }
+        }
+        else{
+            maxeval <- ellipsis$maxeval;
+        }
+
         # Although this is not needed in case of distribution="dnorm", we do that in a way, for the code consistency purposes
         res <- nloptr(B, CF,
                       opts=list(algorithm=algorithm, xtol_rel=xtol_rel, maxeval=maxeval, print_level=print_level,
@@ -1908,7 +1916,8 @@ alm <- function(formula, data, subset, na.action,
                                  loss=loss, lossFunction=lossFunction, lossValue=CFValue,
                                  df.residual=obsInsample-nParam, df=nParam, call=cl, rank=nParam,
                                  data=dataWork, terms=dataTerms,
-                                 occurrence=occurrence, subset=subset, other=ellipsis, B=B),
+                                 occurrence=occurrence, subset=subset, other=ellipsis, B=B,
+                                 timeElapsed=Sys.time()-startTime),
                             class=c("alm","greybox"));
 
     # If this is an occurrence model, flag it as one
