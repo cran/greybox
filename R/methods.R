@@ -12,6 +12,8 @@
 #'
 #' IMPORTANT NOTE: both of the criteria can only be used for univariate models
 #' (regression models, ARIMA, ETS etc) with normally distributed residuals!
+#' In case of multivariate models, both criteria need to be modified. See
+#' Bedrick & Tsai (1994) for details.
 #'
 #' @aliases AICc
 #' @template author
@@ -29,6 +31,9 @@
 #' information criterion and the finite corrections, Communications in
 #' Statistics - Theory and Methods, 7:1, 13-26,
 #' \doi{10.1080/03610927808827599}
+#' \item Bedrick, E. J., & Tsai, C.-L. (1994). Model Selection for
+#' Multivariate Regression in Small Samples. Biometrics, 50(1), 226.
+#' \doi{10.2307/2533213}
 #' }
 #' @keywords htest
 #' @examples
@@ -84,8 +89,13 @@ AICc.varest <- function(object, ...){
     nparamAll <- nrow(coef(object)[[1]]);
 
     obs <- nobs(object);
-    IC <- -2*llikelihood + ((2*obs*(nparamAll*nSeries + nSeries*(nSeries+1)/2)) /
-                                (obs - (nparamAll + nSeries + 1)));
+    if(obs - (nparamAll + nSeries + 1) <=0){
+        IC <- Inf;
+    }
+    else{
+        IC <- -2*llikelihood + ((2*obs*(nparamAll*nSeries + nSeries*(nSeries+1)/2)) /
+                                    (obs - (nparamAll + nSeries + 1)));
+    }
 
     return(IC);
 }
@@ -98,9 +108,13 @@ BICc.varest <- function(object, ...){
     nparamAll <- nrow(coef(object)[[1]]) + object$K;
 
     obs <- nobs(object);
-    IC <- -2*llikelihood + (((nparamAll + nSeries*(nSeries+1)/2) *
-                                 log(obs * nSeries) * obs * nSeries) /
-                                (obs * nSeries - nparamAll - nSeries*(nSeries+1)/2));
+    if(obs - (nparamAll + nSeries + 1) <=0){
+        IC <- Inf;
+    }
+    else{
+        IC <- -2*llikelihood + ((log(obs)*obs*(nparamAll*nSeries + nSeries*(nSeries+1)/2)) /
+                                    (obs - (nparamAll + nSeries + 1)));
+    }
 
     return(IC);
 }
@@ -639,17 +653,20 @@ nobs.varest <- function(object, ...){
     return(object$obs);
 }
 
-#' Number of parameters in the model
+#' Number of parameters and number of variates in the model
 #'
-#' This function returns the number of estimated parameters in the model
+#' \code{nparam()} returns the number of estimated parameters in the model,
+#' while \code{nvariate()} returns number of variates for the response
+#' variable.
 #'
-#' This is a very basic and a simple function which does what it says:
-#' extracts number of parameters in the estimated model.
+#' \code{nparam()} is a very basic and a simple function which does what it says:
+#' extracts number of estimated parameters in the model. \code{nvariate()} returns
+#' number of variates (dimensions, columns) for the response variable (1 for the
+#' univariate regression).
 #'
-#' @aliases nparam
 #' @param object Time series model.
 #' @param ... Some other parameters passed to the method.
-#' @return This function returns a numeric value.
+#' @return Both functions return numeric values.
 #' @template author
 #' @seealso \link[stats]{nobs}, \link[stats]{logLik}
 #' @keywords htest
@@ -662,9 +679,10 @@ nobs.varest <- function(object, ...){
 #' ourModel <- lm(y~.,data=as.data.frame(xreg))
 #'
 #' nparam(ourModel)
+#' nvariate(ourModel)
 #'
-#' @rdname nparam
 #' @importFrom stats coef
+#' @rdname nparam
 #' @export nparam
 nparam <- function(object, ...) UseMethod("nparam")
 
@@ -702,6 +720,20 @@ nparam.varest <- function(object, ...){
     ### This is the nparam per series
     # Parameters in all the matrices + the elements of the covariance matrix
     return(nrow(coef(object)[[1]])*object$K + 0.5*object$K*(object$K+1));
+}
+
+#' @rdname nparam
+#' @export nvariate
+nvariate <- function(object, ...) UseMethod("nvariate")
+
+#' @export
+nvariate.default <- function(object, ...){
+    if(is.null(dim(actuals(object)))){
+        return(1)
+    }
+    else{
+        return(ncol(actuals(object)));
+    }
 }
 
 #' @importFrom stats sigma
@@ -963,7 +995,7 @@ vcov.lmGreybox <- function(object, ...){
 
 #' Plots of the fit and residuals
 #'
-#' The function produces fitted values and plots for the residuals of the greybox functions
+#' The function produces diagnostics plots for a \code{greybox} model
 #'
 #' The list of produced plots includes:
 #' \enumerate{
@@ -999,7 +1031,7 @@ vcov.lmGreybox <- function(object, ...){
 #' 8 and 9 also use the parameters \code{level}, which specifies the confidence level for
 #' the intervals.
 #'
-#' @param x Time series model for which forecasts are required.
+#' @param x Estimated greybox model.
 #' @param which Which of the plots to produce. The possible options (see details for explanations):
 #' \enumerate{
 #' \item Actuals vs Fitted values;
@@ -2158,6 +2190,11 @@ hatvalues.greybox <- function(model, ...){
         hatValue <- diag(xreg %*% vcov(model) %*% t(xreg))/sigma(model)^2;
     }
     names(hatValue) <- names(actuals(model));
+
+    # Substitute extreme values by something very big.
+    if(any(hatValue==1)){
+        hatValue[hatValue==1] <- 1 -1E5;
+    }
     return(hatValue);
 }
 

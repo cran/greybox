@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2021-03-12" />
+<meta name="date" content="2021-04-16" />
 
 <title>Greybox main vignette</title>
 
@@ -311,7 +311,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Greybox main vignette</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2021-03-12</h4>
+<h4 class="date">2021-04-16</h4>
 
 
 
@@ -365,6 +365,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <li><code>sigma()</code> - extracts the standard deviation of the residuals.</li>
 <li><code>nobs()</code> - the number of the in-sample observations of the model.</li>
 <li><code>nparam()</code> - the number of all the estimated parameters in the model.</li>
+<li><code>nvariate()</code> - the number of variates (columns / dimensions) of the resposne variable.</li>
 <li><code>summary()</code> - produces the summary of the model.</li>
 <li><code>predict()</code> - produces the predictions based on the model and the provided <code>newdata</code>. If the <code>newdata</code> is not provided, then it uses the already available data in the model. Can also produce <code>confidence</code> and <code>prediction</code> intervals.</li>
 <li><code>forecast()</code> - acts similarly to <code>predict()</code> with few differences. It has a parameter <code>h</code> - forecast horizon - which is <code>NULL</code> by default and is set to be equal to the number of rows in <code>newdata</code>. However, if the <code>newdata</code> is not provided, then it will produce forecasts of the explanatory variables to the horizon <code>h</code> and use them as <code>newdata</code>. Finally, if <code>h</code> and <code>newdata</code> are provided, then the number of rows to use will be regulated by <code>h</code>.</li>

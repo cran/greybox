@@ -29,6 +29,8 @@ McQuarrie (1999) and is used in similar circumstances.
 
 IMPORTANT NOTE: both of the criteria can only be used for univariate models
 (regression models, ARIMA, ETS etc) with normally distributed residuals!
+In case of multivariate models, both criteria need to be modified. See
+Bedrick & Tsai (1994) for details.
 }
 \examples{
 
@@ -47,6 +49,9 @@ BICc(ourModel)
 \item Burnham Kenneth P. and Anderson David R. (2002). Model Selection
 and Multimodel Inference. A Practical Information-Theoretic Approach.
 Springer-Verlag New York. DOI: [10.1007/b97636](http://dx.doi.org/10.1007/b97636).
+\item McQuarrie, A. D. (1999). A small-sample correction for the Schwarz SIC model
+selection criterion. Statistics {&} Probability Letters, 44(1), 79–86.
+[10.1016/S0167-7152(98)00294-6](https://doi.org/10.1016/S0167-7152(98)00294-6).
 }
 
 \itemize{
@@ -57,6 +62,9 @@ pp.79-86. \doi{10.1016/S0167-7152(98)00294-6}
 information criterion and the finite corrections, Communications in
 Statistics - Theory and Methods, 7:1, 13-26,
 \doi{10.1080/03610927808827599}
+\item Bedrick, E. J., & Tsai, C.-L. (1994). Model Selection for
+Multivariate Regression in Small Samples. Biometrics, 50(1), 226.
+\doi{10.2307/2533213}
 }
 }
 \seealso{

@@ -1,3 +1,19 @@
+greybox v0.6.9 (Release data: 2021-04-17)
+==============
+
+Changes:
+* hatvalues() now returns 1 -1E5 instead of 1. Otherwise things break...
+* nvariate() method to get number of variates in the response variable in the model.
+* Fixed formula for BICc for multivariate models (vars) and added a reference to appropriate paper.
+* maxeval in alm() for the model with i>0 is now 40*k.
+
+Bugfixes:
+* mcor(), assoc() and spread() are now more robust to missing values.
+* A fix in alm() for an exotic case with i>0 and a variable not having any variability after the t>i.
+* A fix for coefbootstrap in case of i>0 (previously didn't work).
+* A fix for spread() not working for low count variable. It now treats it as factor.
+
+
 greybox v0.6.8 (Release data: 2021-03-12)
 ==============
 
