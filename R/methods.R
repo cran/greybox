@@ -837,21 +837,21 @@ vcov.alm <- function(object, bootstrap=FALSE, ...){
                 matrixXreg <- matrixXreg[,-1,drop=FALSE];
             }
             obsInsample <- nobs(object);
-            FIMatrix <- matrixXreg[1,] %*% t(matrixXreg[1,]) * object$mu[1];
+            FIMatrix <- t(matrixXreg[1,,drop=FALSE]) %*% matrixXreg[1,,drop=FALSE] * object$mu[1];
             for(j in 2:obsInsample){
-                FIMatrix[] <- FIMatrix + matrixXreg[j,] %*% t(matrixXreg[j,]) * object$mu[j];
+                FIMatrix[] <- FIMatrix + t(matrixXreg[j,,drop=FALSE]) %*% matrixXreg[j,,drop=FALSE] * object$mu[j];
             }
 
             # See if Choleski works... It sometimes fails, when we don't get to the max of likelihood.
             vcovMatrixTry <- try(chol2inv(chol(FIMatrix)), silent=TRUE);
-            if(any(class(vcovMatrixTry)=="try-error")){
+            if(inherits(vcovMatrixTry,"try-error")){
                 warning(paste0("Choleski decomposition of hessian failed, so we had to revert to the simple inversion.\n",
                                "The estimate of the covariance matrix of parameters might be inaccurate.\n"),
-                        call.=FALSE);
+                        call.=FALSE, immediate.=TRUE);
                 vcov <- try(solve(FIMatrix, diag(nVariables), tol=1e-20), silent=TRUE);
 
                 # If the conventional approach failed, do bootstrap
-                if(any(class(FIMatrix)=="try-error")){
+                if(inherits(vcov,"try-error")){
                     warning(paste0("Sorry, but the hessian is singular, so we could not invert it.\n",
                                    "Switching to bootstrap of covariance matrix of parameters.\n"),
                             call.=FALSE, immediate.=TRUE);
@@ -911,12 +911,12 @@ vcov.alm <- function(object, bootstrap=FALSE, ...){
 
             # See if Choleski works... It sometimes fails, when we don't get to the max of likelihood.
             vcovMatrixTry <- try(chol2inv(chol(FIMatrix)), silent=TRUE);
-            if(any(class(vcovMatrixTry)=="try-error")){
+            if(inherits(vcovMatrixTry,"try-error")){
                 warning(paste0("Choleski decomposition of hessian failed, so we had to revert to the simple inversion.\n",
                                "The estimate of the covariance matrix of parameters might be inaccurate.\n"),
-                        call.=FALSE);
-                FIMatrix <- try(solve(FIMatrix, diag(nVariables), tol=1e-20), silent=TRUE);
-                if(any(class(FIMatrix)=="try-error")){
+                        call.=FALSE, immediate.=TRUE);
+                vcovMatrixTry <- try(solve(FIMatrix, diag(nVariables), tol=1e-20), silent=TRUE);
+                if(inherits(vcovMatrixTry,"try-error")){
                     vcov <- diag(1e+100,nVariables);
                 }
                 else{
@@ -928,7 +928,7 @@ vcov.alm <- function(object, bootstrap=FALSE, ...){
             }
 
             # If the conventional approach failed, do bootstrap
-            if(any(class(FIMatrix)=="try-error")){
+            if(inherits(vcovMatrixTry,"try-error")){
                 warning(paste0("Sorry, but the hessian is singular, so we could not invert it.\n",
                                "Switching to bootstrap of covariance matrix of parameters.\n"),
                         call.=FALSE, immediate.=TRUE);
@@ -1488,6 +1488,11 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             yName <- "Studentised";
         }
 
+        # If there is occurrence part, substitute zeroes with NAs
+        if(is.occurrence(x$occurrence)){
+            ellipsis$x[actuals(x$occurrence)==0] <- NA;
+        }
+
         if(!any(names(ellipsis)=="main")){
             ellipsis$main <- paste0(yName," Residuals vs Time");
         }
@@ -1532,6 +1537,10 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         if(length(outliersID)>0){
             points(outliersID, ellipsis$x[outliersID], pch=16);
             text(outliersID, ellipsis$x[outliersID], labels=outliersID, pos=(ellipsis$x[outliersID]>0)*2+1);
+        }
+        # If there is occurrence model, plot points to fill in breaks
+        if(is.occurrence(x$occurrence)){
+            points(time(ellipsis$x), ellipsis$x);
         }
         if(lowess){
             # Substitute NAs with the mean
@@ -1804,6 +1813,7 @@ plot.coef.greyboxD <- function(x, ...){
     # We are not interested in intercept, so skip it in plot
 
     parDefault <- par(no.readonly=TRUE);
+    on.exit(par(parDefault));
 
     pages <- ceiling((ncol(ourData)-1) / 8);
     perPage <- ceiling((ncol(ourData)-1) / pages);
@@ -1827,8 +1837,6 @@ plot.coef.greyboxD <- function(x, ...){
         ellipsis$main <- colnames(ourData)[i];
         do.call(plot,ellipsis);
     }
-
-    par(parDefault);
 }
 
 #' @importFrom grDevices rgb
@@ -1873,6 +1881,9 @@ plot.rollingOrigin <- function(x, ...){
 #### Print ####
 #' @export
 print.greybox <- function(x, ...){
+    if(!is.null(x$timeElapsed)){
+        cat("Time elapsed:",round(as.numeric(x$timeElapsed,units="secs"),2),"seconds\n");
+    }
     cat("Call:\n");
     print(x$call);
     cat("\nCoefficients:\n");
@@ -3582,15 +3593,14 @@ predict.almari <- function(object, newdata=NULL, interval=c("none", "confidence"
     return(structure(ourModel,class="predict.greybox"));
 }
 
-#' @importFrom forecast forecast
+# @importFrom forecast forecast
 #' @export forecast
-NULL
-# forecast <- function(object, ...) UseMethod("forecast")
+forecast <- function(object, ...) UseMethod("forecast")
 
-# @export
-# forecast.default <- function(object, ...){
-#     return(predict(object, ...));
-# }
+#' @export
+forecast.default <- function(object, ...){
+    return(predict(object, ...));
+}
 
 #' @rdname predict.greybox
 #' @export
