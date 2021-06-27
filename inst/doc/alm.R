@@ -257,6 +257,22 @@ plot(predict(modelMixtureAR,outSample,interval="p",side="u"))
 plot(forecast(modelMixtureAR, h=10, interval="p",side="u"))
 
 ## -----------------------------------------------------------------------------
+locationModel <- lm(mpg~., mtcars)
+scaleModel <- sm(locationModel,~qsec+wt)
+
+## -----------------------------------------------------------------------------
+summary(scaleModel)
+
+## -----------------------------------------------------------------------------
+almModel <- alm(mpg~., mtcars[-c(1:3),], scale=~qsec+wt)
+
+## -----------------------------------------------------------------------------
+summary(almModel)
+
+## ----eval=FALSE---------------------------------------------------------------
+#  plot(predict(almModel,mtcars[1:3,],interval="p",level=0.95))
+
+## -----------------------------------------------------------------------------
 lossFunction <- function(actual, fitted, B, xreg){
   return(mean(abs(actual-fitted)^3));
 }

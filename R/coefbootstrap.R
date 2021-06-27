@@ -239,7 +239,7 @@ coefbootstrap.alm <- function(object, nsim=1000, size=floor(0.75*nobs(object)),
     else{
         newCall$formula <- as.formula(paste0("`",colnames(object$data)[1],"`~.-1"));
     }
-    newCall$data <- object$data;
+    newCall$data <- substitute(object$data);
     newCall$distribution <- object$distribution;
     if(object$loss=="custom"){
         newCall$loss <- object$lossFunction;
@@ -254,7 +254,7 @@ coefbootstrap.alm <- function(object, nsim=1000, size=floor(0.75*nobs(object)),
         newCall$data <- newCall$data[,!(colnames(newCall$data) %in% names(object$other$polynomial))];
     }
 
-    # If this is ARIMA, and the size wasn't specified, make it changable
+    # If this is ARIMA, and the size wasn't specified, make it changeable
     if(arimaModel && is.null(cl$size)){
         changeSize <- TRUE;
     }
@@ -282,7 +282,14 @@ coefbootstrap.alm <- function(object, nsim=1000, size=floor(0.75*nobs(object)),
         newCall$shape <- object$other$shape;
     }
     newCall$occurrence <- object$occurrence;
-    newCall$B <- object$B;
+    # Only pre-initialise the parameters if non-normal stuff is used
+    if(all(object$distribution!=c("dnorm","dlnorm","dlogitnorm"))){
+        newCall$B <- substitute(object$B);
+    }
+    # If there is scale model, remove it
+    if(is.scale(object$scale)){
+        newCall$scale <- NULL;
+    }
 
     # Function creates a random sample. Needed for dynamic models
     sampler <- function(indices,size,replace,prob,arimaModel=FALSE,changeSize=FALSE){
@@ -325,14 +332,15 @@ coefbootstrap.alm <- function(object, nsim=1000, size=floor(0.75*nobs(object)),
     colnames(coefBootstrap) <- names(coefficientsOriginal);
 
     # Centre the coefficients for the calculation of the vcov
-    coefvcov <- coefBootstrap - matrix(coefficientsOriginal, nsim, nVariables, byrow=TRUE);
+    coefvcov <- coefBootstrap - matrix(colMeans(coefBootstrap), nsim, nVariables, byrow=TRUE);
 
-    return(structure(list(vcov=(t(coefvcov) %*% coefvcov)/nsim,
+    return(structure(list(vcov=(t(coefvcov) %*% coefvcov)/(nsim-1),
                           coefficients=coefBootstrap,
                           nsim=nsim, size=size, replace=replace, prob=prob, parallel=parallel,
                           model=object$call[[1]], timeElapsed=Sys.time()-startTime),
                      class="bootstrap"));
 }
+
 
 #' @export
 print.bootstrap <- function(x, ...){

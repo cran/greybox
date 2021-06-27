@@ -1,6 +1,7 @@
 # greybox
 [![CRAN_Status_Badge](http://www.r-pkg.org/badges/version/greybox)](https://cran.r-project.org/package=greybox)
 [![Downloads](http://cranlogs.r-pkg.org/badges/greybox)](https://cran.r-project.org/package=greybox)
+[![R-CMD-check](https://github.com/config-i1/greybox/actions/workflows/test.yml/badge.svg)](https://github.com/config-i1/greybox/actions/workflows/test.yml)
 [![ko-fi](https://ivan.svetunkov.ru/ko-fi.png)](https://ko-fi.com/G2G51C4C4)
 
 The package _greybox_ contains functions for model building, which is currently done via the model selection and combinations based on information criteria. The resulting model can then be used in analysis and forecasting.
@@ -8,9 +9,10 @@ The package _greybox_ contains functions for model building, which is currently 
 There are several groups of functions in the package.
 
 ### Regression model functions
-1. alm - augmented linear regression model that implements likelihood estimation of parameters for Normal, Laplace, Asymmetric Laplace, Logistic, Student's t, S, Folded Normal, Log Normal, Box-Cox Normal, Inverse Gaussian, Chi-Squared, Beta, Poisson, Negative Binomial, Cumulative Logistic and Cumulative Normal distributions. In a sense this is similar to `glm()` function, but with a different set of distributions and with a focus on forecasting.
-2. stepwise - function implements stepwise IC based on partial correlations.
-3. lmCombine - function combines the regression models from the provided data, based on IC weights and returns the combined alm object.
+1. alm - Augmented Linear (regression) Model that implements likelihood estimation of parameters for Normal, Laplace, Asymmetric Laplace, Logistic, Student's t, S, Generalised Normal, Folded Normal, Log Normal, Box-Cox Normal, Logit Normal, Inverse Gaussian, Gamma, Poisson, Negative Binomial, Cumulative Logistic and Cumulative Normal distributions. In a sense this is similar to `glm()` function, but with a different set of distributions and with a focus on forecasting.
+2. sm - Scale Model which constructs a regression for scale parameter of a distribution (e.g. for variance in normal distribution). Works like a method applied to already existing model (lm / alm).
+3. stepwise - function implements stepwise IC based on partial correlations for the location model.
+4. lmCombine - function combines the regression models from the provided data, based on IC weights and returns the combined alm object.
 
 ### Exogenous variables transformation functions
 1. xregExpander - function produces lags and leads of the provided data.
@@ -68,8 +70,8 @@ There are several groups of functions in the package.
 The stable version of the package is available on CRAN, so you can install it by running:
 > install.packages("greybox")
 
-A recent, development version, is available via github and can be installed using "devtools" in R. First make sure that you have devtools:
-> if (!require("devtools")){install.packages("devtools")}
+A recent, development version, is available via github and can be installed using "remotes" in R. First make sure that you have remotes:
+> if (!require("remotes")){install.packages("remotes")}
 
 and after that run:
-> devtools::install_github("config-i1/greybox")
+> remotes::install_github("config-i1/greybox")

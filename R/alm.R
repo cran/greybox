@@ -93,12 +93,19 @@
 #' regression using \code{alm()} is estimated for the occurrence part;
 #' \code{"pnorm"} - then probit is constructed via \code{alm()} for the
 #' occurrence part. In both of the latter cases, the formula used is the same
-#' as the formula for the sizes. Finally, an "alm" model can be provided and
-#' its estimates will be used in the model construction.
+#' as the formula for the sizes. Alternatively, you can provide the formula here,
+#' and \code{alm} will estimate logistic occurrence model with that formula.
+#' Finally, an "alm" model can be provided and its estimates will be used in
+#' the model construction.
 #'
 #' If this is not \code{"none"}, then the model is estimated
 #' in two steps: 1. Occurrence part of the model; 2. Sizes part of the model
 #' (excluding zeroes from the data).
+#' @param scale formula for scale parameter of the model. If \code{NULL}, then it is
+#' assumed that the scale is constant. This might be useful if you need a model with
+#' changing variance (i.e. in case of heteroscedasticity). The log-link is used for
+#' the scale (i.e. take exponent of obtained fitted value for the scale, so that
+#' it is always positive).
 #' @param orders the orders of ARIMA to include in the model. Only non-seasonal
 #' orders are accepted.
 #' @param parameters vector of parameters of the linear model. When \code{NULL}, it
@@ -126,7 +133,8 @@
 #' You can also pass parameters to the optimiser:
 #' \enumerate{
 #' \item \code{B} - the vector of starting values of parameters for the optimiser,
-#' should correspond to the ordering of the explanatory variables;
+#' should correspond to the explanatory variables. If formula for scale was provided,
+#' the parameters for that part should follow the parameters for location;
 #' \item \code{algorithm} - the algorithm to use in optimisation
 #' (\code{"NLOPT_LN_SBPLX"} by default);
 #' \item \code{maxeval} - maximum number of evaluations to carry out. Default is 40 per
@@ -152,7 +160,8 @@
 #' \item fitted - fitted values,
 #' \item residuals - residuals of the model,
 #' \item mu - the estimated location parameter of the distribution,
-#' \item scale - the estimated scale parameter of the distribution,
+#' \item scale - the estimated scale parameter of the distribution. If a formula was provided for
+#' scale, then an object of class "scale" will be returned.
 #' \item distribution - distribution used in the estimation,
 #' \item logLik - log-likelihood of the model. Only returned, when \code{loss="likelihood"}
 #' and in several other special cases of distribution and loss combinations (e.g. \code{loss="MSE"},
@@ -195,6 +204,8 @@
 #' # Produce predictions with the one sided interval (upper bound)
 #' predict(ourModel, mtcars2[-c(1:30),], interval="p", side="u")
 #'
+#' # Model with heteroscedasticity (scale changes with the change of qsec)
+#' \donttest{ourModel <- alm(mpg~., mtcars2[1:30,], scale=~qsec)}
 #'
 #' ### Artificial data for the other examples
 #' \donttest{xreg <- cbind(rlaplace(100,10,3),rnorm(100,50,5))
@@ -244,7 +255,7 @@
 #'
 #' @importFrom pracma hessian
 #' @importFrom nloptr nloptr
-#' @importFrom stats model.frame sd terms model.matrix
+#' @importFrom stats model.frame sd terms model.matrix update.formula
 #' @importFrom stats dchisq dlnorm dnorm dlogis dpois dnbinom dt dbeta dgamma
 #' @importFrom stats plogis
 #' @importFrom statmod dinvgauss
@@ -259,7 +270,7 @@ alm <- function(formula, data, subset, na.action,
                                "plogis","pnorm"),
                 loss=c("likelihood","MSE","MAE","HAM","LASSO","RIDGE"),
                 occurrence=c("none","plogis","pnorm"),
-                # scale=NULL,
+                scale=NULL,
                 orders=c(0,0,0),
                 parameters=NULL, fast=FALSE, ...){
 # Useful stuff for dnbinom: https://scialert.net/fulltext/?doi=ajms.2010.1.15
@@ -317,11 +328,14 @@ alm <- function(formula, data, subset, na.action,
         }
     }
 
+    # Function that calculates mean. Works faster than mean()
     meanFast <- function(x){
         return(sum(x) / length(x));
     }
 
+    # Basic fitter for non-dynamic models
     fitter <- function(B, distribution, y, matrixXreg){
+        # Deal with additional parameters
         if(distribution=="dalaplace"){
             if(!aParameterProvided){
                 other <- B[1];
@@ -437,36 +451,13 @@ alm <- function(formula, data, subset, na.action,
                        "plogis" = matrixXreg %*% B
         );
 
-        scale <- switch(distribution,
-                        "dbeta" = exp(matrixXreg %*% B[-c(1:(length(B)/2))]),
-                        "dnorm" = sqrt(sum((y[otU]-mu[otU])^2)/obsInsample),
-                        "dlaplace" = sum(abs(y[otU]-mu[otU]))/obsInsample,
-                        "ds" = sum(sqrt(abs(y[otU]-mu[otU]))) / (obsInsample*2),
-                        "dgnorm" = (other*sum(abs(y[otU]-mu[otU])^other)/obsInsample)^{1/other},
-                        "dlogis" = sqrt(sum((y[otU]-mu[otU])^2)/obsInsample * 3 / pi^2),
-                        "dalaplace" = sum((y[otU]-mu[otU]) * (other - (y[otU]<=mu[otU])*1))/obsInsample,
-                        "dlnorm" = sqrt(sum((log(y[otU])-mu[otU])^2)/obsInsample),
-                        "dllaplace" = sum(abs(log(y[otU])-mu[otU]))/obsInsample,
-                        "dls" = sum(sqrt(abs(log(y[otU])-mu[otU]))) / (obsInsample*2),
-                        "dlgnorm" = (other*sum(abs(log(y[otU])-mu[otU])^other)/obsInsample)^{1/other},
-                        "dbcnorm" = sqrt(sum((bcTransform(y[otU],other)-mu[otU])^2)/obsInsample),
-                        "dinvgauss" = sum((y[otU]/mu[otU]-1)^2 / (y[otU]/mu[otU]))/obsInsample,
-                        "dgamma" = sum((y[otU]/mu[otU]-1)^2)/obsInsample,
-                        "dlogitnorm" = sqrt(sum((log(y[otU]/(1-y[otU]))-mu[otU])^2)/obsInsample),
-                        "dfnorm" = abs(other),
-                        "dt" = ,
-                        "dchisq" =,
-                        "dnbinom" = abs(other),
-                        "dpois" = mu[otU],
-                        "pnorm" = sqrt(meanFast(qnorm((y - pnorm(mu, 0, 1) + 1) / 2, 0, 1)^2)),
-                        # Here we use the proxy from Svetunkov & Boylan (2019)
-                        "plogis" = sqrt(meanFast(log((1 + y * (1 + exp(mu))) /
-                                                         (1 + exp(mu) * (2 - y) - y))^2))
-        );
+        # Get the scale value
+        scale <- scalerInternal(B, distribution, y, matrixXreg, mu, other);
 
         return(list(mu=mu,scale=scale,other=other,poly1=poly1));
     }
 
+    # Fitter for dynamic models
     fitterRecursive <- function(B, distribution, y, matrixXreg){
         fitterReturn <- fitter(B, distribution, y, matrixXreg);
         # Fill in the first ariOrder elements with fitted values
@@ -485,6 +476,93 @@ alm <- function(formula, data, subset, na.action,
         fitterReturn <- fitter(B, distribution, y, matrixXreg);
         fitterReturn$matrixXreg <- matrixXreg;
         return(fitterReturn);
+    }
+
+    # Function for scale calculation
+    scalerInternal <- function(B, distribution, y, matrixXreg, mu, other){
+        return(switch(distribution,
+                      "dbeta" = exp(matrixXreg %*% B[-c(1:(length(B)/2))]),
+                      "dnorm" = sqrt(sum((y[otU]-mu[otU])^2)/obsInsample),
+                      "dlaplace" = sum(abs(y[otU]-mu[otU]))/obsInsample,
+                      "ds" = sum(sqrt(abs(y[otU]-mu[otU]))) / (obsInsample*2),
+                      "dgnorm" = (other*sum(abs(y[otU]-mu[otU])^other)/obsInsample)^{1/other},
+                      "dlogis" = sqrt(sum((y[otU]-mu[otU])^2)/obsInsample * 3 / pi^2),
+                      "dalaplace" = sum((y[otU]-mu[otU]) * (other - (y[otU]<=mu[otU])*1))/obsInsample,
+                      "dlnorm" = sqrt(sum((log(y[otU])-mu[otU])^2)/obsInsample),
+                      "dllaplace" = sum(abs(log(y[otU])-mu[otU]))/obsInsample,
+                      "dls" = sum(sqrt(abs(log(y[otU])-mu[otU]))) / (obsInsample*2),
+                      "dlgnorm" = (other*sum(abs(log(y[otU])-mu[otU])^other)/obsInsample)^{1/other},
+                      "dbcnorm" = sqrt(sum((bcTransform(y[otU],other)-mu[otU])^2)/obsInsample),
+                      "dinvgauss" = sum((y[otU]/mu[otU]-1)^2 / (y[otU]/mu[otU]))/obsInsample,
+                      "dgamma" = sum((y[otU]/mu[otU]-1)^2)/obsInsample,
+                      "dlogitnorm" = sqrt(sum((log(y[otU]/(1-y[otU]))-mu[otU])^2)/obsInsample),
+                      "dfnorm" = abs(other),
+                      "dt" = ,
+                      "dchisq" =,
+                      "dnbinom" = abs(other),
+                      "dpois" = mu[otU],
+                      "pnorm" = sqrt(meanFast(qnorm((y - pnorm(mu, 0, 1) + 1) / 2, 0, 1)^2)),
+                      # Here we use the proxy from Svetunkov & Boylan (2019)
+                      "plogis" = sqrt(meanFast(log((1 + y * (1 + exp(mu))) /
+                                                       (1 + exp(mu) * (2 - y) - y))^2))
+        ));
+    }
+
+    ### Fitted values in the scale of the original variable
+    extractorFitted <- function(distribution, mu, scale){
+        return(switch(distribution,
+                      "dfnorm" = sqrt(2/pi)*scale*exp(-mu^2/(2*scale^2))+mu*(1-2*pnorm(-mu/scale)),
+                      "dnorm" =,
+                      "dgnorm" =,
+                      "dinvgauss" =,
+                      "dgamma" =,
+                      "dlaplace" =,
+                      "dalaplace" =,
+                      "dlogis" =,
+                      "dt" =,
+                      "ds" =,
+                      "dpois" =,
+                      "dnbinom" = mu,
+                      "dchisq" = mu + nu,
+                      "dlnorm" =,
+                      "dllaplace" =,
+                      "dls" =,
+                      "dlgnorm" = exp(mu),
+                      "dlogitnorm" = exp(mu)/(1+exp(mu)),
+                      "dbcnorm" = bcTransformInv(mu,lambdaBC),
+                      "dbeta" = mu / (mu + scale),
+                      "pnorm" = pnorm(mu, mean=0, sd=1),
+                      "plogis" = plogis(mu, location=0, scale=1)
+        ))
+    }
+
+    ### Error term in the transformed scale
+    extractorResiduals <- function(distribution, mu, yFitted){
+        return(switch(distribution,
+                      "dbeta" = y - yFitted,
+                      "dfnorm" =,
+                      "dnorm" =,
+                      "dlaplace" =,
+                      "ds" =,
+                      "dgnorm" =,
+                      "dalaplace" =,
+                      "dlogis" =,
+                      "dt" =,
+                      "dnbinom" =,
+                      "dpois" = y - mu,
+                      "dinvgauss" =,
+                      "dgamma" = y / mu,
+                      "dchisq" = sqrt(y) - sqrt(mu),
+                      "dlnorm" =,
+                      "dllaplace" =,
+                      "dls" =,
+                      "dlgnorm" = log(y) - mu,
+                      "dbcnorm" = bcTransform(y,lambdaBC) - mu,
+                      "dlogitnorm" = log(y/(1-y)) - mu,
+                      "pnorm" = qnorm((y - pnorm(mu, 0, 1) + 1) / 2, 0, 1),
+                      "plogis" = log((1 + y * (1 + exp(mu))) / (1 + exp(mu) * (2 - y) - y))
+                      # Here we use the proxy from Svetunkov & Boylan (2019)
+        ));
     }
 
     CF <- function(B, distribution, loss, y, matrixXreg, recursiveModel, denominator){
@@ -576,32 +654,7 @@ alm <- function(formula, data, subset, na.action,
             }
         }
         else{
-            ### Fitted values in the scale of the original variable
-            yFitted[] <- switch(distribution,
-                                "dfnorm" = sqrt(2/pi)*fitterReturn$scale*exp(-fitterReturn$mu^2/(2*fitterReturn$scale^2))+
-                                    fitterReturn$mu*(1-2*pnorm(-fitterReturn$mu/fitterReturn$scale)),
-                                "dnorm" =,
-                                "dlaplace" =,
-                                "ds" =,
-                                "dgnorm" =,
-                                "dalaplace" =,
-                                "dlogis" =,
-                                "dt" =,
-                                "dinvgauss" =,
-                                "dgamma" =,
-                                "dpois" =,
-                                "dnbinom" = fitterReturn$mu,
-                                "dchisq" = fitterReturn$mu + nu,
-                                "dlnorm" =,
-                                "dllaplace" =,
-                                "dls" =,
-                                "dlgnorm" = exp(fitterReturn$mu),
-                                "dlogitnorm" = exp(fitterReturn$mu)/(1+exp(fitterReturn$mu)),
-                                "dbcnorm" = bcTransformInv(fitterReturn$mu,fitterReturn$other),
-                                "dbeta" = fitterReturn$mu / (fitterReturn$mu + fitterReturn$scale),
-                                "pnorm" = pnorm(fitterReturn$mu, mean=0, sd=1),
-                                "plogis" = plogis(fitterReturn$mu, location=0, scale=1)
-            );
+            yFitted[] <- extractorFitted(distribution, fitterReturn$mu, fitterReturn$scale);
 
             if(loss=="MSE"){
                 CFValue <- meanFast((y-yFitted)^2);
@@ -825,16 +878,32 @@ alm <- function(formula, data, subset, na.action,
     else{
         print_level <- ellipsis$print_level;
     }
+    if(is.null(ellipsis$stepSize)){
+        stepSize <- .Machine$double.eps^(1/4);
+    }
+    else{
+        stepSize <- ellipsis$stepSize;
+    }
 
-
+    #### Occurrence part ####
+    occurrenceFormula <- NULL;
     # If occurrence is not provideded, then set it to "none"
     if(is.null(occurrence)){
+        occurrenceModel <- FALSE;
+        occurrenceProvided <- FALSE;
         occurrence <- "none";
     }
+    else if(inherits(occurrence,"formula")){
+        occurrenceModel <- TRUE;
+        occurrenceProvided <- FALSE;
+        occurrenceFormula <- occurrence;
+        occurrence <- "plogis";
+    }
     # See if the occurrence model is provided, and whether we need to treat the data as intermittent
-    if(is.occurrence(occurrence)){
+    else if(is.occurrence(occurrence)){
         occurrenceModel <- TRUE;
         occurrenceProvided <- TRUE;
+        occurrenceFormula <- formula(occurrence);
     }
     else{
         occurrence <- occurrence[1];
@@ -852,8 +921,32 @@ alm <- function(formula, data, subset, na.action,
             occurrenceModel <- FALSE;
             occurrence <- NULL;
         }
+        occurrenceFormula <- formula;
     }
 
+    #### Scale part ####
+    # Define whether the scale estimation is needed or not
+    scaleModel <- FALSE;
+    scaleProvided <- FALSE;
+    scaleFormula <- NULL;
+    if(inherits(scale,"formula")){
+        scaleFormula <- scale;
+        scaleModel[] <- TRUE;
+    }
+    else if(is.scale(scale)){
+        scaleFormula <- formula(scale);
+        scaleModel[] <- TRUE;
+        scaleProvided[] <- TRUE;
+    }
+
+    # Make sure that scaleModel is done with likelihood
+    if(scaleModel && loss!="likelihood"){
+        warning("Scale model can only be estimated via likelihood, your loss won't work. Switching to likelihood.",
+                call.=FALSE);
+        loss <- "likelihood";
+    }
+
+    #### ARIMA orders ####
     arOrder <- orders[1];
     iOrder <- orders[2];
     #### !!! This is not implemented yet
@@ -1181,10 +1274,6 @@ alm <- function(formula, data, subset, na.action,
     # The number of exogenous variables (no ARI elements)
     nVariablesExo <- nVariables;
 
-    #### The model for the scale ####
-    # if(!is.null(scale)){
-    # }
-
     #### Estimate parameters of the model ####
     if(is.null(parameters)){
         #### Add AR and I elements in the regression ####
@@ -1509,7 +1598,7 @@ alm <- function(formula, data, subset, na.action,
                 maxeval <- length(B) * 40;
             }
             # The following ones don't really need the estimation. This is for consistency only
-            else if(any(distribution==c("dnorm","dlnorm","dlogitnorm")) & !recursiveModel && iOrder==0 &&
+            else if(any(distribution==c("dnorm","dlnorm","dlogitnorm")) & !recursiveModel && !scaleModel && iOrder==0 &&
                     any(loss==c("likelihood","MSE"))){
                 maxeval <- 1;
             }
@@ -1618,7 +1707,27 @@ alm <- function(formula, data, subset, na.action,
         fitterReturn <- fitter(B, distribution, y, matrixXreg);
     }
     mu[] <- fitterReturn$mu;
-    scale <- fitterReturn$scale;
+    # Write down scale if it is not provided
+    if(!scaleProvided){
+        scale <- fitterReturn$scale;
+    }
+
+    #### Produce Fisher Information ####
+    if(FI){
+        # Only vcov is needed, no point in redoing the occurrenceModel
+        # occurrenceModel <- FALSE;
+        FI <- hessian(CF, B, h=stepSize,
+                      distribution=distribution, loss=loss, y=y, matrixXreg=matrixXreg,
+                      recursiveModel=recursiveModel, denominator=denominator);
+
+        if(any(is.nan(FI))){
+            warning("Something went wrong and we failed to produce the covariance matrix of the parameters.\n",
+                    "Obviously, it's not our fault. Probably Russians have hacked your computer...\n",
+                    "Try a different distribution maybe?", call.=FALSE);
+            FI <- diag(1e+100,nVariables);
+        }
+        dimnames(FI) <- list(variablesNames,variablesNames);
+    }
 
     # Give names to additional parameters
     if(is.null(parameters)){
@@ -1716,57 +1825,10 @@ alm <- function(formula, data, subset, na.action,
     }
 
     ### Fitted values in the scale of the original variable
-    yFitted[] <- switch(distribution,
-                       "dfnorm" = sqrt(2/pi)*scale*exp(-mu^2/(2*scale^2))+mu*(1-2*pnorm(-mu/scale)),
-                       "dnorm" =,
-                       "dgnorm" =,
-                       "dinvgauss" =,
-                       "dgamma" =,
-                       "dlaplace" =,
-                       "dalaplace" =,
-                       "dlogis" =,
-                       "dt" =,
-                       "ds" =,
-                       "dpois" =,
-                       "dnbinom" = mu,
-                       "dchisq" = mu + nu,
-                       "dlnorm" =,
-                       "dllaplace" =,
-                       "dls" =,
-                       "dlgnorm" = exp(mu),
-                       "dlogitnorm" = exp(mu)/(1+exp(mu)),
-                       "dbcnorm" = bcTransformInv(mu,lambdaBC),
-                       "dbeta" = mu / (mu + scale),
-                       "pnorm" = pnorm(mu, mean=0, sd=1),
-                       "plogis" = plogis(mu, location=0, scale=1)
-    );
+    yFitted[] <- extractorFitted(distribution, mu, scale);
 
     ### Error term in the transformed scale
-    errors[] <- switch(distribution,
-                       "dbeta" = y - yFitted,
-                       "dfnorm" =,
-                       "dnorm" =,
-                       "dlaplace" =,
-                       "ds" =,
-                       "dgnorm" =,
-                       "dalaplace" =,
-                       "dlogis" =,
-                       "dt" =,
-                       "dnbinom" =,
-                       "dpois" = y - mu,
-                       "dinvgauss" =,
-                       "dgamma" = y / mu,
-                       "dchisq" = sqrt(y) - sqrt(mu),
-                       "dlnorm" =,
-                       "dllaplace" =,
-                       "dls" =,
-                       "dlgnorm" = log(y) - mu,
-                       "dbcnorm" = bcTransform(y,lambdaBC) - mu,
-                       "dlogitnorm" = log(y/(1-y)) - mu,
-                       "pnorm" = qnorm((y - pnorm(mu, 0, 1) + 1) / 2, 0, 1),
-                       "plogis" = log((1 + y * (1 + exp(mu))) / (1 + exp(mu) * (2 - y) - y))
-                       # Here we use the proxy from Svetunkov & Boylan (2019)
-    );
+    errors[] <- extractorResiduals(distribution, mu, yFitted);
 
     # If this is the occurrence model, then set unobserved errors to zero
     if(occurrenceModel){
@@ -1778,8 +1840,13 @@ alm <- function(formula, data, subset, na.action,
         yFitted[mu<0] <- 0;
     }
 
-    # Parameters of the model + scale
-    nParam <- nVariables + (loss=="likelihood")*1;
+    # Parameters of the model. Scale part goes later
+    if(scaleModel){
+        nParam <- nVariables;
+    }
+    else{
+        nParam <- nVariables + (loss=="likelihood")*1;
+    }
 
     # Amend the number of parameters, depending on the type of distribution
     if(any(distribution==c("dnbinom","dchisq","dt","dfnorm","dbcnorm","dgnorm","dlgnorm","dalaplace"))){
@@ -1816,23 +1883,6 @@ alm <- function(formula, data, subset, na.action,
         scale <- sqrt(meanFast(errors^2));
     }
 
-    #### Produce Fisher Information ####
-    if(FI){
-        # Only vcov is needed, no point in redoing the occurrenceModel
-        occurrenceModel <- FALSE;
-        FI <- hessian(CF, B,
-                      distribution=distribution, loss=loss, y=y, matrixXreg=matrixXreg,
-                      recursiveModel=recursiveModel, denominator=denominator);
-
-        if(any(is.nan(FI))){
-            warning("Something went wrong and we failed to produce the covariance matrix of the parameters.\n",
-                    "Obviously, it's not our fault. Probably Russians have hacked your computer...\n",
-                    "Try a different distribution maybe?", call.=FALSE);
-            FI <- diag(1e+100,nVariables);
-        }
-        dimnames(FI) <- list(variablesNames,variablesNames);
-    }
-
     #### Deal with the occurrence part of the model ####
     if(occurrenceModel){
         mf$subset <- NULL;
@@ -1859,10 +1909,11 @@ alm <- function(formula, data, subset, na.action,
         # New data and new response variable
         dataNew <- dataWork
         # dataNew <- mf$data[mf$subset,,drop=FALSE];
-        dataNew[,all.vars(formula)[1]] <- (ot)*1;
+        dataNew[,all.vars(occurrenceFormula)[1]] <- (ot)*1;
 
         if(!occurrenceProvided){
-            occurrence <- do.call("alm", list(formula=formula, data=dataNew, distribution=occurrence, ar=arOrder, i=iOrder));
+            occurrence <- do.call("alm", list(formula=occurrenceFormula, data=dataNew,
+                                              distribution=occurrence, ar=arOrder, i=iOrder));
             if(exists("dataSubstitute",inherits=FALSE,mode="call")){
                 occurrence$call$data <- as.name(paste0(deparse(dataSubstitute),collapse=""));
             }
@@ -1918,10 +1969,23 @@ alm <- function(formula, data, subset, na.action,
        (loss=="MAE" && any(distribution==c("dlaplace","dllaplace"))) ||
        (loss=="HAM" && any(distribution==c("ds","dls")))){
         logLik <- -CF(B, distribution, loss="likelihood", y,
-                      matrixXreg, recursiveModel, denominator);
+                      matrixXreg, recursiveModel, scaleModel, denominator);
     }
     else{
         logLik <- NA;
+    }
+
+    #### Scale model ####
+    if(scaleModel){
+        if(!scaleProvided){
+            scale <- do.call("scaler",list(scaleFormula, mf$data, mf$subset, mf$na.action,
+                                           distribution, mu, y, errors,
+                                           NULL, occurrence, ellipsis));
+            scale$call$data <- dataSubstitute;
+            scale$formula <- update.formula(scaleFormula,paste0(responseName,"~."));
+        }
+        nParam <- nParam + nparam(scale);
+        logLik <- logLik(scale);
     }
 
     finalModel <- structure(list(coefficients=parameters, FI=FI, fitted=yFitted, residuals=as.vector(errors),

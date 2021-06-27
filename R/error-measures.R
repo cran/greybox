@@ -545,7 +545,7 @@ sMIS <- function(holdout,lower,upper,scale,level=0.95){
 #' \item rMAE,
 #' \item rRMSE,
 #' \item rAME,
-#' \item cbias,
+#' \item asymmetry,
 #' \item sPIS.
 #' }
 #' For the details on these errors, see \link[greybox]{Errors}.
@@ -600,7 +600,7 @@ measures <- function(holdout, forecast, actual, digits=NULL, benchmark=c("naive"
                        rMAE(holdout,forecast,becnhmarkForecast),
                        rRMSE(holdout,forecast,becnhmarkForecast),
                        rAME(holdout,forecast,becnhmarkForecast),
-                       cbias(holdout-forecast,0),
+                       asymmetry(holdout-forecast,0),
                        sPIS(holdout,forecast,mean(abs(actual[actual!=0]))));
     if(!is.null(digits)){
         errormeasures[] <- round(errormeasures, digits);
@@ -608,7 +608,7 @@ measures <- function(holdout, forecast, actual, digits=NULL, benchmark=c("naive"
     names(errormeasures) <- c("ME","MAE","MSE",
                               "MPE","MAPE",
                               "sCE","sMAE","sMSE","MASE","RMSSE",
-                              "rMAE","rRMSE","rAME","cbias","sPIS");
+                              "rMAE","rRMSE","rAME","asymmetry","sPIS");
     return(errormeasures);
 }
 
@@ -616,8 +616,9 @@ measures <- function(holdout, forecast, actual, digits=NULL, benchmark=c("naive"
 #' Half moment of a distribution and its derivatives.
 #'
 #' \code{hm} function estimates half moment from some predefined constant
-#' \code{C}. \code{ham} estimates half absolute moment. Finally, \code{cbias}
-#' function returns bias based on \code{hm}.
+#' \code{C}. \code{ham} estimates half absolute moment. Finally, \code{asymmetry}
+#' function returns asymmetry coefficient, while \code{extremity}
+#' returns the coefficient of excess, both based on \code{hm}.
 #'
 #' \code{NA} values of \code{x} are excluded on the first step of calculation.
 #'
@@ -628,13 +629,13 @@ measures <- function(holdout, forecast, actual, digits=NULL, benchmark=c("naive"
 #' @param C Centring parameter.
 #' @param ...  Other parameters passed to mean function.
 #' @return A complex variable is returned for \code{hm} function and real values
-#' are returned for \code{cbias} and \code{ham}.
+#' are returned for \code{asymmetry} and \code{ham}.
 #' @examples
 #'
 #' x <- rnorm(100,0,1)
 #' hm(x)
 #' ham(x)
-#' cbias(x)
+#' asymmetry(x)
 #'
 #' @export hm
 #' @rdname hm
@@ -652,11 +653,19 @@ ham <- function(x,C=mean(x),...){
 }
 
 #' @rdname hm
-#' @export cbias
-#' @aliases cbias
-cbias <- function(x,C=mean(x),...){
+#' @export asymmetry
+#' @aliases asymmetry
+asymmetry <- function(x,C=mean(x),...){
     # This function calculates half moment
     return(1 - Arg(hm(x,C,...))/(pi/4));
+}
+
+#' @rdname hm
+#' @export extremity
+#' @aliases extremity
+extremity <- function(x,C=mean(x),...){
+    # This function calculates half moment
+    return(ham(x,C)/mean((x-C)^2)^0.25);
 }
 
 #' Pinball function

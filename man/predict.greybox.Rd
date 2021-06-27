@@ -5,6 +5,7 @@
 \alias{predict.greybox}
 \alias{forecast}
 \alias{forecast.greybox}
+\alias{predict.scale}
 \alias{forecast.alm}
 \title{Forecasting using greybox functions}
 \usage{
@@ -13,6 +14,10 @@
   "lower"), ...)
 
 \method{predict}{greybox}(object, newdata = NULL, interval = c("none",
+  "confidence", "prediction"), level = 0.95, side = c("both", "upper",
+  "lower"), ...)
+
+\method{predict}{scale}(object, newdata = NULL, interval = c("none",
   "confidence", "prediction"), level = 0.95, side = c("both", "upper",
   "lower"), ...)
 
@@ -112,7 +117,7 @@ plot(forecast(ourModel,h=10,interval="p"))
 
 }
 \seealso{
-\link[stats]{predict.lm}, \link[forecast]{forecast}
+\link[stats]{predict.lm}
 }
 \author{
 Ivan Svetunkov, \email{ivan@svetunkov.ru}
