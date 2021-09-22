@@ -48,14 +48,14 @@ register_S3_method <- function(pkg, generic, class) {
 overwrite_S3_method <- function(pkg, generic){
   setHook(packageEvent(pkg, "onLoad"),
           function(...) {
-            do.call("unlockBinding",list(generic,asNamespace("forecast")));
+            do.call("unlockBinding",list(generic,asNamespace(pkg)));
             assign(generic, get(generic, asNamespace("greybox")), envir=asNamespace(pkg));
-            lockBinding(generic,asNamespace("forecast"));
+            lockBinding(generic,asNamespace(pkg));
           },action="append");
 }
 
 .onLoad <- function(...) {
-  # Do things if fable is present in the installed packages
+  # Do things if fabletools is present in the installed packages
   if(length(find.package("fabletools", quiet=TRUE, verbose=FALSE))!=0){
     overwrite_S3_method("fabletools","forecast");
     register_S3_method("fabletools","forecast","greybox");
