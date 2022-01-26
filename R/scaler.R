@@ -21,7 +21,8 @@
 #' @examples
 #'
 #' xreg <- cbind(rnorm(100,10,3),rnorm(100,50,5))
-#' xreg <- cbind(100+0.5*xreg[,1]-0.75*xreg[,2]+rnorm(100,0,3),xreg,rnorm(100,300,10))
+#' xreg <- cbind(100+0.5*xreg[,1]-0.75*xreg[,2]+sqrt(exp(0.8+0.2*xreg[,1]))*rnorm(100,0,1),
+#'               xreg,rnorm(100,300,10))
 #' colnames(xreg) <- c("y","x1","x2","Noise")
 #'
 #' # Estimate the location model
@@ -120,7 +121,8 @@ scaler <- function(formula, data, subset=NULL, na.action=NULL, distribution, mu,
     }
 
     #### Ellipsis values ####
-    ellipsis <- list(...);
+    ellipsis <- match.call(expand.dots = FALSE)$`...`;
+
     # Fisher Information
     if(is.null(ellipsis$FI)){
         FI <- FALSE;
@@ -372,7 +374,7 @@ scaler <- function(formula, data, subset=NULL, na.action=NULL, distribution, mu,
             B <- .lm.fit(matrixXregScale[otU,,drop=FALSE],2*log(abs(residuals[otU]-1)))$coefficients;
         }
         else if(distribution=="dinvgauss"){
-            B <- .lm.fit(matrixXregScale[otU,,drop=FALSE],log(abs(residuals[otU]-1)^2/residuals[otU]))$coefficients;
+            B <- .lm.fit(matrixXregScale[otU,,drop=FALSE],log((residuals[otU]-1)^2/residuals[otU]))$coefficients;
         }
         # Other distributions: dt, dchisq, dnbinom, dpois, pnorm, plogis, dbeta
         else{
@@ -405,7 +407,8 @@ scaler <- function(formula, data, subset=NULL, na.action=NULL, distribution, mu,
     }
 
     scale <- fitterScale(B, distribution);
-    #### !!!! This needs to be double checked
+
+    # Extract the actual values from the model
     errors <- switch(distribution,
                      "dnorm"=,
                      "dlnorm"=,
@@ -447,7 +450,7 @@ scaler <- function(formula, data, subset=NULL, na.action=NULL, distribution, mu,
         matrixXregScale <- cbind(errors,matrixXregScale);
     }
     colnames(matrixXregScale)[1] <- "residuals";
-    errors[] <- errors / scale;
+    errors[] <- residuals[subset] / scale;
 
     # If formula does not have response variable, update it.
     # This is mainly needed for the proper plots and outputs

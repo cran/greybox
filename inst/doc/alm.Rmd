@@ -29,6 +29,7 @@ Although `alm()` supports various loss functions, the core of the function is th
 This vignette contains the following sections:
 
 - [Supported distributions](#distributions);
+- [Scale model](#scaleModel);
 - [Using different loss functions](#losses);
 - [Estimation process](#estimator).
 
@@ -330,10 +331,11 @@ This group includes:
 2. [Box-Cox Normal distribution](#bcnormal),
 3. [Inverse Gaussian distribution](#invgauss),
 4. [Gamma distribution](#gamma),
-5. [Log Laplace distribution](#llaplace),
-6. [Log S distribution](#lsvetunkov),
-7. [Log Generalised Normal distribution](#lgnormal),
-8. [Folded Normal distribution](#fnormal),
+5. [Exponential distribution](#exponential),
+6. [Log Laplace distribution](#llaplace),
+7. [Log S distribution](#lsvetunkov),
+8. [Log Generalised Normal distribution](#lgnormal),
+9. [Folded Normal distribution](#fnormal),
 
 Although (2) and (3) in theory allow having zeroes in data, given that the density function is equal to zero in any specific point, it will be zero in these cases as well. So the `alm()` will return some solutions for these distributions, but don't expect anything good. As for (1), it supports strictly positive data.
 
@@ -423,7 +425,7 @@ legend("topright",legend=c("IG(1,1)","IG(1,2)","IG(2,1)"),
        lwd=1, col=c("black","blue","red","purple"))
 ```
 
-`alm()` with `distribution="dinvgauss"` estimates the density for $y_t$ using `dinvgauss()` function from `statmod` package. The $\mu_t$ is returned in the variables `mu` and `fitted.values`, the dispersion $\phi$ is in the variable `scale`. `resid()` method returns $e_t = \frac{y_t}{\mu_t}$. Finally, the prediction and confidence intervals for the regression model are generated using `qinvgauss()` function from the `statmod` package.
+`alm()` with `distribution="dinvgauss"` estimates the density for $y_t$ using `dinvgauss()` function from `statmod` package. The $\mu_t$ is returned in the variables `mu` and `fitted.values`, the dispersion $\phi$ is in the variable `scale`. `resid()` method returns $e_t = \frac{y_t}{\mu_t}$. Finally, the prediction interval for the regression model are generated using `qinvgauss()` function from the `statmod` package.
 
 
 ### Gamma distribution {#gamma}
@@ -454,7 +456,44 @@ legend("topright",legend=c("Gamma(1,1)","Gamma(0.5,2)","Gamma(2,0.5)"),
        lwd=1, col=c("black","blue","red","purple"))
 ```
 
-`alm()` with `distribution="dgamma"` estimates the density for $y_t$ using `dgamma()` function from `stats` package. The $\mu_t$ is returned in the variables `mu` and `fitted.values`, the scale $\sigma^2$ is in the variable `scale`. `resid()` method returns $e_t = \frac{y_t}{\mu_t}$. Finally, the prediction and confidence intervals for the regression model are generated using `qgamma()` function from the `stats` package.
+`alm()` with `distribution="dgamma"` estimates the density for $y_t$ using `dgamma()` function from `stats` package. The $\mu_t$ is returned in the variables `mu` and `fitted.values`, the scale $\sigma^2$ is in the variable `scale`. `resid()` method returns $e_t = \frac{y_t}{\mu_t}$. Finally, the prediction interval for the regression model are generated using `qgamma()` function from the `stats` package.
+
+
+### Exponential distribution {#exponential}
+One peculiar and very specific distribution, which can also be used in modelling is Exponential distribution. It only has one parameter, $\lambda$, which regulates both mean and variance:
+\begin{equation*}
+  \begin{aligned}
+    & x \sim \mathrm{Exp}(\lambda) \\
+    & \mathrm{E}(x) = \frac{1}{\lambda} \\
+    & \mathrm{V}(x) = \frac{1}{\lambda^2}
+  \end{aligned} .
+\end{equation*}
+It might be useful in cases, when one wants to model inter-arrival times.
+
+The implementation in `alm()` relies on the model, similar to the [Inverse Gaussian](#invgauss) and [Gamma](#gamma) models:
+\begin{equation*}
+    y_t = \mu_t \times \epsilon_t ,
+\end{equation*}
+where $\epsilon_t \sim \mathrm{Exp} \left(1 \right)$, implying that $\mathrm{E}(\epsilon_t) = \mathrm{V}(\epsilon_t) = 1$. This is a very restrictive model, which only works in some special cases. If for some reason the variance and mean are not equal to one in the empirical distribution, then the Exponential one would not be appropriate. But in general the model formulated as above implies that $y_t \sim \mathrm{Exp}\left( \frac{1}{\mu_t} \right)$, meaning that the variance of the model changes together with the conditional expectation. The density function for the error term in this case is:
+\begin{equation} \label{eq:Exp}
+    f(\epsilon_t) = \exp(-\epsilon_t).
+\end{equation}
+Note that in our formulation $\mu_t = \exp\left( x_t' B \right)$, so that the mean is always positive, which implies that we deal with a pure multiplicative model. In addition, we assume that $\mu_t$ is just a scale for the distribution, otherwise $y_t$ would not follow Exponential distribution.
+
+The density function has the following shapes depending on the values of the expectation:
+```{r pdfExp, echo=FALSE}
+library(statmod)
+plot(seq(0,5,0.01),dexp(seq(0,5,0.01),rate=1),type="l",
+     xlab="y_t",ylab="Density",main="PDF of Exponential distribution")
+lines(seq(0.01,5,0.01),dexp(seq(0.01,5,0.01),rate=0.5), col="blue")
+lines(seq(0,5,0.01),dexp(seq(0,5,0.01),rate=2), col="red")
+legend("topright",legend=c("Exp(1), mu=1","Exp(0.5), mu=2","Exp(2), mu=0.5"),
+       lwd=1, col=c("black","blue","red","purple"))
+```
+
+`alm()` with `distribution="dexp"` estimates the density for $y_t$ using `dexp()` function from `stats` package. The $\mu_t$ is returned in the variables `mu` and `fitted.values`, the scale is assumed to be equal to one. `resid()` method returns $e_t = \frac{y_t}{\mu_t}$. Finally, the prediction interval for the regression model are generated using `qexp()` function from the `stats` package.
+
+**NOTE** that if the assumption of $\mathrm{E}(\epsilon_t) = \mathrm{V}(\epsilon_t) = 1$ does not hold, the model will produce unreasonable quantiles.
 
 
 ### Log Laplace distribution {#llaplace}
@@ -868,21 +907,22 @@ It will produce forecasts for each of the explanatory variables based on the ava
 
 
 # Scale model {#scaleModel}
-Finally, `alm()` supports scale model, estimating the scale of assumed distribution via the specified set of variables. This might be handy if you suspect that some variables cause heteroscedasticity. However, this can only be done if likelihood approach is used for the model estimation and is done via `scale` parameter, which can accept either previously estimated model (e.g. via `sm()` method) or a formula for the model. While the details will differ from one distribution to another, the main idea will be the same, so here we discuss this on example of [Normal distribution](#normal), for which the model becomes:
+Finally, `alm()` supports scale model, estimating the scale of assumed distribution via the specified set of variables (this is inspired by GAMLSS model). This might be handy if you suspect that some variables cause heteroscedasticity. However, this can only be done if likelihood approach is used for the model estimation and is done via `scale` parameter, which can accept either previously estimated model (e.g. via `sm()` method) or a formula for the model. While the details will differ from one distribution to another, the main idea will be the same, so here we discuss this on example of [Normal distribution](#normal), for which the model becomes:
 \begin{equation} \label{eq:scaleModel}
-    y_t = \sim \mathcal{N}\left(\mathbf{x}_t' \mathbf{b}, \exp^2\left(\mathbf{z}_t' \mathbf{c}\right) \right),
+    y_t \sim \mathcal{N}\left(\mathbf{x}_t' \mathbf{b}, \exp\left(\mathbf{z}_t' \mathbf{c}\right) \right),
 \end{equation}
-where $\mathbf{x}_t$ and $\mathbf{B}$ are defined [as above](#normal), $\mathbf{z}_t$ is the vector of explanatory variables for the scale and $\mathbf{c}$ is the vector of parameters for this part of model. The exponent in the formula above is needed to make sure that the resulting values are always positive. Given that the location and scale of distribution are independent, we can construct the complete model in two steps: first by estimating the parameters of location and then the parameters of scale. The parameters are initialised based on the residuals of the model and then are optimised via maximisation of likelihood of the specified probability density function. This is done using the generic method `sm()` after constructing a model. For example, you can estimate a model based on `lm()` and then construct scale model for it (`sm()` will assume Normal distribution in this case):
+where $\mathbf{x}_t$ and $\mathbf{B}$ are defined [as above](#normal), $\mathbf{z}_t$ is the vector of explanatory variables for the scale and $\mathbf{c}$ is the vector of parameters for this part of model. The exponent in the formula above is needed to make sure that the resulting values are always positive. The resulting value $\hat{\sigma}_t^2 = \exp\left(\mathbf{z}_t' \mathbf{c}\right)$ will be the variance of the residuals conditional on the values of explanatory variables. The same model can be rewritten as (in case of normal distribution):
+\begin{equation} \label{eq:scaleModel2}
+    y_t = \mathbf{x}_t' \mathbf{b} + \sqrt{\exp\left(\mathbf{z}_t' \mathbf{c}\right)} \epsilon_t,
+\end{equation}
+where $\epsilon_t \sim \mathcal{N}\left(0, 1 \right)$. Given that the location and scale of distribution are independent, we can construct the complete model in two steps: first by estimating the parameters of location and then the parameters of scale. The parameters are initialised based on the residuals of the model and then are optimised via maximisation of likelihood of the specified probability density function. This is done using the generic method `sm()` after constructing a model. For example, you can estimate a model based on `lm()` and then construct scale model for it (`sm()` will assume Normal distribution in this case and will use likelihood):
 ```{r}
 locationModel <- lm(mpg~., mtcars)
 scaleModel <- sm(locationModel,~qsec+wt)
 ```
+In `sm()`, the estimation starts with a least squares of logarithms of squared residuals on the selected explanatory variables. The obtained parameters are then used in the optimiser (using `nloptr()` function) and are modified to maximise the likelihood function of the Normal distribution.
 
-The function returns the object of class `scale`, which contains several potentially useful variables, including the fitted value ($\hat{\sigma}_t = \exp\left(\mathbf{z}_t' \mathbf{c}\right)$) and residuals. The formula for residuals would differ from one distribution to another. For normal distribution it is:
-\begin{equation} \label{eq:scaleModelResiduals}
-    u_t = \frac{e_t^2}{\sigma^2_t} .
-\end{equation}
-They do not have any proper meaning or follow any specific distribution, but they might provide some idea about the performance of scale model. The resulting model supports several methods. Here is an example:
+The function returns the object of class `scale`, which contains several potentially useful variables, including the fitted value ($\hat{\sigma}^2_t = \exp\left(\mathbf{z}_t' \mathbf{c}\right)$) and residuals ($\epsilon_t$). The formula for residuals would differ from one distribution to another. The residuals can be used for model diagnostics to see if the potential problems of the location model have been resolved (e.g. heteroscedasticity removed). The resulting model supports several methods. Here is an example:
 ```{r}
 summary(scaleModel)
 ```
@@ -908,7 +948,17 @@ plot(predict(almModel,mtcars[1:3,],interval="p",level=0.95))
 
 If the prediction interval is required, the function would first produce forecasts of the scale, and then use them for the construction of interval via the standard procedure, depending on the assumed distribution.
 
-Note that the scale model is currently a new experimental feature, so it might not produce perfect results.
+As mentioned earlier, depending on the distribution, we would have slight differences in the function `sm()`, with different transformations of residuals of the location model (needed for the initialisation) and transformations of scale depending on the used distribution. Here is the full list of these:
+
+1. [Normal](#normal), [Log Normal](#lnormal), [Boc-Cox Normal](#bcnormal), [Logit Normal](#logitnormal), [Folded Normal](#fnormal) and [Logistic distribution](#logis). Logarithms of squared residuals are used in the initialisation, $\hat{\sigma}_t$ is used in the density function;
+2. [Laplace](#laplace), [Log Laplace](#llaplace) and [Asymmetric Laplace](#alaplace) distributions. Logarithms of absolute residuals are used in the initialisation, $\hat{\sigma}_t$ is used in the density function;
+3. [S](#svetunkov) and [Log S](#lsvetunkov) distributions. Logarithms of square root absolute residuals are used in the initialisation, $\hat{\sigma}_t^2$ is used in the density function;
+4. [Generalised Normal](#gnormal) and [Log Generalised Normal](#lgnormal) distributions. Logarithms of absolute residuals in the power of $\beta$ are used in the initialisation, $\hat{\sigma}_t^{\frac{1}{\beta}}$ is used in the density function;
+5. [Gamma distribution](#gamma). Logarithms of squared residuals minus one ($\log(e_t-1)^2$) are used in the initialisation. This is needed in order to get to the estimate of the variance in the residuals, as the distribution assumes in `alm()` that $\mathrm{E}(e_t)=1$. $\hat{\sigma}_t$ is used in the density function;
+6. Inverse Gaussian distribution. The residuals are transformed according to the formula: $\log\left(\frac{(e_t-1)^2}{e_t}\right)$, which (similarly to Gamma distribution) is motivated by the assumption of $\mathrm{E}(e_t)=1$. $\hat{\sigma}_t$ is used in the density function.
+7. All the other distributions rely on logarithms of absolute residuals and use $\hat{\sigma}_t$. This does not necessarily has a good reason and is done for fail-safe purposes.
+
+Note that the scale model is currently a new experimental feature, so it might not produce perfect results. Let me know if you have ideas of how to improve it via [https://github.com/config-i1/greybox/issues](https://github.com/config-i1/greybox/issues).
 
 
 # Using different loss functions {#losses}

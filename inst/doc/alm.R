@@ -112,6 +112,15 @@ lines(seq(0,5,0.01),dgamma(seq(0,5,0.01),shape=2,scale=0.5), col="red")
 legend("topright",legend=c("Gamma(1,1)","Gamma(0.5,2)","Gamma(2,0.5)"),
        lwd=1, col=c("black","blue","red","purple"))
 
+## ----pdfExp, echo=FALSE-------------------------------------------------------
+library(statmod)
+plot(seq(0,5,0.01),dexp(seq(0,5,0.01),rate=1),type="l",
+     xlab="y_t",ylab="Density",main="PDF of Exponential distribution")
+lines(seq(0.01,5,0.01),dexp(seq(0.01,5,0.01),rate=0.5), col="blue")
+lines(seq(0,5,0.01),dexp(seq(0,5,0.01),rate=2), col="red")
+legend("topright",legend=c("Exp(1), mu=1","Exp(0.5), mu=2","Exp(2), mu=0.5"),
+       lwd=1, col=c("black","blue","red","purple"))
+
 ## ----pdflogLaplace, echo=FALSE------------------------------------------------
 plot(seq(0.01,5,0.01),dlaplace(log(seq(0.01,5,0.01)),0,1)/seq(0.01,5,0.01),type="l",ylim=c(0,1.5),
      xlab="y_t",ylab="Density",main="PDF of Log Laplace distribution")
