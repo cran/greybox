@@ -80,7 +80,7 @@ plot(predict(ourModel,outSample))
 
 ## ----pdflognorm, echo=FALSE---------------------------------------------------
 plot(seq(0,5,0.01),dlnorm(seq(0,5,0.01),0,1),type="l",
-     xlab="y_t",ylab="Density",ylim=c(0,1.5),main="PDF of Log Normal distribution")
+     xlab="y_t",ylab="Density",ylim=c(0,1.5),main="PDF of Log-Normal distribution")
 lines(seq(0,5,0.01),dlnorm(seq(0,5,0.01),1,1), col="blue")
 lines(seq(0,5,0.01),dlnorm(seq(0,5,0.01),0,2), col="red")
 legend("topright",legend=c("logN(0,1)","logN(1,1)","logN(0,2)"), lwd=1, col=c("black","blue","red"))
@@ -123,7 +123,7 @@ legend("topright",legend=c("Exp(1), mu=1","Exp(0.5), mu=2","Exp(2), mu=0.5"),
 
 ## ----pdflogLaplace, echo=FALSE------------------------------------------------
 plot(seq(0.01,5,0.01),dlaplace(log(seq(0.01,5,0.01)),0,1)/seq(0.01,5,0.01),type="l",ylim=c(0,1.5),
-     xlab="y_t",ylab="Density",main="PDF of Log Laplace distribution")
+     xlab="y_t",ylab="Density",main="PDF of Log-Laplace distribution")
 lines(seq(0.01,5,0.01),dlaplace(log(seq(0.01,5,0.01)),0,2)/seq(0.01,5,0.01), col="blue")
 lines(seq(0.01,5,0.01),dlaplace(log(seq(0.01,5,0.01)),1,1)/seq(0.01,5,0.01), col="red")
 legend("topright",legend=c("logLaplace(0,1)","logLaplace(0,2)","logLaplace(1,1)"),
@@ -131,7 +131,7 @@ legend("topright",legend=c("logLaplace(0,1)","logLaplace(0,2)","logLaplace(1,1)"
 
 ## ----pdflogS, echo=FALSE------------------------------------------------------
 plot(seq(0.01,5,0.01),ds(log(seq(0.01,5,0.01)),0,1)/seq(0.01,5,0.01),type="l",ylim=c(0,1.5),
-     xlab="y_t",ylab="Density",main="PDF of Log S distribution")
+     xlab="y_t",ylab="Density",main="PDF of Log-S distribution")
 lines(seq(0.01,5,0.01),ds(log(seq(0.01,5,0.01)),0,2)/seq(0.01,5,0.01), col="blue")
 lines(seq(0.01,5,0.01),ds(log(seq(0.01,5,0.01)),1,1)/seq(0.01,5,0.01), col="red")
 legend("topright",legend=c("logS(0,1)","logS(0,2)","logS(1,1)"),
@@ -139,7 +139,7 @@ legend("topright",legend=c("logS(0,1)","logS(0,2)","logS(1,1)"),
 
 ## ----pdflogGN, echo=FALSE-----------------------------------------------------
 plot(seq(0.01,5,0.01),dgnorm(log(seq(0.01,5,0.01)),0,1,2)/seq(0.01,5,0.01),type="l",ylim=c(0,1.5),
-     xlab="y_t",ylab="Density",main="PDF of Log Generalised Normal distribution")
+     xlab="y_t",ylab="Density",main="PDF of Log-Generalised Normal distribution")
 lines(seq(0.01,5,0.01),dgnorm(log(seq(0.01,5,0.01)),0,1,1)/seq(0.01,5,0.01), col="blue")
 lines(seq(0.01,5,0.01),dgnorm(log(seq(0.01,5,0.01)),0,1,0.5)/seq(0.01,5,0.01), col="red")
 lines(seq(0.01,5,0.01),dgnorm(log(seq(0.01,5,0.01)),0,1,100)/seq(0.01,5,0.01), col="purple")
