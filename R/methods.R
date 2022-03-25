@@ -790,14 +790,65 @@ sigma.varest <- function(object, ...){
     return(t(residuals(object)) %*% residuals(object) / (nobs(object)-nparam(object)+object$K));
 }
 
-# Function extracts the scale from the model
-extractScale <- function(object, ...){
+#' Functions to extract scale and standard error from a model
+#'
+#' Functions extract scale and the standard error of the residuals. Mainly needed for
+#' the work with the model estimated via \link[greybox]{sm}.
+#'
+#' In case of a simpler model, the functions will return the scalar using
+#' \code{sigma()} method. If the scale model was estimated, \code{extractScale()} and
+#' \code{extractSigma()} will return the conditional scale and the conditional
+#' standard error of the residuals respectively.
+#'
+#' @param object The model estimated using lm / alm / etc.
+#' @param ... Other parameters (currently nothing).
+#'
+#' @return One of the two is returned, depending on the type of estimated model:
+#' \itemize{
+#' \item Scalar from \code{sigma()} method if the variance is assumed to be constant.
+#' \item Vector of values if the scale model was estimated
+#' }
+#'
+#' @template author
+#' @template keywords
+#'
+#' @seealso \code{\link[greybox]{sm}}
+#'
+#' @examples
+#' # Generate the data
+#' xreg <- cbind(rnorm(100,10,3),rnorm(100,50,5))
+#' xreg <- cbind(100+0.5*xreg[,1]-0.75*xreg[,2]+sqrt(exp(0.8+0.2*xreg[,1]))*rnorm(100,0,1),
+#'               xreg,rnorm(100,300,10))
+#' colnames(xreg) <- c("y","x1","x2","Noise")
+#'
+#' # Estimate the location and scale model
+#' ourModel <- alm(y~., xreg, scale=~x1+x2)
+#'
+#' # Extract scale
+#' extractScale(ourModel)
+#' # Extract standard error
+#' extractSigma(ourModel)
+#'
+#' @rdname extractScale
+#' @export
+extractScale <- function(object, ...) UseMethod("extractScale")
+
+#' @rdname extractScale
+#' @export
+extractScale.default <- function(object, ...){
+    return(sigma(object));
+}
+
+#' @rdname extractScale
+#' @export
+extractScale.greybox <- function(object, ...){
     if(is.scale(object$scale)){
         return(fitted(object$scale));
     }
     else{
         if(is.scale(object)){
-            return(fitted(object));
+            return(1);
+            # return(fitted(object));
         }
         else{
             return(object$scale);
@@ -805,8 +856,19 @@ extractScale <- function(object, ...){
     }
 }
 
-# Function extracts variance from the model. Needed for scaleModel
-extractSigma <- function(object, ...){
+#' @rdname extractScale
+#' @export
+extractSigma <- function(object, ...) UseMethod("extractSigma")
+
+#' @rdname extractScale
+#' @export
+extractSigma.default <- function(object, ...){
+    return(sigma(object));
+}
+
+#' @rdname extractScale
+#' @export
+extractSigma.greybox <- function(object, ...){
     if(is.scale(object$scale)){
         return(switch(object$distribution,
                       "dnorm"=,
@@ -848,7 +910,7 @@ vcov.alm <- function(object, bootstrap=FALSE, ...){
     # Try the basic method, if not a bootstrap
     if(!bootstrap){
         # If the likelihood is not available, then this is a non-conventional loss
-        if(is.na(logLik(object))){
+        if(is.na(logLik(object)) && (object$loss!="MSE")){
             warning(paste0("You used the non-likelihood compatible loss, so the covariance matrix might be incorrect. ",
                            "It is recommended to use bootstrap=TRUE option in this case."),
                     call.=FALSE);
@@ -865,7 +927,9 @@ vcov.alm <- function(object, bootstrap=FALSE, ...){
         }
 
         # Analytical values for vcov
-        if(iOrders==0 && maOrders==0 && any(object$distribution==c("dnorm","dlnorm","dbcnorm","dlogitnorm"))){
+        if(iOrders==0 && maOrders==0 &&
+           ((any(object$distribution==c("dnorm","dlnorm","dbcnorm","dlogitnorm")) & object$loss=="likelihood") ||
+            object$loss=="MSE")){
             matrixXreg <- object$data;
             if(interceptIsNeeded){
                 matrixXreg[,1] <- 1;
@@ -1239,6 +1303,11 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         on.exit(devAskNewPage(oask));
     }
 
+    # Warn if the diagnostis will be done for scale
+    if(is.scale(x$scale) && any(which %in% c(2:6,8,9,13:14))){
+        message("Note that residuals diagnostics plots are produced for scale model");
+    }
+
     # 1. Fitted vs Actuals values
     plot1 <- function(x, ...){
         ellipsis <- list(...);
@@ -1301,6 +1370,11 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
     # 2 and 3: Standardised  / studentised residuals vs Fitted
     plot2 <- function(x, type="rstandard", ...){
         ellipsis <- list(...);
+
+        # Amend to do analysis of residuals of scale model
+        if(is.scale(x$scale)){
+            x <- x$scale;
+        }
 
         ellipsis$x <- as.vector(fitted(x));
         if(type=="rstandard"){
@@ -1398,6 +1472,11 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
     plot3 <- function(x, type="abs", ...){
         ellipsis <- list(...);
 
+        # Amend to do analysis of residuals of scale model
+        if(is.scale(x$scale)){
+            x <- x$scale;
+        }
+
         ellipsis$x <- as.vector(fitted(x));
         ellipsis$y <- as.vector(residuals(x));
         if(any(x$distribution==c("dinvgauss","dgamma","dexp"))){
@@ -1445,6 +1524,11 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
     # 6. Q-Q with the specified distribution
     plot4 <- function(x, ...){
         ellipsis <- list(...);
+
+        # Amend to do analysis of residuals of scale model
+        if(is.scale(x$scale)){
+            x <- x$scale;
+        }
 
         ellipsis$y <- as.vector(residuals(x));
         if(is.occurrence(x$occurrence)){
@@ -1642,8 +1726,13 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
 
     # 8 and 9. Standardised / Studentised residuals vs time
     plot6 <- function(x, type="rstandard", ...){
-
         ellipsis <- list(...);
+
+        # Amend to do analysis of residuals of scale model
+        if(is.scale(x$scale)){
+            x <- x$scale;
+        }
+
         if(type=="rstandard"){
             ellipsis$x <- rstandard(x);
             yName <- "Standardised";
@@ -1821,6 +1910,11 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
     plot9 <- function(x, type="abs", ...){
         ellipsis <- list(...);
 
+        # Amend to do analysis of residuals of scale model
+        if(is.scale(x$scale)){
+            x <- x$scale;
+        }
+
         ellipsis$x <- as.vector(fitted(x));
         ellipsis$y <- as.vector(rstandard(x));
         if(any(x$distribution==c("dinvgauss","dgamma","dexp"))){
@@ -1865,61 +1959,51 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         }
     }
 
-    if(any(which==1)){
-        plot1(x, ...);
+    for(i in which){
+        if(any(i==1)){
+            plot1(x, ...);
+        }
+        else if(any(i==2)){
+            plot2(x, ...);
+        }
+        else if(any(i==3)){
+            plot2(x, type="rstudent", ...);
+        }
+        else if(any(i==4)){
+            plot3(x, ...);
+        }
+        else if(any(i==5)){
+            plot3(x, type="squared", ...);
+        }
+        else if(any(i==6)){
+            plot4(x, ...);
+        }
+        else if(any(i==7)){
+            plot5(x, ...);
+        }
+        else if(any(i==8)){
+            plot6(x, ...);
+        }
+        else if(any(i==9)){
+            plot6(x, type="rstudent", ...);
+        }
+        else if(any(i==10)){
+            plot7(x, type="acf", ...);
+        }
+        else if(any(i==11)){
+            plot7(x, type="pacf", ...);
+        }
+        else if(any(i==12)){
+            plot8(x, ...);
+        }
+        else if(any(i==13)){
+            plot9(x, ...);
+        }
+        else if(any(i==14)){
+            plot9(x, type="squared", ...);
+        }
     }
 
-    if(any(which==2)){
-        plot2(x, ...);
-    }
-
-    if(any(which==3)){
-        plot2(x, type="rstudent", ...);
-    }
-
-    if(any(which==4)){
-        plot3(x, ...);
-    }
-
-    if(any(which==5)){
-        plot3(x, type="squared", ...);
-    }
-
-    if(any(which==6)){
-        plot4(x, ...);
-    }
-
-    if(any(which==7)){
-        plot5(x, ...);
-    }
-
-    if(any(which==8)){
-        plot6(x, ...);
-    }
-
-    if(any(which==9)){
-        plot6(x, type="rstudent", ...);
-    }
-
-    if(any(which==10)){
-        plot7(x, type="acf", ...);
-    }
-
-    if(any(which==11)){
-        plot7(x, type="pacf", ...);
-    }
-
-    if(any(which==12)){
-        plot8(x, ...);
-    }
-
-    if(any(which==13)){
-        plot9(x, ...);
-    }
-
-    if(any(which==14)){
-        plot9(x, type="squared", ...);
-    }
 }
 
 #' @export
@@ -2697,10 +2781,11 @@ cooks.distance.greybox <- function(model, ...){
 #' # Detect outliers
 #' xregOutlierDummy <- outlierdummy(ourModel)
 #'
+#' @rdname outlierdummy
 #' @export outlierdummy
-outlierdummy <-  function(object, level=0.999, type=c("rstandard","rstudent"),
-                          ...) UseMethod("outlierdummy")
+outlierdummy <-  function(object, ...) UseMethod("outlierdummy")
 
+#' @rdname outlierdummy
 #' @export
 outlierdummy.default <- function(object, level=0.999, type=c("rstandard","rstudent"), ...){
     # Function returns the matrix of dummies with outliers
@@ -2724,6 +2809,7 @@ outlierdummy.default <- function(object, level=0.999, type=c("rstandard","rstude
                      class="outlierdummy"));
 }
 
+#' @rdname outlierdummy
 #' @export
 outlierdummy.alm <- function(object, level=0.999, type=c("rstandard","rstudent"), ...){
     # Function returns the matrix of dummies with outliers

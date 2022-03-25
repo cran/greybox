@@ -273,6 +273,11 @@ scaleModel <- sm(locationModel,~qsec+wt)
 summary(scaleModel)
 
 ## -----------------------------------------------------------------------------
+locationModel <- alm(mpg~., mtcars)
+scaleModel <- sm(locationModel,~qsec+wt)
+locationModel <- implant(locationModel,scaleModel)
+
+## -----------------------------------------------------------------------------
 almModel <- alm(mpg~., mtcars[-c(1:3),], scale=~qsec+wt)
 
 ## -----------------------------------------------------------------------------

@@ -1,9 +1,5 @@
 #include <Rcpp.h>
-// #include <RcppArmadillo.h>
-// // [[Rcpp::depends(RcppArmadillo)]]
-
 using namespace Rcpp;
-
 
 /* # Function allows to multiply polinomails */
 NumericVector polyMult(NumericVector const &poly1, NumericVector const &poly2){
@@ -41,7 +37,7 @@ NumericVector polyMult(NumericVector const &poly1, NumericVector const &poly2){
 //'
 //' @examples
 //'
-//' polyprod(c(1,-2,-1),c(1,0.5,0.3))
+//' \dontrun{polyprod(c(1,-2,-1),c(1,0.5,0.3))}
 //'
 //' @useDynLib greybox
 //' @export
