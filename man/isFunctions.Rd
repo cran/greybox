@@ -52,7 +52,7 @@ function;
 \item \code{is.rollingOrigin()} tests if the object was produced by \code{ro()}
 function;
 \item \code{is.scale()} tests if the object is of the class "scale" (produced by
-alm in case of heteroscedastic model);
+\link[greybox]{alm} or \link[greybox]{sm} in case of heteroscedastic model);
 }
 }
 \examples{

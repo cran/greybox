@@ -1007,6 +1007,11 @@ vcov.alm <- function(object, bootstrap=FALSE, ...){
         else{
             # Form the call for alm
             newCall <- object$call;
+            # Tuning for srm, to call alm() instead
+            # if(is.srm(object)){
+            #     newCall[[1]] <- as.name("alm");
+            #     newCall$folder <- NULL;
+            # }
             if(interceptIsNeeded){
                 newCall$formula <- as.formula(paste0("`",all.vars(newCall$formula)[1],"`~."));
             }
@@ -1265,7 +1270,9 @@ vcov.scale <- function(object, bootstrap=FALSE, ...){
 #' \item PACF of the residuals;
 #' \item Cook's distance over time with 0.5, 0.75 and 0.95 quantile lines from Fisher's distribution;
 #' \item Absolute standardised residuals vs Fitted;
-#' \item Squared standardised residuals vs Fitted.
+#' \item Squared standardised residuals vs Fitted;
+#' \item ACF of the squared residuals;
+#' \item PACF of the squared residuals.
 #' }
 #' @param level Confidence level. Defines width of confidence interval. Used in plots (2), (3), (7),
 #' (8), (9), (10) and (11).
@@ -1289,7 +1296,7 @@ vcov.scale <- function(object, bootstrap=FALSE, ...){
 #' par(mfcol=c(4,4))
 #' plot(ourModel, c(1:14))
 #'
-#' @importFrom stats ppoints qqline qqnorm qqplot acf pacf lowess qf
+#' @importFrom stats ppoints qqline qqnorm qqplot acf pacf lowess qf na.pass
 #' @importFrom grDevices dev.interactive devAskNewPage grey
 #' @aliases plot.alm
 #' @export
@@ -1649,13 +1656,14 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             if(!any(names(ellipsis)=="main")){
                 ellipsis$main <- "QQ-plot of Poisson distribution";
             }
-            ellipsis$x <- actuals(x)-qpois(ppoints(500), lambda=x$mu);
-            # ellipsis$x <- qpois(ppoints(500), lambda=x$mu);
-            # ellipsis$y[] <- actuals(x);
+            # ellipsis$x <- actuals(x)-qpois(ppoints(nobs(x)*100), lambda=x$mu);
+            ellipsis$x <- qpois(ppoints(nobs(x)*100), lambda=x$mu);
+            ellipsis$y[] <- actuals(x);
 
             do.call(qqplot, ellipsis);
-            # abline(a=0,b=1);
-            qqline(ellipsis$y, distribution=function(p) qpois(p, lambda=x$mu)-actuals(x));
+            abline(a=0,b=1);
+            # qqline(ellipsis$y, distribution=function(p) qpois(p, lambda=x$mu)-actuals(x));
+            # qqline(ellipsis$y, distribution=function(p) qpois(p, lambda=x$mu));
             # message("Sorry, but we don't produce QQ plots for the Poisson distribution");
         }
         else if(x$distribution=="dnbinom"){
@@ -1816,15 +1824,25 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
     }
 
     # 10 and 11. ACF and PACF
-    plot7 <- function(x, type="acf", ...){
+    plot7 <- function(x, type="acf", squared=FALSE, ...){
         ellipsis <- list(...);
 
         if(!any(names(ellipsis)=="main")){
             if(type=="acf"){
-                ellipsis$main <- "Autocorrelation Function of Residuals";
+                if(squared){
+                    ellipsis$main <- "Autocorrelation Function of Squared Residuals";
+                }
+                else{
+                    ellipsis$main <- "Autocorrelation Function of Residuals";
+                }
             }
             else{
-                ellipsis$main <- "Partial Autocorrelation Function of Residuals";
+                if(squared){
+                    ellipsis$main <- "Partial Autocorrelation Function of Squared Residuals";
+                }
+                else{
+                    ellipsis$main <- "Partial Autocorrelation Function of Residuals";
+                }
             }
         }
 
@@ -1844,11 +1862,21 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             ellipsis$ylim <- c(-1,1);
         }
 
-        if(type=="acf"){
-            theValues <- acf(as.vector(residuals(x)), plot=FALSE)
+        if(squared){
+            if(type=="acf"){
+                theValues <- acf(as.vector(residuals(x)^2), plot=FALSE, na.action=na.pass)
+            }
+            else{
+                theValues <- pacf(as.vector(residuals(x)^2), plot=FALSE, na.action=na.pass);
+            }
         }
         else{
-            theValues <- pacf(as.vector(residuals(x)), plot=FALSE);
+            if(type=="acf"){
+                theValues <- acf(as.vector(residuals(x)), plot=FALSE, na.action=na.pass)
+            }
+            else{
+                theValues <- pacf(as.vector(residuals(x)), plot=FALSE, na.action=na.pass);
+            }
         }
         ellipsis$x <- theValues$acf[-1];
         statistic <- qnorm(c((1-level)/2, (1+level)/2),0,sqrt(1/nobs(x)));
@@ -2001,6 +2029,12 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         }
         else if(any(i==14)){
             plot9(x, type="squared", ...);
+        }
+        else if(any(i==15)){
+            plot7(x, type="acf", squared=TRUE, ...);
+        }
+        else if(any(i==16)){
+            plot7(x, type="pacf", squared=TRUE, ...);
         }
     }
 
