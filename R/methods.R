@@ -254,6 +254,7 @@ pointLik.alm <- function(object, ...){
                              "dgnorm" = dgnorm(y, mu=mu, scale=scale, shape=object$other$shape, log=TRUE),
                              "dlgnorm" = dgnorm(log(y), mu=mu, scale=scale, shape=object$other$shape, log=TRUE),
                              "dfnorm" = dfnorm(y, mu=mu, sigma=scale, log=TRUE),
+                             "drectnorm" = drectnorm(y, mu=mu, sigma=scale, log=TRUE),
                              "dbcnorm" = dbcnorm(y, mu=mu, sigma=scale, lambda=object$other$lambdaBC, log=TRUE),
                              "dlogitnorm" = dlogitnorm(y, mu=mu, sigma=scale, log=TRUE),
                              "dexp" = dexp(y, rate=1/mu, log=TRUE),
@@ -273,7 +274,8 @@ pointLik.alm <- function(object, ...){
                              "plogis" = c(plogis(mu[ot], location=0, scale=1, log.p=TRUE),
                                           plogis(mu[!ot], location=0, scale=1, lower.tail=FALSE, log.p=TRUE)),
                              "pnorm" = c(pnorm(mu[ot], mean=0, sd=1, log.p=TRUE),
-                                         pnorm(mu[!ot], mean=0, sd=1, lower.tail=FALSE, log.p=TRUE))
+                                         pnorm(mu[!ot], mean=0, sd=1, lower.tail=FALSE, log.p=TRUE)),
+                             0
     );
     if(any(distribution==c("dllaplace","dls","dlgnorm"))){
         likValues[otU] <- likValues[otU] - log(y);
@@ -876,6 +878,7 @@ extractSigma.greybox <- function(object, ...){
                       "dlogitnorm"=,
                       "dbcnorm"=,
                       "dfnorm"=,
+                      "drectnorm"=,
                       "dinvgauss"=,
                       "dgamma"=extractScale(object),
                       "dlaplace"=,
@@ -1040,7 +1043,7 @@ vcov.alm <- function(object, bootstrap=FALSE, ...){
             else if(object$distribution=="dalaplace"){
                 newCall$alpha <- object$other$alpha;
             }
-            else if(object$distribution=="dfnorm"){
+            else if(any(object$distribution==c("dfnorm","drectnorm"))){
                 newCall$sigma <- object$other$sigma;
             }
             else if(object$distribution=="dbcnorm"){
@@ -1549,13 +1552,35 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             ellipsis$ylab <- "Actual Quantile";
         }
 
-        if(any(x$distribution==c("dnorm","dlnorm","dbcnorm","dlogitnorm","dfnorm","plogis","pnorm"))){
+        if(any(x$distribution==c("dnorm","dlnorm","dbcnorm","dlogitnorm","plogis","pnorm"))){
             if(!any(names(ellipsis)=="main")){
                 ellipsis$main <- "QQ plot of normal distribution";
             }
 
             do.call(qqnorm, ellipsis);
             qqline(ellipsis$y);
+        }
+        else if(x$distribution=="dfnorm"){
+            # Standardise residuals
+            ellipsis$y[] <- ellipsis$y / sd(ellipsis$y);
+            if(!any(names(ellipsis)=="main")){
+                ellipsis$main <- "QQ-plot of Folded Normal distribution";
+            }
+            ellipsis$x <- qfnorm(ppoints(500), mu=0, sigma=extractScale(x));
+
+            do.call(qqplot, ellipsis);
+            qqline(ellipsis$y, distribution=function(p) qfnorm(p, mu=0, sigma=extractScale(x)));
+        }
+        else if(x$distribution=="drectnorm"){
+            # Standardise residuals
+            ellipsis$y[] <- ellipsis$y / sd(ellipsis$y);
+            if(!any(names(ellipsis)=="main")){
+                ellipsis$main <- "QQ-plot of Rectified Normal distribution";
+            }
+            ellipsis$x <- qrectnorm(ppoints(500), mu=0, sigma=extractScale(x));
+
+            do.call(qqplot, ellipsis);
+            qqline(ellipsis$y, distribution=function(p) qrectnorm(p, mu=0, sigma=extractScale(x)));
         }
         else if(any(x$distribution==c("dgnorm","dlgnorm"))){
             # Standardise residuals
@@ -2229,6 +2254,16 @@ print.greybox <- function(x, ...){
 }
 
 #' @export
+print.occurrence <- function(x, ...){
+    if(x$occurrence=="provided"){
+        cat("The values for occcurrence part were provided by user\n");
+    }
+    else{
+        print.greybox(x);
+    }
+}
+
+#' @export
 print.scale <- function(x, ...){
     cat("Formula:\n");
     print(formula(x));
@@ -2332,6 +2367,7 @@ print.summary.alm <- function(x, ...){
                       "ds" = "S",
                       "dls" = "Log-S",
                       "dfnorm" = "Folded Normal",
+                      "drectnorm" = "Rectified Normal",
                       "dlnorm" = "Log-Normal",
                       "dbcnorm" = paste0("Box-Cox Normal with lambda=",round(x$other$lambdaBC,digits)),
                       "dlogitnorm" = "Logit Normal",
@@ -2348,7 +2384,8 @@ print.summary.alm <- function(x, ...){
     if(is.occurrence(x$occurrence)){
         distribOccurrence <- switch(x$occurrence$distribution,
                                     "plogis" = "Cumulative logistic",
-                                    "pnorm" = "Cumulative normal"
+                                    "pnorm" = "Cumulative normal",
+                                    "Provided values"
         );
         distrib <- paste0("Mixture of ", distrib," and ", distribOccurrence);
     }
@@ -2412,6 +2449,7 @@ print.summary.scale <- function(x, ...){
                       "ds" = "S",
                       "dls" = "Log-S",
                       "dfnorm" = "Folded Normal",
+                      "drectnorm" = "Rectified Normal",
                       "dlnorm" = "Log-Normal",
                       "dbcnorm" = paste0("Box-Cox Normal with lambda=",round(x$other$lambdaBC,digits)),
                       "dlogitnorm" = "Logit Normal",
@@ -2470,6 +2508,7 @@ print.summary.greybox <- function(x, ...){
                       "ds" = "S",
                       "ds" = "Log-S",
                       "dfnorm" = "Folded Normal",
+                      "drectnorm" = "Rectified Normal",
                       "dlnorm" = "Log-Normal",
                       "dbcnorm" = "Box-Cox Normal",
                       "dlogitnorm" = "Logit Normal",
@@ -2525,6 +2564,7 @@ print.summary.greyboxC <- function(x, ...){
                       "ds" = "S",
                       "dls" = "Log-S",
                       "dfnorm" = "Folded Normal",
+                      "drectnorm" = "Rectified Normal",
                       "dlnorm" = "Log-Normal",
                       "dbcnorm" = "Box-Cox Normal",
                       "dlogitnorm" = "Logit Normal",
@@ -2671,6 +2711,9 @@ rstandard.greybox <- function(model, ...){
         }
         else if(any(model$distribution==c("dinvgauss","dgamma","dexp"))){
             errors[residsToGo] <- errors[residsToGo] / mean(errors[residsToGo]);
+        }
+        else if(any(model$distribution==c("dfnorm","drectnorm"))){
+            errors[residsToGo] <- (errors[residsToGo]) / sqrt(extractScale(model)^2 * obs / df);
         }
         else{
             errors[residsToGo] <- (errors[residsToGo] - mean(errors[residsToGo])) / (extractScale(model) * obs / df);
@@ -2865,6 +2908,8 @@ outlierdummy.alm <- function(object, level=0.999, type=c("rstandard","rstudent")
                                                   (nobs(object)-nparam(object))),
                         "dgamma"=qgamma(c((1-level)/2, (1+level)/2), shape=1/extractScale(object), scale=extractScale(object)),
                         "dexp"=qexp(c((1-level)/2, (1+level)/2), rate=1),
+                        "dfnorm"=qfnorm(c((1-level)/2, (1+level)/2), 0, 1),
+                        "drectnorm"=qrectnorm(c((1-level)/2, (1+level)/2), 0, 1),
                         qnorm(c((1-level)/2, (1+level)/2), 0, 1));
     outliersID <- which(errors>statistic[2] | errors<statistic[1]);
     outliersNumber <- length(outliersID);
@@ -3164,12 +3209,15 @@ setMethod("extract", signature=className("summary.greyboxC","greybox"), definiti
 
 #### Predictions and forecasts ####
 
+#' @param occurrence If occurrence was provided, then a user can provide a vector of future
+#' values via this variable.
 #' @rdname predict.greybox
 #' @importFrom stats predict qchisq qlnorm qlogis qpois qnbinom qbeta qgamma qexp
 #' @importFrom statmod qinvgauss
 #' @export
 predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "prediction"),
-                            level=0.95, side=c("both","upper","lower"), ...){
+                            level=0.95, side=c("both","upper","lower"),
+                        occurrence=NULL, ...){
     if(is.null(newdata)){
         newdataProvided <- FALSE;
     }
@@ -3201,22 +3249,31 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     greyboxForecast$distribution <- object$distribution;
 
     # If there is an occurrence part of the model, use it
-    if(is.occurrence(object$occurrence)){
-        occurrence <- predict(object$occurrence, newdata, interval=interval, level=level, side=side, ...);
+    if(is.null(occurrence) && is.occurrence(object$occurrence) &&
+       is.list(object$occurrence) &&
+       (is.null(object$occurrence$occurrence) || object$occurrence$occurrence!="provided")){
+        occurrencePredict <- predict(object$occurrence, newdata, interval=interval, level=level, side=side, ...);
         # Reset horizon, just in case
-        h <- length(occurrence$mean);
+        h <- length(occurrencePredict$mean);
         # Create a matrix of levels for each horizon and level
         level <- matrix(level, h, nLevels, byrow=TRUE);
         # The probability of having zero should be subtracted from that thing...
         if(interval=="prediction"){
-            level[] <- (level - (1 - occurrence$mean)) / occurrence$mean;
+            level[] <- (level - (1 - occurrencePredict$mean)) / occurrencePredict$mean;
         }
         level[level<0] <- 0;
-        greyboxForecast$occurrence <- occurrence;
+        greyboxForecast$occurrence <- occurrencePredict;
     }
     else{
         # Create a matrix of levels for each horizon and level
         level <- matrix(level, h, nLevels, byrow=TRUE);
+        if(is.null(occurrence) &&
+           is.list(object$occurrence) &&
+           !is.null(object$occurrence$occurrence) &&
+           object$occurrence$occurrence=="provided"){
+            warning("occurrence is not provided for the new data. Using a vector of ones.", call.=FALSE);
+            occurrence <- rep(1, h);
+        }
     }
 
     scaleModel <- is.scale(object$scale);
@@ -3240,7 +3297,7 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     levelUp[levelUp<0] <- 0;
 
     if(object$distribution=="dnorm"){
-        if(is.occurrence(object$occurrence) & interval!="none"){
+        if(is.null(occurrence) && is.occurrence(object$occurrence) && interval!="none"){
             greyboxForecast$lower[] <- qnorm(levelLow,greyboxForecast$mean,greyboxForecast$scale);
             greyboxForecast$upper[] <- qnorm(levelUp,greyboxForecast$mean,greyboxForecast$scale);
         }
@@ -3374,6 +3431,26 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
             greyboxForecast$mean <- (sqrt(2/pi)*sqrt(greyboxForecast$variances)*exp(-greyboxForecast$mean^2 /
                                                                                        (2*greyboxForecast$variances)) +
                                          greyboxForecast$mean*(1-2*pnorm(-greyboxForecast$mean/sqrt(greyboxForecast$variances))));
+        }
+        else{
+            warning("The mean of Folded Normal distribution was not corrected. ",
+                    "We only do that, when interval!='none'.",
+                    call.=FALSE)
+        }
+    }
+    else if(object$distribution=="drectnorm"){
+        if(interval=="prediction"){
+            for(i in 1:nLevels){
+                greyboxForecast$lower[,i] <- qrectnorm(levelLow[,i],greyboxForecast$mean,sqrt(greyboxForecast$variances));
+                greyboxForecast$upper[,i] <- qrectnorm(levelUp[,i],greyboxForecast$mean,sqrt(greyboxForecast$variances));
+            }
+        }
+        if(interval!="none"){
+            # Correct the mean value
+            greyboxForecast$mean <- greyboxForecast$mean *
+                                        (1-pnorm(0, greyboxForecast$mean, sqrt(greyboxForecast$variances))) +
+                                    sqrt(greyboxForecast$variances) *
+                                        dnorm(0, greyboxForecast$mean, sqrt(greyboxForecast$variances));
         }
         else{
             warning("The mean of Folded Normal distribution was not corrected. ",
@@ -3598,12 +3675,22 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
     }
 
     # If there is an occurrence part of the model, use it
-    if(is.occurrence(object$occurrence)){
-        greyboxForecast$mean <- greyboxForecast$mean * occurrence$mean;
+    if(is.null(occurrence) && is.occurrence(object$occurrence) &&
+       is.list(object$occurrence) &&
+       (is.null(object$occurrence$occurrence) || object$occurrence$occurrence!="provided")){
+        greyboxForecast$mean <- greyboxForecast$mean * greyboxForecast$occurrence$mean;
         #### This is weird and probably wrong. But I don't know yet what the confidence intervals mean in case of occurrence model.
         if(interval=="confidence"){
-            greyboxForecast$lower[] <- greyboxForecast$lower * occurrence$mean;
-            greyboxForecast$upper[] <- greyboxForecast$upper * occurrence$mean;
+            greyboxForecast$lower[] <- greyboxForecast$lower * greyboxForecast$occurrence$mean;
+            greyboxForecast$upper[] <- greyboxForecast$upper * greyboxForecast$occurrence$mean;
+        }
+    }
+    else{
+        # If occurrence was provided, modify everything
+        if(!is.null(occurrence)){
+            greyboxForecast$mean[] <- greyboxForecast$mean * occurrence;
+            greyboxForecast$lower[] <- greyboxForecast$lower * occurrence;
+            greyboxForecast$upper[] <- greyboxForecast$upper * occurrence;
         }
     }
 
@@ -3837,7 +3924,8 @@ predict.greybox <- function(object, newdata=NULL, interval=c("none", "confidence
                                             "dlnorm"=,
                                             "dbcnorm"=,
                                             "dlogitnorm"=,
-                                            "dfnorm"=sigmaValues^2,
+                                            "dfnorm"=,
+                                            "drectnorm"=sigmaValues^2,
                                             "dlaplace"=,
                                             "dllaplace"=2*sigmaValues^2,
                                             "dalaplace"=sigmaValues^2*
@@ -4132,25 +4220,26 @@ predict.scale <- function(object, newdata=NULL, interval=c("none", "confidence",
     # Fix the predicted scale
     scalePredicted$mean[] <- exp(scalePredicted$mean);
     scalePredicted$mean[] <- switch(object$distribution,
-                                           "dnorm"=,
-                                           "dlnorm"=,
-                                           "dbcnorm"=,
-                                           "dlogitnorm"=,
-                                           "dfnorm"=,
-                                           "dlogis"=sqrt(scalePredicted$mean),
-                                           "dlaplace"=,
-                                           "dllaplace"=,
-                                           "dalaplace"=scalePredicted$mean,
-                                           "ds"=,
-                                           "dls"=scalePredicted$mean^2,
-                                           "dgnorm"=,
-                                           "dlgnorm"=scalePredicted$mean^{1/object$other},
-                                           "dgamma"=sqrt(scalePredicted$mean)+1,
-                                           # This is based on polynomial from y = (x-1)^2/x
-                                           "dinvgauss"=(scalePredicted$mean+2+
-                                                            sqrt(scalePredicted$mean^2+
-                                                                     4*scalePredicted$mean))/2,
-                                           scalePredicted$mean);
+                                    "dnorm"=,
+                                    "dlnorm"=,
+                                    "dbcnorm"=,
+                                    "dlogitnorm"=,
+                                    "dfnorm"=,
+                                    "drectnorm"=,
+                                    "dlogis"=sqrt(scalePredicted$mean),
+                                    "dlaplace"=,
+                                    "dllaplace"=,
+                                    "dalaplace"=scalePredicted$mean,
+                                    "ds"=,
+                                    "dls"=scalePredicted$mean^2,
+                                    "dgnorm"=,
+                                    "dlgnorm"=scalePredicted$mean^{1/object$other},
+                                    "dgamma"=sqrt(scalePredicted$mean)+1,
+                                    # This is based on polynomial from y = (x-1)^2/x
+                                    "dinvgauss"=(scalePredicted$mean+2+
+                                                     sqrt(scalePredicted$mean^2+
+                                                              4*scalePredicted$mean))/2,
+                                    scalePredicted$mean);
     return(scalePredicted);
 }
 
@@ -4266,4 +4355,27 @@ forecast.alm <- function(object, newdata=NULL, h=NULL, ...){
         }
     }
     return(predict(object, newdata, ...));
+}
+
+#' @importFrom xtable xtable
+#' @export
+xtable::xtable
+
+#' @export
+xtable.greybox <- function(x, caption = NULL, label = NULL, align = NULL, digits = NULL,
+                           display = NULL, auto = FALSE, ...){
+    greyboxSummary <- summary(x);
+    return(do.call("xtable", list(x=greyboxSummary,
+                                  caption=caption, label=label, align=align, digits=digits,
+                                  display=display, auto=auto, ...)));
+}
+
+#' @export
+xtable.summary.greybox <- function(x, caption = NULL, label = NULL, align = NULL, digits = NULL,
+                           display = NULL, auto = FALSE, ...){
+    # Substitute class with lm
+    class(x) <- "summary.lm";
+    return(do.call("xtable", list(x=x,
+                                  caption=caption, label=label, align=align, digits=digits,
+                                  display=display, auto=auto, ...)));
 }

@@ -632,7 +632,7 @@ measures <- function(holdout, forecast, actual, digits=NULL, benchmark=c("naive"
 #'
 #' @export hm
 #' @rdname hm
-hm <- function(x,C=mean(x),...){
+hm <- function(x,C=mean(x, na.rm=TRUE),...){
     # This function calculates half moment
     return(mean(sqrt(as.complex(x[!is.na(x)]-C)),...));
 }
@@ -640,7 +640,7 @@ hm <- function(x,C=mean(x),...){
 #' @rdname hm
 #' @export ham
 #' @aliases ham
-ham <- function(x,C=mean(x),...){
+ham <- function(x,C=mean(x, na.rm=TRUE),...){
     # This function calculates half moment
     return(mean(sqrt(abs(x[!is.na(x)]-C)),...));
 }
@@ -648,7 +648,7 @@ ham <- function(x,C=mean(x),...){
 #' @rdname hm
 #' @export asymmetry
 #' @aliases asymmetry
-asymmetry <- function(x,C=mean(x),...){
+asymmetry <- function(x,C=mean(x, na.rm=TRUE),...){
     # This function calculates half moment
     return(1 - Arg(hm(x,C,...))/(pi/4));
 }
@@ -656,9 +656,9 @@ asymmetry <- function(x,C=mean(x),...){
 #' @rdname hm
 #' @export extremity
 #' @aliases extremity
-extremity <- function(x,C=mean(x),...){
+extremity <- function(x,C=mean(x, na.rm=TRUE),...){
     # This function calculates half moment
-    return(ham(x,C)/mean((x-C)^2)^0.25);
+    return(ham(x, C, ...)/mean((x-C)^2, ...)^0.25);
 }
 
 #' Pinball function
@@ -669,10 +669,11 @@ extremity <- function(x,C=mean(x),...){
 #' @template author
 #'
 #' @param holdout The vector or matrix of the holdout values.
-#' @param forecast The forecast of prediction interval (should be the same length as the
-#' holdout).
-#' @param level The level of the prediction interval associated with the forecast.
+#' @param forecast The forecast of a distribution (e.g. quantile or expectile).
+#' It should be the same length as the holdout.
+#' @param level The level associated with the forecast (e.g. level of quantile).
 #' @param loss The type of loss to use. The number which corresponds to L1, L2 etc.
+#' L1 implies the loss for quantiles, while L2 is for the expectile.
 #' @param na.rm Logical, defining whether to remove the NAs from the provided data or not.
 #' @return The function returns the scalar value.
 #' @examples

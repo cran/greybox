@@ -78,13 +78,6 @@ ourModel <- alm(y~x1+x2, data=inSample, distribution="dalaplace",alpha=0.95)
 summary(ourModel)
 plot(predict(ourModel,outSample))
 
-## ----pdflognorm, echo=FALSE---------------------------------------------------
-plot(seq(0,5,0.01),dlnorm(seq(0,5,0.01),0,1),type="l",
-     xlab="y_t",ylab="Density",ylim=c(0,1.5),main="PDF of Log-Normal distribution")
-lines(seq(0,5,0.01),dlnorm(seq(0,5,0.01),1,1), col="blue")
-lines(seq(0,5,0.01),dlnorm(seq(0,5,0.01),0,2), col="red")
-legend("topright",legend=c("logN(0,1)","logN(1,1)","logN(0,2)"), lwd=1, col=c("black","blue","red"))
-
 ## ----pdfBCNorm, echo=FALSE----------------------------------------------------
 plot(seq(0,5,0.1),dbcnorm(seq(0,5,0.1),0,1,1),type="l",ylim=c(0,1),
      xlab="y_t",ylab="Density",main="PDF of Box-Cox Normal distribution")
@@ -93,6 +86,33 @@ lines(seq(0,5,0.1),dbcnorm(seq(0,5,0.1),0,1,2), col="red")
 lines(seq(0,5,0.01),dbcnorm(seq(0,5,0.01),0,1,0.01), col="purple")
 legend("topright",legend=c("BCN(0,1,1)","BCN(0,1,0.5)","BCN(0,1,2)","BCN(0,1,0.01)"),
        lwd=1, col=c("black","blue","red","purple"))
+
+## ----pdfFnorm, echo=FALSE-----------------------------------------------------
+plot(seq(0.01,5,0.01),dfnorm(seq(0.01,5,0.01),0,1),type="l",ylim=c(0,1.5),
+     xlab="y_t",ylab="Density",main="PDF of Folded Normal distribution")
+lines(seq(0.01,5,0.01),dfnorm(seq(0.01,5,0.01),-1,1), col="blue")
+lines(seq(0.01,5,0.01),dfnorm(seq(0.01,5,0.01),-2,1), col="red")
+legend("topright",legend=c("FN(0,1)","FN(-1,1)","FN(-2,1)"),
+       lwd=1, col=c("black","blue","red"))
+
+## ----pdfRectnormal, echo=FALSE------------------------------------------------
+plot(seq(0,5,0.01),drectnorm(seq(0,5,0.01),0,1),type="l",ylim=c(0,1.5),
+     xlab="y_t",ylab="Density",main="PDF of REctified Normal distribution",
+     xlim=c(0,2))
+points(0,drectnorm(0,0,1),col="black")
+lines(seq(0,5,0.001),drectnorm(seq(0,5,0.001),1,1), col="blue")
+points(0,drectnorm(0,1,1),col="blue")
+lines(seq(0,5,0.01),drectnorm(seq(0,5,0.01),-1,1), col="red")
+points(0,drectnorm(0,-1,1),col="red")
+legend("topright",legend=c("RectN(0,1)","RectN(1,1)","RectN(-1,1)"),
+       lwd=1, col=c("black","blue","red"))
+
+## ----pdflognorm, echo=FALSE---------------------------------------------------
+plot(seq(0,5,0.01),dlnorm(seq(0,5,0.01),0,1),type="l",
+     xlab="y_t",ylab="Density",ylim=c(0,1.5),main="PDF of Log-Normal distribution")
+lines(seq(0,5,0.01),dlnorm(seq(0,5,0.01),1,1), col="blue")
+lines(seq(0,5,0.01),dlnorm(seq(0,5,0.01),0,2), col="red")
+legend("topright",legend=c("logN(0,1)","logN(1,1)","logN(0,2)"), lwd=1, col=c("black","blue","red"))
 
 ## ----pdfIG, echo=FALSE--------------------------------------------------------
 library(statmod)
@@ -145,14 +165,6 @@ lines(seq(0.01,5,0.01),dgnorm(log(seq(0.01,5,0.01)),0,1,0.5)/seq(0.01,5,0.01), c
 lines(seq(0.01,5,0.01),dgnorm(log(seq(0.01,5,0.01)),0,1,100)/seq(0.01,5,0.01), col="purple")
 legend("topright",legend=c("logGN(0,1,2)","logGN(0,1,1)","logGN(0,1,0.5)","logGN(0,1,100)"),
        lwd=1, col=c("black","blue","red","purple"))
-
-## ----pdfFnorm, echo=FALSE-----------------------------------------------------
-plot(seq(0.01,5,0.01),dfnorm(seq(0.01,5,0.01),0,1),type="l",ylim=c(0,1.5),
-     xlab="y_t",ylab="Density",main="PDF of Folded Normal distribution")
-lines(seq(0.01,5,0.01),dfnorm(seq(0.01,5,0.01),-1,1), col="blue")
-lines(seq(0.01,5,0.01),dfnorm(seq(0.01,5,0.01),-2,1), col="red")
-legend("topright",legend=c("FN(0,1)","FN(-1,1)","FN(-2,1)"),
-       lwd=1, col=c("black","blue","red"))
 
 ## ----pdfLogitnorm, echo=FALSE-------------------------------------------------
 plot(seq(0.01,0.99,0.01),dlogitnorm(seq(0.01,0.99,0.01),0,1),type="l",ylim=c(0,5),
@@ -260,10 +272,14 @@ plot(modelMixture, c(1:9))
 ## ----mixtureExampleFinalAR----------------------------------------------------
 modelMixtureAR <- alm(y~x1+x2+Noise, inSample, distribution="dlnorm", occurrence=modelOccurrence, orders=c(1,0,0))
 summary(modelMixtureAR)
-plot(predict(modelMixtureAR,outSample,interval="p",side="u"))
+plot(predict(modelMixtureAR, outSample, interval="p", side="u"))
 
 ## ----mixtureExampleFinalARForecast--------------------------------------------
-plot(forecast(modelMixtureAR, h=10, interval="p",side="u"))
+plot(forecast(modelMixtureAR, h=10, interval="p", side="u"))
+
+## ----eval=FALSE---------------------------------------------------------------
+#  forecast(modelMixtureAR, h=10, interval="p", side="u",
+#           occurrence=c(0,1,0,1,1,1,0,0,0,1))
 
 ## -----------------------------------------------------------------------------
 locationModel <- lm(mpg~., mtcars)

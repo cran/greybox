@@ -17,6 +17,7 @@
 #' \item dls - Log-S distribution,
 #' \item dlgnorm - Log-Generalised Normal distribution,
 #' \item \link[greybox]{dfnorm} - Folded normal distribution,
+#' \item \link[greybox]{drectnorm} - Rectified normal distribution,
 #' \item \link[greybox]{dbcnorm} - Box-Cox normal distribution,
 # \item \link[stats]{dchisq} - Chi-Squared Distribution,
 #' \item \link[statmod]{dinvgauss} - Inverse Gaussian distribution,
@@ -201,6 +202,8 @@
 #' ourModel <- alm(mpg~., mtcars2[1:30,], distribution="dlnorm")
 #' summary(ourModel)
 #' \donttest{plot(ourModel)}
+#' # Produce table based on the output for LaTeX
+#' xtable(summary(ourModel))
 #'
 #' # Produce predictions with the one sided interval (upper bound)
 #' predict(ourModel, mtcars2[-c(1:30),], interval="p", side="u")
@@ -264,8 +267,9 @@
 #' @export alm
 alm <- function(formula, data, subset, na.action,
                 distribution=c("dnorm","dlaplace","ds","dgnorm","dlogis","dt","dalaplace",
-                               "dlnorm","dllaplace","dls","dlgnorm","dbcnorm","dfnorm",
+                               "dlnorm","dllaplace","dls","dlgnorm","dbcnorm",
                                "dinvgauss","dgamma","dexp",
+                               "dfnorm","drectnorm",
                                "dpois","dnbinom",
                                "dbeta","dlogitnorm",
                                "plogis","pnorm"),
@@ -303,10 +307,6 @@ alm <- function(formula, data, subset, na.action,
         else{
             return(no);
         }
-    }
-
-    meanFast <- function(x){
-        return(sum(x) / length(x));
     }
 
     # Function for the Box-Cox transform
@@ -364,7 +364,7 @@ alm <- function(formula, data, subset, na.action,
                 other <- nu;
             }
         }
-        else if(distribution=="dfnorm"){
+        else if(any(distribution==c("dfnorm","drectnorm"))){
             if(!aParameterProvided){
                 other <- B[1];
                 B <- B[-1];
@@ -447,8 +447,9 @@ alm <- function(formula, data, subset, na.action,
                        "dllaplace" =,
                        "dls" =,
                        "dlgnorm" =,
-                       "dbcnorm"=,
+                       "dbcnorm" =,
                        "dfnorm" =,
+                       "drectnorm" =,
                        "pnorm" =,
                        "plogis" = matrixXreg %*% B
         );
@@ -498,8 +499,9 @@ alm <- function(formula, data, subset, na.action,
                       "dinvgauss" = sum((y[otU]/mu[otU]-1)^2 / (y[otU]/mu[otU]))/obsInsample,
                       "dgamma" = sum((y[otU]/mu[otU]-1)^2)/obsInsample,
                       "dlogitnorm" = sqrt(sum((log(y[otU]/(1-y[otU]))-mu[otU])^2)/obsInsample),
-                      "dfnorm" = abs(other),
-                      "dt" = ,
+                      "dfnorm" =,
+                      "drectnorm" =,
+                      "dt" =,
                       "dchisq" =,
                       "dnbinom" = abs(other),
                       "dpois" = mu[otU],
@@ -516,6 +518,7 @@ alm <- function(formula, data, subset, na.action,
     extractorFitted <- function(distribution, mu, scale){
         return(switch(distribution,
                       "dfnorm" = sqrt(2/pi)*scale*exp(-mu^2/(2*scale^2))+mu*(1-2*pnorm(-mu/scale)),
+                      "drectnorm" = mu*(1-pnorm(0, mu, scale)) + scale * dnorm(0, mu, scale),
                       "dnorm" =,
                       "dgnorm" =,
                       "dinvgauss" =,
@@ -546,6 +549,7 @@ alm <- function(formula, data, subset, na.action,
         return(switch(distribution,
                       "dbeta" = y - yFitted,
                       "dfnorm" =,
+                      "drectnorm" =,
                       "dnorm" =,
                       "dlaplace" =,
                       "ds" =,
@@ -597,9 +601,12 @@ alm <- function(formula, data, subset, na.action,
                                    "dls" = ds(log(y[otU]), mu=fitterReturn$mu[otU], scale=fitterReturn$scale, log=TRUE)-log(y[otU]),
                                    "dlgnorm" = dgnorm(log(y[otU]), mu=fitterReturn$mu[otU], scale=fitterReturn$scale,
                                                       shape=fitterReturn$other, log=TRUE)-log(y[otU]),
-                                   "dbcnorm" = dbcnorm(y[otU], mu=fitterReturn$mu[otU], sigma=fitterReturn$scale,
-                                                       lambda=fitterReturn$other, log=TRUE),
+                                   # Use ifelse() to remove densities for y=0, which result in -Inf
+                                   # This is just a fix! It has no good reason behind it!
+                                   "dbcnorm" = ifelse(y[otU]!=0,dbcnorm(y[otU], mu=fitterReturn$mu[otU], sigma=fitterReturn$scale,
+                                                                   lambda=fitterReturn$other, log=TRUE),0),
                                    "dfnorm" = dfnorm(y[otU], mu=fitterReturn$mu[otU], sigma=fitterReturn$scale, log=TRUE),
+                                   "drectnorm" = drectnorm(y[otU], mu=fitterReturn$mu[otU], sigma=fitterReturn$scale, log=TRUE),
                                    "dinvgauss" = dinvgauss(y[otU], mean=fitterReturn$mu[otU],
                                                            dispersion=fitterReturn$scale/fitterReturn$mu[otU], log=TRUE),
                                    "dgamma" = dgamma(y[otU], shape=1/fitterReturn$scale,
@@ -771,6 +778,15 @@ alm <- function(formula, data, subset, na.action,
             aParameterProvided <- TRUE;
         }
     }
+    else if(distribution=="drectnorm"){
+        if(is.null(ellipsis$sigma)){
+            aParameterProvided <- FALSE;
+        }
+        else{
+            sigma <- ellipsis$sigma;
+            aParameterProvided <- TRUE;
+        }
+    }
     else if(any(distribution==c("dgnorm","dlgnorm"))){
         if(is.null(ellipsis$shape)){
             aParameterProvided <- FALSE;
@@ -897,7 +913,8 @@ alm <- function(formula, data, subset, na.action,
 
     #### Occurrence part ####
     occurrenceFormula <- NULL;
-    # If occurrence is not provideded, then set it to "none"
+    occurrenceType <- "none";
+    # If occurrence is not provided, then set it to "none"
     if(is.null(occurrence)){
         occurrenceModel <- FALSE;
         occurrenceProvided <- FALSE;
@@ -908,12 +925,22 @@ alm <- function(formula, data, subset, na.action,
         occurrenceProvided <- FALSE;
         occurrenceFormula <- occurrence;
         occurrence <- "plogis";
+        occurrenceType <- "alm";
     }
     # See if the occurrence model is provided, and whether we need to treat the data as intermittent
     else if(is.occurrence(occurrence)){
         occurrenceModel <- TRUE;
         occurrenceProvided <- TRUE;
         occurrenceFormula <- formula(occurrence);
+        occurrenceType <- "model";
+    }
+    else if(is.numeric(occurrence)){
+        occurrenceModel <- TRUE;
+        occurrenceProvided <- TRUE;
+        occurrence <- list(occurrence="provided", fitted=occurrence,
+                           logLik=0, distribution="none", df=0);
+        class(occurrence) <- c("occurrence","alm","greybox");
+        occurrenceType <- "provided";
     }
     else{
         occurrence <- occurrence[1];
@@ -926,6 +953,7 @@ alm <- function(formula, data, subset, na.action,
 
         if(any(occurrence==c("plogis","pnorm"))){
             occurrenceModel <- TRUE;
+            occurrenceType <- "alm";
         }
         else{
             occurrenceModel <- FALSE;
@@ -1088,11 +1116,12 @@ alm <- function(formula, data, subset, na.action,
     # Make this numeric, to address potential issues with zoo + data.table
     y <- as.numeric(dataWork[,1]);
 
-    interceptIsNeeded <- attr(terms(dataWork),"intercept")!=0;
+    interceptIsNeeded <- attr(dataTerms,"intercept")!=0;
     # Create a model from the provided stuff. This way we can work with factors
     dataWork <- model.matrix(dataWork,data=dataWork);
     obsInsample <- nrow(dataWork);
 
+    # matrixXreg should not contain 1 for the further checks
     if(interceptIsNeeded){
         variablesNames <- colnames(dataWork)[-1];
         matrixXreg <- as.matrix(dataWork[,-1,drop=FALSE]);
@@ -1131,7 +1160,8 @@ alm <- function(formula, data, subset, na.action,
     errors <- vector("numeric", obsInsample);
     ot <- vector("logical", obsInsample);
 
-    if(any(distribution==c("dfnorm","dexp","dlnorm","dllaplace","dls","dbcnorm","dchisq",
+    if(any(distribution==c("dexp","dlnorm","dllaplace","dls","dbcnorm","dchisq",
+                           "dfnorm","drectnorm",
                            "dpois","dnbinom",
                            "dinvgauss","dgamma")) && any(y<0)){
         stop(paste0("Negative values are not allowed in the response variable for the distribution '",distribution,"'"),
@@ -1259,7 +1289,7 @@ alm <- function(formula, data, subset, na.action,
         }
 
         #### Finish forming the matrix of exogenous variables ####
-        # Remove the redudant dummies, if there are any
+        # Remove the redundant dummies, if there are any
         varsToLeave <- apply(matrixXreg[otU,,drop=FALSE],2,var)!=0;
         matrixXreg <- matrixXreg[,varsToLeave,drop=FALSE];
         variablesNames <- variablesNames[varsToLeave];
@@ -1323,7 +1353,7 @@ alm <- function(formula, data, subset, na.action,
             colnames(ariElements) <- ariNames;
             variablesNamesAll <- c(variablesNames,ariNames);
 
-            # Non-zero sequencies for the recursion mechanism of ar
+            # Non-zero sequences for the recursion mechanism of ar
             if(occurrenceModel){
                 ariZeroes <- ariElements == 0;
                 ariZeroesLengths <- apply(ariZeroes, 2, sum);
@@ -1555,7 +1585,7 @@ alm <- function(formula, data, subset, na.action,
                     BUpper <- rep(Inf,length(B));
                 }
             }
-            else if(distribution=="dfnorm"){
+            else if(any(distribution==c("dfnorm","drectnorm"))){
                 B <- c(sd(y),B);
                 BLower <- c(0,rep(-Inf,length(B)-1));
                 BUpper <- rep(Inf,length(B));
@@ -1783,7 +1813,7 @@ alm <- function(formula, data, subset, na.action,
             }
             names(parameters) <- c(variablesNames);
         }
-        else if(distribution=="dfnorm"){
+        else if(any(distribution==c("dfnorm","drectnorm"))){
             if(!aParameterProvided){
                 ellipsis$sigma <- sigma <- abs(parameters[1]);
                 parameters <- parameters[-1];
@@ -1879,7 +1909,8 @@ alm <- function(formula, data, subset, na.action,
     }
 
     # Amend the number of parameters, depending on the type of distribution
-    if(any(distribution==c("dnbinom","dchisq","dt","dfnorm","dbcnorm","dgnorm","dlgnorm","dalaplace"))){
+    if(any(distribution==c("dnbinom","dchisq","dt",
+                           "dbcnorm","dgnorm","dlgnorm","dalaplace"))){
         if(!aParameterProvided){
             nParam <- nParam + 1;
         }
@@ -1914,7 +1945,7 @@ alm <- function(formula, data, subset, na.action,
     }
 
     #### Deal with the occurrence part of the model ####
-    if(occurrenceModel){
+    if(occurrenceModel && occurrenceType!="provided"){
         mf$subset <- NULL;
 
         if(interceptIsNeeded){
@@ -1977,6 +2008,11 @@ alm <- function(formula, data, subset, na.action,
             variablesUsed <- variablesNamesAll;
         }
         colnames(dataWork) <- c(responseName, variablesUsed);
+        if(occurrenceType=="provided"){
+            yFitted[] <- yFitted * ot;
+            occurrence$data <- dataWork[,1,drop=FALSE];
+            occurrence$data[,1] <- ot;
+        }
     }
 
     if(distribution=="dbeta"){
