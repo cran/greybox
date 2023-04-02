@@ -5,10 +5,11 @@
 \title{Combine regressions based on point information criteria}
 \usage{
 lmDynamic(data, ic = c("AICc", "AIC", "BIC", "BICc"), bruteforce = FALSE,
-  silent = TRUE, distribution = c("dnorm", "dlaplace", "ds", "dgnorm",
-  "dlogis", "dt", "dalaplace", "dlnorm", "dllaplace", "dls", "dlgnorm",
-  "dbcnorm", "dfnorm", "dinvgauss", "dgamma", "dpois", "dnbinom", "dlogitnorm",
-  "plogis", "pnorm"), parallel = FALSE, ...)
+  silent = TRUE, formula = NULL, subset = NULL,
+  distribution = c("dnorm", "dlaplace", "ds", "dgnorm", "dlogis", "dt",
+  "dalaplace", "dlnorm", "dllaplace", "dls", "dlgnorm", "dbcnorm", "dfnorm",
+  "dinvgauss", "dgamma", "dpois", "dnbinom", "dlogitnorm", "plogis", "pnorm"),
+  parallel = FALSE, lowess = TRUE, f = NULL, ...)
 }
 \arguments{
 \item{data}{Data frame containing dependent variable in the first column and
@@ -23,12 +24,26 @@ one are produced and then combined.}
 \item{silent}{If \code{FALSE}, then nothing is silent, everything is printed
 out. \code{TRUE} means that nothing is produced.}
 
+\item{formula}{If provided, then the selection will be done from the listed
+variables in the formula after all the necessary transformations.}
+
+\item{subset}{an optional vector specifying a subset of observations to be
+used in the fitting process.}
+
 \item{distribution}{Distribution to pass to \code{alm()}. See \link[greybox]{alm}
 for details.}
 
 \item{parallel}{If \code{TRUE}, then the model fitting is done in parallel.
 WARNING! Packages \code{foreach} and either \code{doMC} (Linux and Mac only)
 or \code{doParallel} are needed in order to run the function in parallel.}
+
+\item{lowess}{Logical defining, whether LOWESS should be used to smooth the
+dynamic weights. By default it is \code{TRUE}.}
+
+\item{f}{the smoother span for LOWESS. This gives the proportion of points in
+the plot which influence the smooth at each value. Larger values give more
+smoothness. If \code{NULL} the parameter will be optimised by minimising
+\code{ic}.}
 
 \item{...}{Other parameters passed to \code{alm()}.}
 }
@@ -64,12 +79,15 @@ the time,
 }
 \description{
 Function combines parameters of linear regressions of the first variable
-on all the other provided data using pAIC weights
+on all the other provided data using pAIC weights. This is an extension of the
+\link[greybox]{lmCombine} function, which relies upon the idea that the combination
+weights might change over time.
 }
 \details{
 The algorithm uses alm() to fit different models and then combines the models
-based on the selected point IC. This is a dynamic counterpart of
-\link[greybox]{lmCombine} function.
+based on the selected point IC. The combination weights are calculated for each
+observation based on the point IC and then smoothed via LOWESS if the respective
+parameter (\code{lowess}) is set to TRUE.
 
 Some details and examples of application are also given in the vignette
 "Greybox": \code{vignette("greybox","greybox")}

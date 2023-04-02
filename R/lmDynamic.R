@@ -1,11 +1,14 @@
 #' Combine regressions based on point information criteria
 #'
 #' Function combines parameters of linear regressions of the first variable
-#' on all the other provided data using pAIC weights
+#' on all the other provided data using pAIC weights. This is an extension of the
+#' \link[greybox]{lmCombine} function, which relies upon the idea that the combination
+#' weights might change over time.
 #'
 #' The algorithm uses alm() to fit different models and then combines the models
-#' based on the selected point IC. This is a dynamic counterpart of
-#' \link[greybox]{lmCombine} function.
+#' based on the selected point IC. The combination weights are calculated for each
+#' observation based on the point IC and then smoothed via LOWESS if the respective
+#' parameter (\code{lowess}) is set to TRUE.
 #'
 #' Some details and examples of application are also given in the vignette
 #' "Greybox": \code{vignette("greybox","greybox")}
@@ -22,11 +25,21 @@
 #' one are produced and then combined.
 #' @param silent If \code{FALSE}, then nothing is silent, everything is printed
 #' out. \code{TRUE} means that nothing is produced.
+#' @param formula If provided, then the selection will be done from the listed
+#' variables in the formula after all the necessary transformations.
+#' @param subset an optional vector specifying a subset of observations to be
+#' used in the fitting process.
 #' @param distribution Distribution to pass to \code{alm()}. See \link[greybox]{alm}
 #' for details.
 #' @param parallel If \code{TRUE}, then the model fitting is done in parallel.
 #' WARNING! Packages \code{foreach} and either \code{doMC} (Linux and Mac only)
 #' or \code{doParallel} are needed in order to run the function in parallel.
+#' @param lowess Logical defining, whether LOWESS should be used to smooth the
+#' dynamic weights. By default it is \code{TRUE}.
+#' @param f the smoother span for LOWESS. This gives the proportion of points in
+#' the plot which influence the smooth at each value. Larger values give more
+#' smoothness. If \code{NULL} the parameter will be optimised by minimising
+#' \code{ic}.
 #' @param ... Other parameters passed to \code{alm()}.
 #'
 #' @return Function returns \code{model} - the final model of the class
@@ -73,15 +86,17 @@
 #' predict(ourModel,outSample)
 #' plot(predict(ourModel,outSample))
 #'
+#' @importFrom stats lowess
 #' @export lmDynamic
 lmDynamic <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, silent=TRUE,
+                      formula=NULL, subset=NULL,
                       distribution=c("dnorm","dlaplace","ds","dgnorm","dlogis","dt","dalaplace",
                                      "dlnorm","dllaplace","dls","dlgnorm","dbcnorm","dfnorm",
                                      "dinvgauss","dgamma",
                                      "dpois","dnbinom",
                                      "dlogitnorm",
                                      "plogis","pnorm"),
-                      parallel=FALSE, ...){
+                      parallel=FALSE, lowess=TRUE, f=NULL, ...){
     # Function combines linear regression models and produces the combined lm object.
 
     # Start measuring the time of calculations
@@ -95,6 +110,40 @@ lmDynamic <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, s
     loss <- "likelihood";
     if(is.null(ellipsis$loss)){
        ellipsis$loss <- loss;
+    }
+
+    # Use formula to form the data frame for further selection
+    if(!is.null(formula) || !is.null(subset)){
+        # If subset is provided, but not formula, generate one
+        if(is.null(formula)){
+            formula <- as.formula(paste0(colnames(data)[1],"~."));
+        }
+
+        # Do model.frame manipulations
+        mf <- match.call(expand.dots = FALSE);
+        mf <- mf[c(1L, match(c("formula", "data", "subset"), names(mf), 0L))];
+        mf$drop.unused.levels <- TRUE;
+        mf[[1L]] <- quote(stats::model.frame);
+
+        if(!is.data.frame(data)){
+            mf$data <- as.data.frame(data);
+        }
+        # Evaluate data frame to do transformations of variables
+        data <- eval(mf, parent.frame());
+        responseName <- colnames(data)[1];
+
+        # Remove variables that have "-x" in the formula
+        dataTerms <- terms(data);
+        data <- data[,c(responseName, colnames(attr(dataTerms,"factors")))];
+        ## We do it this way to avoid factors expansion into dummies at this stage
+    }
+
+    # Check, whether the response is numeric
+    if(!is.numeric(data[[1]])){
+        warning(paste0("The response variable is not numeric! ",
+                       "We will make it numeric, but we cannot promise anything."),
+                call.=FALSE);
+        data[[1]] <- as.numeric(data[[1]]);
     }
 
     # If they asked for parallel, make checks and try to do that
@@ -195,7 +244,8 @@ lmDynamic <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, s
 
     # Define the function of IC
     ic <- match.arg(ic);
-    IC <- switch(ic,"AIC"=AIC,"BIC"=BIC,"BICc"=BICc,AICc);
+    # IC <- switch(ic,"AIC"=AIC,"BIC"=BIC,"BICc"=BICc,AICc);
+    IC <- switch(ic,"AIC"=pAIC,"BIC"=pBIC,"BICc"=pBICc,pAICc);
 
     # Define what function to use in the estimation
     if(useALM){
@@ -511,6 +561,45 @@ lmDynamic <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, s
     # Calculate IC weights
     pICWeights <- pICs - apply(pICs,1,min);
     pICWeights <- exp(-0.5*pICWeights) / apply(exp(-0.5*pICWeights),1,sum)
+
+    if(lowess){
+            # Logit transform of weights
+        pICWeightsLog <- log(pICWeights/(1-pICWeights));
+        ICsMean <- apply(pICs,2,mean);
+        # Optimis f if it is not provided
+        if(is.null(f)){
+            pICWeightsSmooth <- pICWeightsLog;
+            fFinder <- function(f){
+            # Smooth weights via LOWESS
+                pICWeightsSmooth[] <- sapply(apply(pICWeightsLog, 2, lowess, f=f),"[[","y");
+
+                # Inverse logit transform
+                pICWeightsSmooth[] <- exp(pICWeightsSmooth)/(1+exp(pICWeightsSmooth));
+                # Normalisation
+                pICWeightsSmooth[] <- pICWeightsSmooth/apply(pICWeightsSmooth, 1, sum);
+
+                # Dynamic weighted mean pAIC
+                # This is a proxy for the true one based on logLik
+                ICValue <- sum(apply(pICWeightsSmooth,2,mean) * ICsMean);
+                return(ICValue);
+            }
+
+            fValue <- nloptr(0.9, fFinder, lb=0, ub=1,
+                             opts=list(algorithm="NLOPT_LN_SBPLX", xtol_rel=1E-6,
+                                       maxeval=100, print_level=0, xtol_abs=1E-8,
+                                       ftol_rel=1E-4, ftol_abs=0));
+            f <- fValue$solution;
+        }
+
+        # Smooth weights via LOWESS
+        pICWeightsLogSmooth <- sapply(apply(pICWeightsLog, 2, lowess, f=f),"[[","y");
+
+        # Inverse logit transform
+        pICWeights[] <- exp(pICWeightsLogSmooth)/(1+exp(pICWeightsLogSmooth));
+        # Normalisation
+        pICWeights[] <- pICWeights/apply(pICWeights, 1, sum);
+    }
+
     pICWeightsMean <- apply(pICWeights,2,mean);
 
     # Calculate weighted parameters
@@ -686,7 +775,7 @@ lmDynamic <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, s
                                  ICType=ic, df.residual=mean(df), df=sum(apply(importance,2,mean))+1, importance=importance,
                                  call=cl, rank=nVariables+1, data=listToCall$data, mu=mu, scale=scale,
                                  coefficientsDynamic=parametersWeighted, df.residualDynamic=df, dfDynamic=apply(importance,1,sum)+1,
-                                 weights=pICWeights, other=other,
+                                 weights=pICWeights, other=other, f=f,
                                  timeElapsed=Sys.time()-startTime),
                             class=c("greyboxD","alm","greybox"));
 

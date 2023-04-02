@@ -1242,9 +1242,9 @@ vcov.scale <- function(object, bootstrap=FALSE, ...){
 #' details;
 #' \item PACF of the residuals. No, really, are they autocorrelated? See \link[stats]{pacf}
 #' for details;
-#' \item Cook's distance over time. Shows influential observations. If a value is above 0.5, then
-#' this means that the observation influences the parameters of the model. This does not work well
-#' for non-normal distributions;
+#' \item Cook's distance over time. Shows influential observations. 0.5, 0.75 and 0.95 quantile
+#' lines from Fisher's distribution are also plotted. If the value is above them then the
+#' observation is influencial. This does not work well for non-normal distributions;
 #' \item Absolute standardised residuals vs Fitted. Similar to the previous, but with absolute
 #' values. This is more relevant to the models where scale is calculated as an absolute value of
 #' something (e.g. Laplace);
@@ -1903,7 +1903,9 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
                 theValues <- pacf(as.vector(residuals(x)), plot=FALSE, na.action=na.pass);
             }
         }
-        ellipsis$x <- theValues$acf[-1];
+        ellipsis$x <- switch(type,
+                             "acf"=theValues$acf[-1],
+                             "pacf"=theValues$acf);
         statistic <- qnorm(c((1-level)/2, (1+level)/2),0,sqrt(1/nobs(x)));
 
         ellipsis$type <- "h"

@@ -1,8 +1,8 @@
 Package: greybox
 Type: Package
 Title: Toolbox for Model Building and Forecasting
-Version: 1.0.7
-Date: 2022-12-22
+Version: 1.0.8
+Date: 2023-04-02
 Authors@R: c(person("Ivan", "Svetunkov", email = "ivan@svetunkov.ru", role = c("aut", "cre"),
                   comment="Lecturer at Centre for Marketing Analytics and Forecasting, Lancaster University, UK"),
              person("Yves R.", "Sagaert", role = c("ctb"),
@@ -30,11 +30,11 @@ RoxygenNote: 7.2.1
 VignetteBuilder: knitr
 Encoding: UTF-8
 NeedsCompilation: yes
-Packaged: 2022-12-22 13:32:39 UTC; config
+Packaged: 2023-04-02 10:18:19 UTC; config
 Author: Ivan Svetunkov [aut, cre] (Lecturer at Centre for Marketing Analytics
     and Forecasting, Lancaster University, UK),
   Yves R. Sagaert [ctb] (Visiting Research at Centre for Marketing
     Analytics and Forecasting, Lancaster University, UK)
 Maintainer: Ivan Svetunkov <ivan@svetunkov.ru>
 Repository: CRAN
-Date/Publication: 2022-12-22 15:10:07 UTC
+Date/Publication: 2023-04-02 15:30:07 UTC
