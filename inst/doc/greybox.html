@@ -12,7 +12,7 @@
 
 <meta name="author" content="Ivan Svetunkov" />
 
-<meta name="date" content="2023-04-02" />
+<meta name="date" content="2023-09-15" />
 
 <title>Greybox main vignette</title>
 
@@ -362,7 +362,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Greybox main vignette</h1>
 <h4 class="author">Ivan Svetunkov</h4>
-<h4 class="date">2023-04-02</h4>
+<h4 class="date">2023-09-15</h4>
 
 
 
@@ -626,7 +626,7 @@ that we use stepwise function:</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>ourModel <span class="ot">&lt;-</span> <span class="fu">stepwise</span>(BJxreg)</span></code></pre></div>
 <p>And here’s what it returns (the object of class <code>lm</code>):</p>
 <div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>ourModel</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Time elapsed: 0.07 seconds</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Time elapsed: 0.27 seconds</span></span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Call:</span></span>
 <span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; alm(formula = y ~ xLag4 + xLag9 + xLag3 + xLag10 + xLag5 + xLag6 + </span></span>
 <span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;     xLead9 + xLag7 + xLag8, data = data, distribution = &quot;dnorm&quot;)</span></span>

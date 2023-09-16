@@ -1,3 +1,20 @@
+greybox v2.0.0 (Release data: 2023-09-15)
+==============
+
+Changes:
+* Starting from v2.0.0, the greybox package for R will be released under the LGPLv2.1 license. The source of the older version of the software under the GPL(>=2) is available here: https://github.com/config-i1/greybox/releases/tag/v1.0.9
+
+
+greybox v1.0.9 (Release data: 2023-09-15)
+==============
+
+Changes:
+* Documentation for distributions of greybox
+* Extremity and Complex Extremity introduced, aligning them with the HAM paper.
+* actuals() now also extracts actuals from the predict.greybox objects.
+* accuracy() method for greybox classes.
+
+
 greybox v1.0.8 (Release data: 2023-04-02)
 ==============
 
