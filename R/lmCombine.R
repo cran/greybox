@@ -92,10 +92,11 @@
 lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, silent=TRUE,
                       formula=NULL, subset=NULL,
                       distribution=c("dnorm","dlaplace","ds","dgnorm","dlogis","dt","dalaplace",
-                                     "dlnorm","dllaplace","dls","dlgnorm","dbcnorm","dfnorm",
-                                     "dinvgauss","dgamma",
+                                     "dlnorm","dllaplace","dls","dlgnorm","dbcnorm",
+                                     "dinvgauss","dgamma","dexp",
+                                     "dfnorm","drectnorm",
                                      "dpois","dnbinom",
-                                     "dlogitnorm",
+                                     "dbeta","dlogitnorm",
                                      "plogis","pnorm"),
                       parallel=FALSE, ...){
     # Function combines linear regression models and produces the combined lm object.
@@ -739,7 +740,7 @@ lmCombine <- function(data, ic=c("AICc","AIC","BIC","BICc"), bruteforce=FALSE, s
                                  residuals=as.vector(errors), distribution=distribution, logLik=logLikCombined, IC=ICValue,
                                  ICType=ic, df.residual=df, df=sum(importance)+1, importance=importance,
                                  call=cl, rank=nVariables+1, data=listToCall$data, mu=mu, scale=scale,
-                                 combination=variablesCombinations, other=other,
+                                 combination=variablesCombinations, other=other, loss=loss,
                                  timeElapsed=Sys.time()-startTime),
                             class=c("greyboxC","alm","greybox"));
 

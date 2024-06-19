@@ -1,9 +1,9 @@
 Package: greybox
 Type: Package
 Title: Toolbox for Model Building and Forecasting
-Version: 2.0.0
-Date: 2023-09-15
-Authors@R: c(person("Ivan", "Svetunkov", email = "ivan@svetunkov.ru", role = c("aut", "cre"),
+Version: 2.0.1
+Date: 2024-06-18
+Authors@R: c(person("Ivan", "Svetunkov", email = "ivan@svetunkov.com", role = c("aut", "cre"),
                   comment="Lecturer at Centre for Marketing Analytics and Forecasting, Lancaster University, UK"),
              person("Yves R.", "Sagaert", role = c("ctb"),
                   comment="Visiting Research at Centre for Marketing Analytics and Forecasting, Lancaster University, UK"))
@@ -26,15 +26,15 @@ LinkingTo: Rcpp
 Suggests: smooth (>= 3.1.0), doMC, doParallel, foreach, testthat,
         rmarkdown, knitr
 Enhances: vars,
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.1
 VignetteBuilder: knitr
 Encoding: UTF-8
 NeedsCompilation: yes
-Packaged: 2023-09-15 16:22:47 UTC; config
+Packaged: 2024-06-19 12:53:06 UTC; config
 Author: Ivan Svetunkov [aut, cre] (Lecturer at Centre for Marketing Analytics
     and Forecasting, Lancaster University, UK),
   Yves R. Sagaert [ctb] (Visiting Research at Centre for Marketing
     Analytics and Forecasting, Lancaster University, UK)
-Maintainer: Ivan Svetunkov <ivan@svetunkov.ru>
+Maintainer: Ivan Svetunkov <ivan@svetunkov.com>
 Repository: CRAN
-Date/Publication: 2023-09-16 05:50:05 UTC
+Date/Publication: 2024-06-19 15:50:02 UTC

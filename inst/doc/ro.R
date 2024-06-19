@@ -36,13 +36,13 @@ returnedValues1 <- ro(x, h=3, origins=8, call=ourCall, value=ourValue)
 ## -----------------------------------------------------------------------------
 apply(abs(returnedValues1$holdout - returnedValues1$pred),1,mean,na.rm=TRUE) / mean(returnedValues1$actuals)
 
-## ---- fig.height = 4, fig.width = 6-------------------------------------------
+## ----fig.height = 4, fig.width = 6--------------------------------------------
 plot(returnedValues1)
 
 ## -----------------------------------------------------------------------------
 returnedValues2 <- ro(x, h=3, origins=8, call=ourCall, value=ourValue, ci=TRUE, co=FALSE)
 
-## ---- fig.height = 4, fig.width = 6-------------------------------------------
+## ----fig.height = 4, fig.width = 6--------------------------------------------
 plot(returnedValues2)
 
 ## -----------------------------------------------------------------------------

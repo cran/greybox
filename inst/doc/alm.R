@@ -61,6 +61,7 @@ lines(seq(-5,5,0.1),dt(seq(-5,5,0.1),1), col="red")
 legend("topright",legend=c("t(100)","t(10)","t(1)"), lwd=1, col=c("black","blue","red"))
 
 ## ----normalDistributionData---------------------------------------------------
+set.seed(41, kind="L'Ecuyer-CMRG")
 xreg <- cbind(rnorm(200,10,3),rnorm(200,50,5))
 xreg <- cbind(500+0.5*xreg[,1]-0.75*xreg[,2]+rs(200,0,3),xreg,rnorm(200,300,10))
 colnames(xreg) <- c("y","x1","x2","Noise")
@@ -246,6 +247,10 @@ legend("bottomright",legend=c("N(0,1)","N(-1,1)","N(1,1)","N(2,2)"),
        lwd=1, col=c("black","blue","purple","red"))
 
 ## ----mixtureExampleData-------------------------------------------------------
+set.seed(42, kind="L'Ecuyer-CMRG")
+xreg <- cbind(rnorm(200,10,3),rnorm(200,50,5))
+xreg <- cbind(500+0.5*xreg[,1]-0.75*xreg[,2]+rs(200,0,3),xreg,rnorm(200,300,10))
+colnames(xreg) <- c("y","x1","x2","Noise")
 xreg[,1] <- round(exp(xreg[,1]-400) / (1 + exp(xreg[,1]-400)),0) * xreg[,1]
 # Sometimes the generated data contains huge values
 xreg[is.nan(xreg[,1]),1] <- 0;

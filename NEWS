@@ -1,3 +1,22 @@
+greybox v2.0.1 (Release data: 2024-06-18)
+
+Changes:
+* Corrected how the number of parameters is calculated in alm() for loss=c("MSE","MAE","HAM") and respective distribution=c("dnorm","dlaplace","ds").
+* "NLOPT_LN_NELDERMEAD" is now used as the default algorithm for the model estimation instead of "NLOPT_LN_SBPLX". The latter produced biased estimates of parameters...
+* New function for time series bootstrap, timeboot(), inspired by Maximum Entropy Bootstrap from meboot package.
+* adi() function to identify type of demand under consideration.
+* Likelihood for occurrence model is now calculated differently, depending on whether there are ARIMA elements or not. In the former case, it includes the differential entropy, while in the latter it doesn't.
+* New loss function in alm(): "ROLE" - Robust Likelihood Estimator, which uses trimming for the scale parameters and the likelihood to avoid the impact of outliers on the estimates.
+* New distribution in alm(): "dgeom" - Geometric distribution. This can be used for a model for demand intervals.
+* Count distributions now return standardised residuals based on the empirical cumulative probability for each of the observations (sort of probability transform).
+
+Bugfixes:
+* lmCombine() and lmDynamic() now return loss parameter.
+* Fixed a weird bug in vcov.alm(), where instead of inverting Fisher Information, the function would return it as is. This did not apply to all cases, but could have appeared in some situations, when Choleski decomposition would fail.
+* Found some mistakes in the calculation of differential entropy in alm() with occurrence and some distributions.
+* Fixed a bug in alm() with regularisation, which would not work in case of a simple linear regression.
+
+
 greybox v2.0.0 (Release data: 2023-09-15)
 ==============
 

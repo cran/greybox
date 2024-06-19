@@ -35,19 +35,19 @@
 #' Function returns a list of a class "rmcb", which contains the following
 #' variables:
 #' \itemize{
-#' \item{mean}{Mean values for each method.}
-#' \item{interval}{Confidence intervals for each method.}
-#' \item{vlines}{Coordinates used for outplot="l", marking the groups of methods.}
-#' \item{groups}{The table containing the groups. \code{TRUE} - methods are in the
-#' same group, \code{FALSE} - they are not.}
-#' \item{methods}{Similar to \code{group} parameter, but with a slightly different
-#' presentation.}
-#' \item{p.value}{p-value for the test of the significance of the model. This is the
-#' value from the F test of the linear regression.}
-#' \item{level}{Confidence level.}
-#' \item{model}{lm model produced for the calculation of the intervals.}
-#' \item{outplot}{Style of the plot to produce.}
-#' \item{select}{The selected variable to highlight.}
+#' \item mean Mean values for each method.
+#' \item interval Confidence intervals for each method.
+#' \item vlines Coordinates used for outplot="l", marking the groups of methods.
+#' \item groups The table containing the groups. \code{TRUE} - methods are in the
+#' same group, \code{FALSE} - they are not.
+#' \item methods Similar to \code{group} parameter, but with a slightly different
+#' presentation.
+#' \item p.value p-value for the test of the significance of the model. This is the
+#' value from the F test of the linear regression.
+#' \item level Confidence level.
+#' \item model lm model produced for the calculation of the intervals.
+#' \item outplot Style of the plot to produce.
+#' \item select The selected variable to highlight.
 #' }
 #
 #' @keywords htest
@@ -93,15 +93,15 @@ rmcb <- function(data, level=0.95, outplot=c("mcb","lines","none"), select=NULL,
     #### Prepare the data ####
     obs <- nrow(data);
     nMethods <- ncol(data);
-    if(nMethods>obs){
-        response <- readline(paste0("The number of methods is higher than the number of series. ",
-                                    "Are you sure that you want to continue? y/n?"));
-
-        if(all(response!=c("y","Y"))){
-            stop(paste0("Number of methods is higher than the number of series. ",
-                        "The user aborted the calculations."), call.=FALSE);
-        }
-    }
+    # if(nMethods>obs){
+    #     response <- readline(paste0("The number of methods is higher than the number of series. ",
+    #                                 "Are you sure that you want to continue? y/n?"));
+    #
+    #     if(all(response!=c("y","Y"))){
+    #         stop(paste0("Number of methods is higher than the number of series. ",
+    #                     "The user aborted the calculations."), call.=FALSE);
+    #     }
+    # }
     obsAll <- obs*nMethods;
     namesMethods <- colnames(data);
 
