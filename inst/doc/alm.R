@@ -201,19 +201,49 @@ legend("topright",legend=c("Poisson(0.1)","Poisson(0.5)","Poisson(1)","Poisson(5
        lwd=1, col=c("black","blue","purple","red"))
 
 ## ----pmfNegBin, echo=FALSE----------------------------------------------------
-plot(seq(0,10,1),dnbinom(seq(0,10,1),5,0.5),type="b",ylim=c(0,0.4),
+plot(seq(0,10,1),dnbinom(seq(0,10,1),3,0.5),type="b",ylim=c(0,0.4),
      xlab="y_t",ylab="Density",main="PMF of Negative Binomial distribution")
 par(new=TRUE)
-plot(seq(0,10,1),dnbinom(seq(0,10,1),5,0.75),type="b",
+plot(seq(0,10,1),dnbinom(seq(0,10,1),5,0.5),type="b",
      col="blue", ylim=c(0,0.4), axes=FALSE, xlab="", ylab="")
 par(new=TRUE)
-plot(seq(0,10,1),dnbinom(seq(0,10,1),5,0.25),type="b",
+plot(seq(0,10,1),dnbinom(seq(0,10,1),5,0.75),type="b",
      col="purple", ylim=c(0,0.4), axes=FALSE, xlab="", ylab="")
 par(new=TRUE)
-plot(seq(0,10,1),dnbinom(seq(0,10,1),3,0.5),type="b",
+plot(seq(0,10,1),dnbinom(seq(0,10,1),5,0.25),type="b",
      col="red", ylim=c(0,0.4), axes=FALSE, xlab="", ylab="")
-legend("topright",legend=c("NegBin(5,0.5)","NegBin(5,0.9)","NegBin(5,0.1)","NegBin(3,0.5)"),
+legend("topright",legend=c("NegBin(3,0.5)","NegBin(5,0.5)","NegBin(5,0.75)","NegBin(5,0.25)"),
        lwd=1, col=c("black","blue","purple","red"))
+
+## ----pmfBin, echo=FALSE-------------------------------------------------------
+plot(seq(0,10,1),dbinom(seq(0,10,1),3,0.5),type="b",ylim=c(0,0.4),
+     xlab="y_t",ylab="Density",main="PMF of Binomial distribution")
+par(new=TRUE)
+plot(seq(0,10,1),dbinom(seq(0,10,1),5,0.5),type="b",
+     col="blue", ylim=c(0,0.4), axes=FALSE, xlab="", ylab="")
+par(new=TRUE)
+plot(seq(0,10,1),dbinom(seq(0,10,1),5,0.75),type="b",
+     col="purple", ylim=c(0,0.4), axes=FALSE, xlab="", ylab="")
+par(new=TRUE)
+plot(seq(0,10,1),dbinom(seq(0,10,1),5,0.25),type="b",
+     col="red", ylim=c(0,0.4), axes=FALSE, xlab="", ylab="")
+legend("topright",legend=c("Bin(3,0.5)","Bin(5,0.5)","Bin(5,0.75)","Bin(5,0.25)"),
+       lwd=1, col=c("black","blue","purple","red"))
+
+## ----pmfGeom, echo=FALSE------------------------------------------------------
+plot(seq(0,10,1),dgeom(seq(0,10,1),0.25),type="b",ylim=c(0,1),
+     xlab="y_t",ylab="Density",main="PMF of Geometric distribution")
+par(new=TRUE)
+plot(seq(0,10,1),dgeom(seq(0,10,1),0.5),type="b",
+     col="blue", ylim=c(0,1), axes=FALSE, xlab="", ylab="")
+par(new=TRUE)
+plot(seq(0,10,1),dgeom(seq(0,10,1),0.75),type="b",
+     col="purple", ylim=c(0,1), axes=FALSE, xlab="", ylab="")
+par(new=TRUE)
+# plot(seq(0,10,1),dgeom(seq(0,10,1),0.9),type="b",
+#      col="red", ylim=c(0,1), axes=FALSE, xlab="", ylab="")
+legend("topright",legend=c("Geom(0.25)","Geom(0.5)","Geom(0.75)"),
+       lwd=1, col=c("black","blue","purple"))
 
 ## ----dataRound----------------------------------------------------------------
 xreg[,1] <- round(abs(xreg[,1]))

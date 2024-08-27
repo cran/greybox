@@ -1,4 +1,31 @@
+greybox v2.0.2 (Release data: 2024-08-27)
+==============
+
+Changes:
+* Accept ellipsis in coefbootstrap().
+* Renamed adi() into aid().
+* aid() now accepts the parameter loss, which is "likelihood" by default.
+* Tuning of timeboot() and changes in some of its parameters.
+* timeboot() now works with data which has some zeroes, but is not intermittent, when intermittent=F.
+* Substituted LOWESS with Friedman's Super Smoother in timeboot().
+* Dropped the smooth lines for the stockouts in aid() - the fixed probability seems to work fine.
+* Dropped the stockout periods in the demand model of aid().
+* We now return res in alm() to see how nloptr worked.
+* Diferent initialisation for the NegBin and positive distributions in case of y containing zeroes in alm().
+* New distribution in alm(), Binomial.
+* plot.timeboot() is now documented.
+* Renamed "timeboot()" into "dsrboot()" ("Data Shape Replication").
+* coefbootstrap() now has two options for bootstrap: "cr" and "dsr" (see documentation).
+
+Bugfixes:
+* Geometric distribution used a wrong formula for the probability.
+* Corrected the number of estimated parameters in NegBin regression, alm().
+* plot.greybox() will now produce plots always, even if Inf values were present in the data. Those values will be flagged separately.
+* Corrected the number of estimated parameters in the occurrence model.
+
+
 greybox v2.0.1 (Release data: 2024-06-18)
+==============
 
 Changes:
 * Corrected how the number of parameters is calculated in alm() for loss=c("MSE","MAE","HAM") and respective distribution=c("dnorm","dlaplace","ds").

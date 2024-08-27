@@ -176,7 +176,7 @@ errorType.ets <- function(object, ...){
 #' @export
 logLik.alm <- function(object, ...){
     if(is.occurrence(object$occurrence)){
-        return(structure(object$logLik,nobs=nobs(object),df=nparam(object)+nparam(object$occurrence),class="logLik"));
+        return(structure(object$logLik,nobs=nobs(object),df=nparam(object),class="logLik"));
     }
     else{
         # Correction is needed for the calculation of AIC in case of OLS et al (add scale).
@@ -511,12 +511,12 @@ nparam.default <- function(object, ...){
 #' @export
 nparam.alm <- function(object, ...){
     # The number of parameters in the model + in the occurrence part
-    # if(!is.null(object$occurrence)){
-    #     return(object$df+object$occurrence$df);
-    # }
-    # else{
+    if(is.occurrence(object$occurrence)){
+        return(object$df+nparam(object$occurrence));
+    }
+    else{
         return(object$df);
-    # }
+    }
 }
 
 #' @export
@@ -1112,7 +1112,7 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
     }
 
     # Special treatment for count distributions
-    countDistribution <- any(x$distribution==c("dpois","dnbinom","dgeom"));
+    countDistribution <- any(x$distribution==c("dpois","dnbinom","dbinom","dgeom"));
 
     # Warn if the diagnostis will be done for scale
     if(is.scale(x$scale) && any(which %in% c(2:6,8,9,13:14))){
@@ -1120,18 +1120,11 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
     }
 
     if(countDistribution && any(which %in% c(3, 9))){
-        message("Studentised residuals are not supported for count distributions");
+        warning("Studentised residuals are not supported for count distributions. Switching to standardised.",
+                call.=FALSE);
+        which[which==3] <- 2;
+        which[which==9] <- 8;
     }
-
-    # Plots for the count data
-    #
-    # # Probability over time
-    # plot(exp(pointLik(test2)),
-    #      xlab="Time", ylab="Observed probability", type="l")
-    #
-    # # ACF/PACF
-    # acf(exp(pointLik(test2))); pacf(exp(pointLik(test2)));
-
 
     # 1. Fitted vs Actuals values
     plot1 <- function(x, ...){
@@ -1269,7 +1262,7 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         }
 
         if(!any(names(ellipsis)=="ylim")){
-            ellipsis$ylim <- range(c(ellipsis$y,statistic), na.rm=TRUE)*1.2;
+            ellipsis$ylim <- range(c(ellipsis$y[is.finite(ellipsis$y)],statistic), na.rm=TRUE)*1.2;
             if(legend){
                 if(legendPosition=="bottomright"){
                     ellipsis$ylim[1] <- ellipsis$ylim[1] - 0.2*diff(ellipsis$ylim);
@@ -1278,6 +1271,13 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
                     ellipsis$ylim[2] <- ellipsis$ylim[2] + 0.2*diff(ellipsis$ylim);
                 }
             }
+        }
+
+        # If there are infinite values, mark them on the plot
+        infiniteValues <- any(is.infinite(ellipsis$y));
+        if(infiniteValues){
+            infiniteMarkers <- ellipsis$y[is.infinite(ellipsis$y)];
+            infiniteMarkersIDs <- which(is.infinite(ellipsis$y));
         }
 
         xRange <- range(ellipsis$x, na.rm=TRUE);
@@ -1300,6 +1300,12 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
                 ellipsis$x <- ellipsis$x[!is.na(ellipsis$x)];
             }
             lines(lowess(ellipsis$x, ellipsis$y), col="red");
+        }
+        # Markers for infinite values
+        if(infiniteValues){
+            points(ellipsis$x[infiniteMarkersIDs], ellipsis$ylim[(infiniteMarkers>0)+1]+0.1, pch=24, bg="red");
+            text(ellipsis$x[infiniteMarkersIDs], ellipsis$ylim[(infiniteMarkers>0)+1]+0.1,
+                 labels=infiniteMarkersIDs, pos=1);
         }
 
         if(legend){
@@ -1433,13 +1439,24 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
                                  dimnames=list(ppoints(nsim), NULL));
                 # message("Sorry, but we don't produce QQ plots for the Negative Binomial distribution");
             }
+            else if(x$distribution=="dbinom"){
+                if(!any(names(ellipsis)=="main")){
+                    ellipsis$main <- "QQ-plot of Binomial distribution";
+                }
+
+                # Produce matrix of quantiles
+                yQuant <- matrix(qbinom(ppoints(nsim), prob=rep(1/(1+x$mu), each=nsim),
+                                         size=rep(x$other$size, each=nsim)),
+                                 nrow=nsim, ncol=nobs(x),
+                                 dimnames=list(ppoints(nsim), NULL));
+            }
             else if(x$distribution=="dgeom"){
                 if(!any(names(ellipsis)=="main")){
                     ellipsis$main <- "QQ-plot of Geometric distribution";
                 }
 
                 # Produce matrix of quantiles
-                yQuant <- matrix(qgeom(ppoints(nsim), prob=rep(1/x$mu, each=nsim)),
+                yQuant <- matrix(qgeom(ppoints(nsim), prob=rep(1/(1+x$mu), each=nsim)),
                                  nrow=nsim, ncol=nobs(x),
                                  dimnames=list(ppoints(nsim), NULL));
             }
@@ -1687,13 +1704,20 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         }
 
         if(!any(names(ellipsis)=="ylim")){
-            ellipsis$ylim <- range(c(ellipsis$x,statistic),na.rm=TRUE)*1.2;
+            ellipsis$ylim <- range(c(ellipsis$x[is.finite(ellipsis$x)],statistic),na.rm=TRUE)*1.2;
         }
 
         if(legend){
             legendPosition <- "topright";
             ellipsis$ylim[2] <- ellipsis$ylim[2] + 0.2*diff(ellipsis$ylim);
             ellipsis$ylim[1] <- ellipsis$ylim[1] - 0.2*diff(ellipsis$ylim);
+        }
+
+        # If there are infinite values, mark them on the plot
+        infiniteValues <- any(is.infinite(ellipsis$x));
+        if(infiniteValues){
+            infiniteMarkers <- ellipsis$x[is.infinite(ellipsis$x)];
+            infiniteMarkersIDs <- which(is.infinite(ellipsis$x));
         }
 
         # Start plotting
@@ -1722,6 +1746,13 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         polygon(c(1:nobs(x), c(nobs(x):1)),
                 c(rep(statistic[1],nobs(x)), rep(statistic[2],nobs(x))),
                 col="lightgrey", border=NA, density=10);
+
+        # Markers for infinite values
+        if(infiniteValues){
+            points(infiniteMarkersIDs, ellipsis$ylim[(infiniteMarkers>0)+1]+0.1, pch=24, bg="red");
+            text(infiniteMarkersIDs, ellipsis$ylim[(infiniteMarkers>0)+1]+0.1,
+                 labels=infiniteMarkersIDs, pos=1);
+        }
         if(legend){
             legend(legendPosition,legend=c("Residuals",paste0(level*100,"% prediction interval")),
                    col=c("black","red"), lwd=rep(1,3), lty=c(1,1,2));
@@ -1824,10 +1855,17 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         thresholdsColours <- c("red","red","red")
         thresholdsLty <- c(3,2,5)
         thresholdsLwd <- c(1,1,2)
-        outliers <- which(ellipsis$x>=thresholdsF[2]);
+        outliersID <- which(ellipsis$x>=thresholdsF[2]);
 
         if(!any(names(ellipsis)=="ylim")){
-            ellipsis$ylim <- range(c(ellipsis$x, thresholdsF));
+            ellipsis$ylim <- range(c(ellipsis$x[is.finite(ellipsis$x)], thresholdsF));
+        }
+
+        # If there are infinite values, mark them on the plot
+        infiniteValues <- any(is.infinite(ellipsis$x));
+        if(infiniteValues){
+            infiniteMarkers <- ellipsis$x[is.infinite(ellipsis$x)];
+            infiniteMarkersIDs <- which(is.infinite(ellipsis$x));
         }
 
         # Start plotting
@@ -1835,8 +1873,14 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
         for(i in 1:length(thresholdsF)){
             abline(h=thresholdsF[i], col=thresholdsColours[i], lty=thresholdsLty[i], lwd=thresholdsLwd[i]);
         }
-        if(length(outliers)>0){
-            text(outliers, ellipsis$x[outliers], labels=outliers, pos=2);
+        if(length(outliersID)>0){
+            text(outliersID, ellipsis$x[outliersID], labels=outliersID, pos=2);
+        }
+        # Markers for infinite values
+        if(infiniteValues){
+            points(infiniteMarkersIDs, ellipsis$ylim[(infiniteMarkers>0)+1]+0.1, pch=24, bg="red");
+            text(infiniteMarkersIDs, ellipsis$ylim[(infiniteMarkers>0)+1]+0.1,
+                 labels=infiniteMarkersIDs, pos=1);
         }
         if(legend){
             legend("topright",
@@ -1891,10 +1935,28 @@ plot.greybox <- function(x, which=c(1,2,4,6), level=0.95, legend=FALSE,
             }
         }
 
+        if(!any(names(ellipsis)=="ylim")){
+            ellipsis$ylim <- range(ellipsis$y[is.finite(ellipsis$y)]);
+        }
+
+        # If there are infinite values, mark them on the plot
+        infiniteValues <- any(is.infinite(ellipsis$y));
+        if(infiniteValues){
+            infiniteMarkers <- ellipsis$y[is.infinite(ellipsis$y)];
+            infiniteMarkersIDs <- which(is.infinite(ellipsis$y));
+        }
+
         do.call(plot,ellipsis);
         abline(h=0, col="grey", lty=2);
         if(lowess){
             lines(lowess(ellipsis$x[!is.na(ellipsis$y)], ellipsis$y[!is.na(ellipsis$y)]), col="red");
+        }
+
+        # Markers for infinite values
+        if(infiniteValues){
+            points(ellipsis$x[infiniteMarkersIDs], ellipsis$ylim[(infiniteMarkers>0)+1]+0.1, pch=24, bg="red");
+            text(ellipsis$x[infiniteMarkersIDs], ellipsis$ylim[(infiniteMarkers>0)+1]+0.1,
+                 labels=infiniteMarkersIDs, pos=1);
         }
     }
 
@@ -2264,6 +2326,7 @@ print.summary.alm <- function(x, ...){
                       "dgeom" = "Geometric",
                       "dpois" = "Poisson",
                       "dnbinom" = paste0("Negative Binomial with size=",round(x$other$size,digits)),
+                      "dbinom" = paste0("Binomial with size=",x$other$size),
                       "dbeta" = "Beta",
                       "plogis" = "Cumulative logistic",
                       "pnorm" = "Cumulative normal"
@@ -2347,6 +2410,7 @@ print.summary.scale <- function(x, ...){
                       "dgeom" = "Geometric",
                       "dpois" = "Poisson",
                       "dnbinom" = paste0("Negative Binomial with size=",round(x$other$size,digits)),
+                      "dbinom" = paste0("Binomial with size=",x$other$size),
                       "dbeta" = "Beta",
                       "plogis" = "Cumulative logistic",
                       "pnorm" = "Cumulative normal"
@@ -2407,6 +2471,7 @@ print.summary.greybox <- function(x, ...){
                       "dgeom" = "Geometric",
                       "dpois" = "Poisson",
                       "dnbinom" = "Negative Binomial",
+                      "dnbinom" = "Binomial",
                       "dbeta" = "Beta",
                       "plogis" = "Cumulative logistic",
                       "pnorm" = "Cumulative normal"
@@ -2464,6 +2529,7 @@ print.summary.greyboxC <- function(x, ...){
                       "dgeom" = "Geometric",
                       "dpois" = "Poisson",
                       "dnbinom" = "Negative Binomial",
+                      "dnbinom" = "Binomial",
                       "dbeta" = "Beta",
                       "plogis" = "Cumulative logistic",
                       "pnorm" = "Cumulative normal"
@@ -2538,7 +2604,7 @@ hatvalues.greybox <- function(model, ...){
         xreg <- model$data[,-1,drop=FALSE];
     }
     # Hatvalues for different distributions
-    if(any(model$distribution==c("dt","dnorm","dlnorm","dbcnorm","dlogitnorm","dnbinom","dpois"))){
+    if(any(model$distribution==c("dt","dnorm","dlnorm","dbcnorm","dlogitnorm","dnbinom","dbinom","dpois"))){
         hatValue <- hat(xreg);
     }
     else{
@@ -2589,7 +2655,7 @@ rstandard.greybox <- function(model, ...){
     # If it is scale model, there's no need to divide by scale anymore
     if(!is.scale(model)){
         # The proper residuals with leverage are currently done only for normal-based distributions
-        if(any(model$distribution==c("dt","dnorm","dlnorm","dbcnorm","dlogitnorm","dnbinom","dpois"))){
+        if(any(model$distribution==c("dt","dnorm","dlnorm","dbcnorm","dlogitnorm"))){
             errors[] <- errors / (extractScale(model)*sqrt(1-hatvalues(model)));
         }
         else if(any(model$distribution==c("ds","dls"))){
@@ -2605,7 +2671,7 @@ rstandard.greybox <- function(model, ...){
         else if(any(model$distribution==c("dfnorm","drectnorm"))){
             errors[residsToGo] <- (errors[residsToGo]) / sqrt(extractScale(model)^2 * obs / df);
         }
-        else if(any(model$distribution==c("dpois","dnbinom","dgeom"))){
+        else if(any(model$distribution==c("dpois","dnbinom","dbinom","dgeom"))){
             errors[residsToGo] <- qnorm(pointLikCumulative(model));
         }
         else{
@@ -2687,7 +2753,7 @@ rstudent.greybox <- function(model, ...){
         }
     }
     # We don't do studentised residuals for count distributions
-    else if(any(model$distribution==c("dpois","dnbinom","dgeom"))){
+    else if(any(model$distribution==c("dpois","dnbinom","dbinom","dgeom"))){
         rstudentised[residsToGo] <- qnorm(pointLikCumulative(model));
     }
     else{
@@ -3017,7 +3083,7 @@ xtable.summary.greybox <- function(x, caption = NULL, label = NULL, align = NULL
 #' @param occurrence If occurrence was provided, then a user can provide a vector of future
 #' values via this variable.
 #' @rdname predict.greybox
-#' @importFrom stats predict qchisq qlnorm qlogis qpois qnbinom qbeta qgamma qexp qgeom
+#' @importFrom stats predict qchisq qlnorm qlogis qpois qnbinom qbeta qgamma qexp qgeom qbinom
 #' @importFrom statmod qinvgauss
 #' @export
 predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "prediction"),
@@ -3430,6 +3496,19 @@ predict.alm <- function(object, newdata=NULL, interval=c("none", "confidence", "
             greyboxForecast$lower[] <- exp(greyboxForecast$lower);
             greyboxForecast$upper[] <- exp(greyboxForecast$upper);
         }
+    }
+    else if(object$distribution=="dbinom"){
+        greyboxForecast$mean <- 1/(1+exp(greyboxForecast$mean));
+        greyboxForecast$scale <- object$other$size;
+        if(interval=="prediction"){
+            greyboxForecast$lower[] <- qbinom(levelLow,prob=greyboxForecast$mean,size=greyboxForecast$scale);
+            greyboxForecast$upper[] <- qbinom(levelUp,prob=greyboxForecast$mean,size=greyboxForecast$scale);
+        }
+        else if(interval=="confidence"){
+            greyboxForecast$lower[] <- exp(greyboxForecast$lower);
+            greyboxForecast$upper[] <- exp(greyboxForecast$upper);
+        }
+        greyboxForecast$mean <- greyboxForecast$mean * object$other$size;
     }
     else if(object$distribution=="dbeta"){
         greyboxForecast$shape1 <- greyboxForecast$mean;
@@ -3909,7 +3988,7 @@ predict_almari <- function(object, newdata=NULL, interval=c("none", "confidence"
         }
 
         # Transform the lagged response variables
-        if(any(object$distribution==c("dlnorm","dllaplace","dls","dpois","dnbinom"))){
+        if(any(object$distribution==c("dlnorm","dllaplace","dls","dpois","dnbinom","dbinom"))){
             if(any(y==0) & !is.occurrence(object$occurrence)){
                 # Use Box-Cox if there are zeroes
                 matrixOfxregFull[,nonariParametersNumber+c(1:ariOrder)] <- (matrixOfxregFull[,nonariParametersNumber+c(1:ariOrder)]^0.01-1)/0.01;
