@@ -60,7 +60,7 @@
 #' @rdname dsrboot
 #' @importFrom stats supsmu
 #' @export
-dsrboot <- function(y, nsim=100, intermittent=TRUE,
+dsrboot <- function(y, nsim=100, intermittent=FALSE,
                     type=c("multiplicative","additive"),
                     kind=c("nonparametric","parametric"),
                     lag=frequency(y), sd=NULL,
@@ -69,6 +69,9 @@ dsrboot <- function(y, nsim=100, intermittent=TRUE,
 
     type <- match.arg(type);
     kind <- match.arg(kind);
+
+    # Get rid of class
+    y <- as.vector(y);
 
     # Sample size and new data
     obsInsample <- length(y);
@@ -174,10 +177,10 @@ dsrboot <- function(y, nsim=100, intermittent=TRUE,
             # yDiffs <- sort(diff(ySorted[!is.na(ySorted)]));
 
             # This is differences of the smoothed data
-            # yDiffs <- sort(diff(yIntermediate[!is.na(yIntermediate)]));
+            yDiffs <- sort(diff(yIntermediate[!is.na(yIntermediate)]));
 
             # This is differences of the original data
-            yDiffs <- sort(diff(yTransformed[!is.na(yTransformed)]));
+            # yDiffs <- sort(diff(yTransformed[!is.na(yTransformed)]));
 
             yDiffsLength <- length(yDiffs);
             # Remove potential outliers
@@ -271,12 +274,13 @@ dsrboot <- function(y, nsim=100, intermittent=TRUE,
     if(obsInsample>1){
         # Make sure that the SD of the data is constant
         yNewSD <- sqrt(apply((yNew - yTransformed)^2, 1, mean, na.rm=TRUE));
-        yNew[] <- yTransformed + (mean(yNewSD, na.rm=TRUE)/(yNewSD)) * (yNew - yTransformed)
+        yNew[] <- yTransformed + (mean(yNewSD, na.rm=TRUE)/(yNewSD)) * (yNew - yTransformed);
     }
 
+    yIntermediate[yOrder] <- yIntermediate;
     if(type=="multiplicative"){
         yNew[] <- exp(yNew);
-        yIntermediate[yOrder] <- exp(yIntermediate);
+        yIntermediate[] <- exp(yIntermediate);
     }
 
     # Recreate zeroes where they were in the original data

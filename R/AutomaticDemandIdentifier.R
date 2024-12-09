@@ -51,12 +51,17 @@ aid <- function(y, ic=c("AICc","AIC","BICc","BIC"), level=0.99,
     ic <- match.arg(ic);
     IC <- switch(ic,"AIC"=AIC,"BIC"=BIC,"BICc"=BICc,AICc);
 
+    obsInSample <- length(y);
+
+    # Substitute NAs with zeroes
+    y[is.na(y)] <- 0;
+
     # Do stockouts only for data with zeroes
     if(any(y==0)){
         #### Stockouts ####
         # Demand intervals to identify stockouts/new/old products
-        # 0 is for the new products, length(y) is to track obsolescence
-        yIntervals <- diff(c(0,which(y!=0),length(y)+1));
+        # 0 is for the new products, obsInSample is to track obsolescence
+        yIntervals <- diff(c(0,which(y!=0),obsInSample+1));
         xregDataIntervals <- data.frame(y=yIntervals,
                                         ### LOWESS is more conservative than supsmu. Better for identification
                                         # x=supsmu(1:length(yIntervals),yIntervals)$y);
@@ -80,7 +85,9 @@ aid <- function(y, ic=c("AICc","AIC","BICc","BIC"), level=0.99,
         productObsolete <- FALSE;
 
         # If the first one is above the threshold, it is a "new product"
-        if(probabilities[1]>level && yIntervals[1]!=1){
+        # if(probabilities[1]>level && yIntervals[1]!=1){
+        # If the first one is not one, the data starts with zeroes
+        if(yIntervals[1]!=1){
             productNew[] <- TRUE;
         }
         # If the last one is above the threshold, it must be obsolescence
@@ -152,7 +159,7 @@ aid <- function(y, ic=c("AICc","AIC","BICc","BIC"), level=0.99,
     }
     else{
         message("The data does not contain any zeroes. It must be regular.");
-        yIDsToUse <- 1:length(y);
+        yIDsToUse <- 1:obsInSample;
         stockoutsStart <- stockoutsEnd <- NULL;
         productNew <- productObsolete <- FALSE;
     }
@@ -298,11 +305,32 @@ aid <- function(y, ic=c("AICc","AIC","BICc","BIC"), level=0.99,
         idType <- "count";
     }
 
-    # Add stockout model to the output
-    idModels$stockout <- stockoutModel;
+    # Add stockout model to the output if there were some zeroes
+    if(any(y==0)){
+        idModels$stockout <- stockoutModel;
+    }
+
+    # Stockout dummy variable
+    stockoutDummy <- rep(0, obsInSample);
+    if(length(stockoutsStart)>0){
+        for(i in 1:length(stockoutsStart)){
+            stockoutDummy[stockoutsStart[i]:stockoutsEnd[i]] <- 1;
+        }
+    }
+    # Dummy variable for the beginning of series
+    newDummy <- rep(0, obsInSample);
+    if(productNew){
+        newDummy[1:(which(y!=0)[1]-1)] <- 1;
+    }
+    # Dummy variable for the end of series
+    obsoleteDummy <- rep(0, obsInSample);
+    if(productObsolete){
+        obsoleteDummy[(tail(which(y!=0),1)+1):obsInSample] <- 1;
+    }
 
     return(structure(list(y=y, models=idModels, ICs=aidCs, type=idType,
-                          stockouts=list(start=stockoutsStart, end=stockoutsEnd),
+                          stockouts=list(start=stockoutsStart, end=stockoutsEnd,
+                                         dummy=stockoutDummy, new=newDummy, obsolete=obsoleteDummy),
                           new=productNew, obsolete=productObsolete),
                      class="aid"));
 }
