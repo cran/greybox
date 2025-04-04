@@ -302,7 +302,7 @@ par(mfcol=c(3,3))
 plot(modelMixture, c(1:9))
 
 ## ----mixturePredict, eval=FALSE-----------------------------------------------
-#  predict(modelMixture,outSample,interval="p",level=c(0.8,0.9,0.95))
+# predict(modelMixture,outSample,interval="p",level=c(0.8,0.9,0.95))
 
 ## ----mixtureExampleFinalAR----------------------------------------------------
 modelMixtureAR <- alm(y~x1+x2+Noise, inSample, distribution="dlnorm", occurrence=modelOccurrence, orders=c(1,0,0))
@@ -313,8 +313,8 @@ plot(predict(modelMixtureAR, outSample, interval="p", side="u"))
 plot(forecast(modelMixtureAR, h=10, interval="p", side="u"))
 
 ## ----eval=FALSE---------------------------------------------------------------
-#  forecast(modelMixtureAR, h=10, interval="p", side="u",
-#           occurrence=c(0,1,0,1,1,1,0,0,0,1))
+# forecast(modelMixtureAR, h=10, interval="p", side="u",
+#          occurrence=c(0,1,0,1,1,1,0,0,0,1))
 
 ## -----------------------------------------------------------------------------
 locationModel <- lm(mpg~., mtcars)
@@ -335,7 +335,7 @@ almModel <- alm(mpg~., mtcars[-c(1:3),], scale=~qsec+wt)
 summary(almModel)
 
 ## ----eval=FALSE---------------------------------------------------------------
-#  plot(predict(almModel,mtcars[1:3,],interval="p",level=0.95))
+# plot(predict(almModel,mtcars[1:3,],interval="p",level=0.95))
 
 ## -----------------------------------------------------------------------------
 lossFunction <- function(actual, fitted, B, xreg){
